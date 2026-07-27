@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit --incremental false",
+    "api:sync": "cp ../backend/openapi.json src/generated/api-contract.json",
     "test": "node --test src/**/*.test.ts"
   },
   "dependencies": {

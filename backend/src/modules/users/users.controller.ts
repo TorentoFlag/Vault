@@ -1,0 +1,32 @@
+import { Body, Controller, Get, Inject, Put, UseGuards } from "@nestjs/common";
+
+import { CsrfGuard } from "../sessions/csrf.guard";
+import { CurrentCustomerContext } from "../sessions/current-customer";
+import { CustomerSessionGuard } from "../sessions/customer-session.guard";
+import type { CurrentCustomer } from "../sessions/sessions.service";
+import { parseOwnedTradeUrl } from "./steam-trade-url";
+import { UsersService } from "./users.service";
+
+@Controller("me")
+export class UsersController {
+  constructor(@Inject(UsersService) private readonly users: UsersService) {}
+
+  @UseGuards(CustomerSessionGuard, CsrfGuard)
+  @Put("steam-trade-url")
+  putSteamTradeUrl(
+    @CurrentCustomerContext() customer: CurrentCustomer,
+    @Body() body: { tradeUrl?: unknown },
+  ): { configured: true } {
+    if (typeof body.tradeUrl !== "string") throw new Error("Invalid Steam Trade URL");
+    const user = this.users.requireUser(customer.userId);
+    const credential = parseOwnedTradeUrl(body.tradeUrl, user.steam.steamId64);
+    this.users.saveSteamTradeCredential(customer.userId, credential);
+    return { configured: true };
+  }
+
+  @UseGuards(CustomerSessionGuard)
+  @Get("steam-trade-url/status")
+  steamTradeUrlStatus(@CurrentCustomerContext() customer: CurrentCustomer): { configured: boolean } {
+    return { configured: this.users.hasSteamTradeCredential(customer.userId) };
+  }
+}

@@ -94,21 +94,23 @@
 - Create: `backend/src/modules/users/*`
 - Create: `backend/src/modules/sessions/*`
 - Create: `backend/src/modules/audit/*`
-- Modify: `frontend/src/lib/auth.ts`
-- Modify: `frontend/src/components/marketplace/MarketplaceProvider.tsx` or replace it with API-backed providers.
+- Create: `frontend/src/lib/api.ts`
+- Create: `frontend/src/generated/api-contract.json`
+- Later modify: `frontend/src/lib/auth.ts`
+- Later modify: `frontend/src/components/marketplace/MarketplaceProvider.tsx` or replace it with API-backed providers.
 
 **Tasks:**
-- [ ] Implement Steam OpenID challenge/callback, nonce/state validation, SteamID64 extraction, and session creation.
+- [x] Implement Steam OpenID challenge/callback, nonce/state validation, SteamID64 extraction, and session creation.
 - [ ] Implement optional email auth only if product confirms it remains.
-- [ ] Store sessions in HTTP-only secure cookies; do not use localStorage for session identifiers.
-- [ ] Add CSRF protection for cookie-authenticated state-changing requests.
-- [ ] Add encrypted write-only Steam Trade URL storage.
-- [ ] Generate frontend types and implement shared API transport.
+- [x] Store sessions in HTTP-only secure cookies; do not use localStorage for session identifiers.
+- [x] Add CSRF protection for cookie-authenticated state-changing requests.
+- [x] Add encrypted write-only Steam Trade URL storage.
+- [x] Generate frontend contract snapshot and implement shared API transport.
 - [ ] Migrate account header/profile/Steam settings from local mock session to backend session.
 
 **Acceptance:**
-- [ ] Backend auth/session tests pass.
-- [ ] Frontend account/auth tests pass against deterministic API fixtures.
+- [x] Backend auth/session tests pass.
+- [x] Frontend API/auth transport tests pass against deterministic API fixtures.
 - [ ] Real Steam OpenID acceptance is recorded separately before release.
 
 ### Phase 4: Catalog and Pricing

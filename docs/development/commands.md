@@ -18,6 +18,7 @@ Run from `/Users/anton/Finext/Vault`.
 | Type check | `npm --prefix frontend run typecheck` | Requires installed dependencies. |
 | Lint | `npm --prefix frontend run lint` | ESLint/Next config. |
 | Production build | `npm --prefix frontend run build` | Use before visual/browser verification. |
+| Sync API contract snapshot | `npm --prefix frontend run api:sync` | Copies backend OpenAPI into `frontend/src/generated/api-contract.json` after `openapi:generate`. |
 
 ## Backend commands
 

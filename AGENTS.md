@@ -50,6 +50,7 @@ When docs and code drift, establish intended behavior from tests/specs, fix the 
 - Preserve unrelated user changes. Never reset, checkout, or clean them away.
 - Use `apply_patch` for hand edits.
 - Do not edit generated OpenAPI/client files manually.
+- After backend OpenAPI changes, run `npm --prefix frontend run api:sync` and verify frontend tests/typecheck.
 - Do not add dependencies casually; explain why existing/platform capability is insufficient.
 - Do not deploy, rotate secrets, alter production data, push, or create a PR unless the user explicitly requests that external action.
 
@@ -70,6 +71,7 @@ Run from the repository root:
 - Type check: `npm --prefix frontend run typecheck`
 - Lint: `npm --prefix frontend run lint`
 - Build: `npm --prefix frontend run build`
+- Sync API contract snapshot: `npm --prefix frontend run api:sync`
 
 ## Current backend commands
 
