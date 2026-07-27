@@ -1,0 +1,54 @@
+{
+  "name": "vault-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "vitest run",
+    "openapi:generate": "tsx src/openapi.ts",
+    "openapi:check": "tsx src/openapi.ts --check",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run openapi:check"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/swagger": "^11.2.0",
+    "bullmq": "^5.58.0",
+    "drizzle-orm": "0.45.2",
+    "ioredis": "^5.7.0",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.0.10"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.32.0",
+    "@nestjs/testing": "^11.1.6",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.19.9",
+    "@types/pg": "^8.15.5",
+    "@types/supertest": "^6.0.3",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.32.0",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.38.0",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.8",
+    "js-yaml": "5.2.2"
+  }
+}

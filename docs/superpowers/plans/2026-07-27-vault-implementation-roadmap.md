@@ -74,18 +74,18 @@
 - Modify: `docs/development/commands.md`
 
 **Tasks:**
-- [ ] Scaffold NestJS backend with strict TypeScript, lint, typecheck, test, build, and verify commands.
-- [ ] Add configuration loader with explicit required envs and secret-file support.
-- [ ] Add Problem Details error envelope and request-id middleware.
-- [ ] Add PostgreSQL/Drizzle and Redis/BullMQ wiring.
-- [ ] Add liveness/readiness/capabilities endpoints.
-- [ ] Add OpenAPI generation/check scripts.
-- [ ] Add integration test containers for PostgreSQL and Redis.
+- [x] Scaffold NestJS backend with strict TypeScript, lint, typecheck, test, build, and verify commands.
+- [x] Add configuration loader with explicit required envs and secret-file support.
+- [x] Add Problem Details error envelope and request-id middleware.
+- [x] Add PostgreSQL/Drizzle and Redis/BullMQ wiring.
+- [x] Add liveness/readiness/capabilities endpoints.
+- [x] Add OpenAPI generation/check scripts.
+- [x] Add integration test containers for PostgreSQL and Redis.
 
 **Acceptance:**
-- [ ] `npm --prefix backend run verify` passes.
-- [ ] `docker compose -f compose.dev.yaml up -d --wait postgres redis` works.
-- [ ] OpenAPI is generated and checked.
+- [x] `npm --prefix backend run verify` passes.
+- [x] `docker compose -f compose.dev.yaml up -d --wait postgres redis` works.
+- [x] OpenAPI is generated and checked.
 
 ### Phase 3: Identity and Sessions
 

@@ -71,4 +71,16 @@ Run from the repository root:
 - Lint: `npm --prefix frontend run lint`
 - Build: `npm --prefix frontend run build`
 
-The root is currently not initialized as a Git repository. The nested `frontend/.git` repository has been removed so Vault can become one repository later.
+## Current backend commands
+
+- Install dependencies: `npm --prefix backend ci`
+- Unit tests: `npm --prefix backend test`
+- Type check: `npm --prefix backend run typecheck`
+- Lint: `npm --prefix backend run lint`
+- Build: `npm --prefix backend run build`
+- Generate OpenAPI: `npm --prefix backend run openapi:generate`
+- Check OpenAPI freshness: `npm --prefix backend run openapi:check`
+- Generate DB migration: `npm --prefix backend run db:generate -- --name=<name>`
+- Apply DB migration: `npm --prefix backend run db:migrate`
+- Full gate: `npm --prefix backend run verify`
+- Dev dependencies: `docker compose -f compose.dev.yaml up -d --wait postgres redis`

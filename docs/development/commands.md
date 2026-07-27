@@ -4,7 +4,7 @@ Commands are separated into current and planned state so agents do not invent to
 
 ## Current root state
 
-The root directory is not currently a Git repository. Do not claim commits, branches, or pushes from the root until a root repository is initialized.
+The root directory is a Git repository on `main` with `origin` set to `https://github.com/TorentoFlag/Vault.git`.
 
 ## Frontend commands
 
@@ -19,33 +19,35 @@ Run from `/Users/anton/Finext/Vault`.
 | Lint | `npm --prefix frontend run lint` | ESLint/Next config. |
 | Production build | `npm --prefix frontend run build` | Use before visual/browser verification. |
 
-## Planned backend commands
+## Backend commands
 
-These become authoritative only after the backend task creates and verifies them:
-
-| Purpose | Planned command |
+| Purpose | Command |
 | --- | --- |
 | Install backend dependencies | `npm --prefix backend ci` |
 | Backend dev API | `npm --prefix backend run dev` |
 | Backend unit tests | `npm --prefix backend test` |
-| Backend integration tests | `npm --prefix backend run test:integration` |
 | Backend type check | `npm --prefix backend run typecheck` |
 | Backend lint | `npm --prefix backend run lint` |
 | Backend build | `npm --prefix backend run build` |
-| Full backend gate | `npm --prefix backend run verify` |
 | Generate OpenAPI | `npm --prefix backend run openapi:generate` |
 | Check OpenAPI freshness | `npm --prefix backend run openapi:check` |
 | Generate DB migration | `npm --prefix backend run db:generate -- --name=<name>` |
 | Apply DB migration | `npm --prefix backend run db:migrate` |
+| Full backend gate | `npm --prefix backend run verify` |
 
-## Planned local stack commands
-
-These become authoritative only after compose files exist:
+Planned, not yet created:
 
 | Purpose | Planned command |
 | --- | --- |
+| Backend integration tests | `npm --prefix backend run test:integration` |
+
+## Local stack commands
+
+| Purpose | Command |
+| --- | --- |
 | Core dependencies | `docker compose -f compose.dev.yaml up -d --wait postgres redis` |
 | Integration dependencies | `docker compose -f compose.dev.yaml --profile integration up -d --wait postgres-test redis-test` |
-| Full stack | `docker compose up -d --wait` |
+
+Vault maps PostgreSQL to host port `55432` and Redis to host port `56379` so it can run beside other Finext projects that already use `5432` and `6379`.
 
 When a script name changes in code, update this file and every runbook/plan that references it in the same change.

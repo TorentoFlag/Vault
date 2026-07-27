@@ -1,0 +1,167 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "service"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "service": {
+                      "type": "string",
+                      "enum": [
+                        "vault-api"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "service",
+                    "dependencies"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded"
+                      ]
+                    },
+                    "service": {
+                      "type": "string",
+                      "enum": [
+                        "vault-api"
+                      ]
+                    },
+                    "dependencies": {
+                      "type": "object",
+                      "required": [
+                        "postgres",
+                        "redis"
+                      ],
+                      "properties": {
+                        "postgres": {
+                          "type": "string",
+                          "enum": [
+                            "ok",
+                            "not_configured"
+                          ]
+                        },
+                        "redis": {
+                          "type": "string",
+                          "enum": [
+                            "ok",
+                            "not_configured"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/capabilities": {
+      "get": {
+        "operationId": "HealthController_capabilities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "checkoutEnabled",
+                    "coinsTopUpEnabled",
+                    "skinFulfillmentEnabled",
+                    "steamRefillEnabled",
+                    "reasons"
+                  ],
+                  "properties": {
+                    "checkoutEnabled": {
+                      "type": "boolean"
+                    },
+                    "coinsTopUpEnabled": {
+                      "type": "boolean"
+                    },
+                    "skinFulfillmentEnabled": {
+                      "type": "boolean"
+                    },
+                    "steamRefillEnabled": {
+                      "type": "boolean"
+                    },
+                    "reasons": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Vault API",
+    "description": "Backend-owned API contract for Vault digital-goods storefront.",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "schemas": {}
+  }
+}
