@@ -125,18 +125,18 @@
 - Modify: `frontend/src/features/home/*`
 
 **Tasks:**
-- [ ] Define normalized product identity with extensible `kind` and provider-independent game/category fields.
+- [x] Define normalized first-release product identity with provider-independent game/category fields.
 - [ ] Implement SIH catalog/item adapter with bounded response size, timeouts, API-key file, and redaction.
-- [ ] Store supplier listings and freshness in PostgreSQL.
+- [ ] Store live supplier listings and freshness in PostgreSQL.
 - [ ] Implement integer price conversion into Coins with append-only pricing settings.
-- [ ] Implement public catalog/search/facet endpoints and product detail endpoint.
-- [ ] Hide/defer GPT products in first release.
+- [x] Implement public catalog/search/facet endpoints and product detail endpoint.
+- [x] Hide/defer GPT products in first release backend catalog.
 - [ ] Migrate home/catalog/product pages to backend data while preserving visual layout.
 
 **Acceptance:**
-- [ ] Search returns exact keyword results for terms such as `Пистолет` and `Автомат`.
-- [ ] No small-category count badges are introduced.
-- [ ] UI prices are in Coins only.
+- [x] Search returns exact keyword results for terms such as `Пистолет` and `Автомат` in backend catalog API.
+- [x] No small-category count badges are introduced in backend facets.
+- [x] Backend catalog prices are in Coins minor units only.
 - [ ] Real SIH catalog/point acceptance is recorded before release.
 
 ### Phase 5: Wallet, Payments, and Top-Up

@@ -1,0 +1,90 @@
+export type CatalogProductKind = "steam" | "skins";
+export type CatalogAvailability = "available" | "on-request";
+export type CatalogFulfillmentMode = "automatic" | "steam-trade" | "manual";
+export type CatalogSort = "relevance" | "price-asc" | "price-desc" | "newest";
+
+export type CatalogProductSpecification = {
+  label: string;
+  value: string;
+};
+
+export type CatalogFulfillmentDetails = {
+  title: string;
+  description: string;
+  requirements: string[];
+};
+
+export type CatalogProductDetails = {
+  specifications: CatalogProductSpecification[];
+  fulfillment: CatalogFulfillmentDetails;
+};
+
+export type CatalogProduct = {
+  id: string;
+  slug: string;
+  kind: CatalogProductKind;
+  category: string;
+  game?: string;
+  productType: string;
+  title: string;
+  description: string;
+  priceCoins: number;
+  availability: CatalogAvailability;
+  fulfillmentMode: CatalogFulfillmentMode;
+  createdAt: string;
+  popularity: number;
+  image?: string;
+  imageAlt?: string;
+  meta: string[];
+  keywords: string[];
+  details: CatalogProductDetails;
+};
+
+export type CoinPriceDto = {
+  currency: "COINS";
+  amountMinor: number;
+  scale: 2;
+  display: string;
+};
+
+export type CatalogProductDto = Omit<CatalogProduct, "priceCoins"> & {
+  price: CoinPriceDto;
+};
+
+export type CatalogFacetOption = {
+  id: string;
+  title: string;
+};
+
+export type CatalogFacetsDto = {
+  kinds: CatalogFacetOption[];
+  games: CatalogFacetOption[];
+  productTypes: CatalogFacetOption[];
+  fulfillmentModes: CatalogFacetOption[];
+  availability: CatalogFacetOption[];
+};
+
+export type CatalogListDto = {
+  items: CatalogProductDto[];
+  facets: CatalogFacetsDto;
+  pricing: {
+    coinRate: {
+      fiatCurrency: "RUB";
+      fiatMinor: 100;
+      coinMinor: 150;
+      display: string;
+    };
+  };
+};
+
+export type CatalogListQuery = {
+  q?: string;
+  category?: string;
+  status?: string | string[];
+  type?: string | string[];
+  fulfillment?: string | string[];
+  weapon?: string | string[];
+  min?: string;
+  max?: string;
+  sort?: string;
+};

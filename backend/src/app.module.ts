@@ -6,10 +6,11 @@ import { QueueModule } from "./common/queue/queue.module";
 import { AppConfigModule } from "./config/app-config.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { CatalogModule } from "./modules/catalog/catalog.module";
 import { HealthModule } from "./modules/health/health.module";
 
 @Module({
-  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AuthModule],
+  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AuthModule, CatalogModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

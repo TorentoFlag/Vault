@@ -1,4 +1,4 @@
-import { boolean, index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable(
   "users",
@@ -107,5 +107,41 @@ export const idempotencyKeys = pgTable(
   (table) => [
     primaryKey({ columns: [table.scope, table.id] }),
     index("idempotency_keys_status_idx").on(table.status),
+  ],
+);
+
+export const catalogProducts = pgTable(
+  "catalog_products",
+  {
+    id: text("id").primaryKey(),
+    slug: text("slug").notNull(),
+    kind: text("kind").notNull(),
+    category: text("category").notNull(),
+    game: text("game"),
+    productType: text("product_type").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    priceCoinMinor: integer("price_coin_minor").notNull(),
+    availability: text("availability").notNull(),
+    fulfillmentMode: text("fulfillment_mode").notNull(),
+    popularity: integer("popularity").notNull(),
+    image: text("image"),
+    imageAlt: text("image_alt"),
+    meta: text("meta").array().notNull(),
+    keywords: text("keywords").array().notNull(),
+    details: jsonb("details").notNull(),
+    supplierProvider: text("supplier_provider"),
+    supplierItemId: text("supplier_item_id"),
+    supplierSnapshot: jsonb("supplier_snapshot").default({}).notNull(),
+    supplierFreshAt: timestamp("supplier_fresh_at", { withTimezone: true }),
+    publicEnabled: boolean("public_enabled").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("catalog_products_slug_uidx").on(table.slug),
+    index("catalog_products_kind_public_idx").on(table.kind, table.publicEnabled),
+    index("catalog_products_game_idx").on(table.game),
+    index("catalog_products_product_type_idx").on(table.productType),
   ],
 );
