@@ -187,3 +187,28 @@ export const supplierListings = pgTable(
     index("supplier_listings_last_seen_idx").on(table.lastSeenAt),
   ],
 );
+
+export const pricingSettings = pgTable(
+  "pricing_settings",
+  {
+    id: text("id").primaryKey(),
+    scope: text("scope").notNull(),
+    source: text("source").notNull(),
+    supplierCurrency: text("supplier_currency").notNull(),
+    fiatCurrency: text("fiat_currency").notNull(),
+    supplierToFiatRateMinor: integer("supplier_to_fiat_rate_minor").notNull(),
+    coinRateNumerator: integer("coin_rate_numerator").notNull(),
+    coinRateDenominator: integer("coin_rate_denominator").notNull(),
+    markupBps: integer("markup_bps").default(0).notNull(),
+    minPriceCoinMinor: integer("min_price_coin_minor").default(100).notNull(),
+    roundToCoinMinor: integer("round_to_coin_minor").default(100).notNull(),
+    validFrom: timestamp("valid_from", { withTimezone: true }).notNull(),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    metadata: jsonb("metadata").default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("pricing_settings_scope_active_idx").on(table.scope, table.supersededAt, table.validFrom),
+    index("pricing_settings_source_idx").on(table.source),
+  ],
+);

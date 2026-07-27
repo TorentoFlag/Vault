@@ -167,6 +167,7 @@ Architecture implication:
 - SIH Steam Refill is the first-release Steam refill fulfillment path because Vault sells refill orders for internal Coins first, then fulfills them from project/provider balance.
 - Implemented Vault adapter scope: `get-items`, `get-min-item`, Steam `check`, and Steam `pay` are available as backend-only SIH client methods with file-backed `SIH_API_KEY_FILE`, request timeout, response byte bound, JSON content-type checks, sanitized provider errors, and integer normalized supplier amounts.
 - Implemented Vault sync persistence scope: `catalog_sync_runs` records promoted SIH snapshots and `supplier_listings` stores latest per-item supplier price, quantity, image, active flag, and observed freshness per `(supplier, game, market_hash_name)`.
+- Implemented Vault pricing scope: append-only `pricing_settings` selects active supplier pricing by scope and converts integer supplier microunits into Coins minor units with integer rate, markup, minimum, and rounding rules. Seed rates are development defaults until the final fixed commercial rate is approved.
 - The adapter is not release acceptance by itself. Real SIH inventory/minimum acceptance is an opt-in integration test and must record only nonsecret evidence such as game, count, and hashed item identity.
 
 ## Resolved decisions
