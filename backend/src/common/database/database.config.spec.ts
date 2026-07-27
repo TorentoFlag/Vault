@@ -7,7 +7,12 @@ const baseConfig: AppConfig = {
   nodeEnv: "test",
   port: 3000,
   arcPay: { environment: "sandbox" },
-  sih: {},
+  sih: {
+    marketBaseUrl: "https://api.sih.market",
+    maximumBodyBytes: 16_777_216,
+    requestTimeoutMs: 60_000,
+    steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+  },
   corsOrigins: [],
 };
 

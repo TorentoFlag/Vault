@@ -165,6 +165,8 @@ Architecture implication:
 
 - SIH skin purchase is a supplier fulfillment flow after Vault wallet hold/debit logic, not a direct customer payment flow.
 - SIH Steam Refill is the first-release Steam refill fulfillment path because Vault sells refill orders for internal Coins first, then fulfills them from project/provider balance.
+- Implemented Vault adapter scope: `get-items`, `get-min-item`, Steam `check`, and Steam `pay` are available as backend-only SIH client methods with file-backed `SIH_API_KEY_FILE`, request timeout, response byte bound, JSON content-type checks, sanitized provider errors, and integer normalized supplier amounts.
+- The adapter is not release acceptance by itself. Real SIH inventory/minimum acceptance is an opt-in integration test and must record only nonsecret evidence such as game, count, and hashed item identity.
 
 ## Resolved decisions
 

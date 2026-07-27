@@ -126,7 +126,7 @@
 
 **Tasks:**
 - [x] Define normalized first-release product identity with provider-independent game/category fields.
-- [ ] Implement SIH catalog/item adapter with bounded response size, timeouts, API-key file, and redaction.
+- [x] Implement SIH catalog/item adapter with bounded response size, timeouts, API-key file, and redaction.
 - [ ] Store live supplier listings and freshness in PostgreSQL.
 - [ ] Implement integer price conversion into Coins with append-only pricing settings.
 - [x] Implement public catalog/search/facet endpoints and product detail endpoint.

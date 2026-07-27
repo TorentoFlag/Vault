@@ -85,6 +85,9 @@ Run from the repository root:
 - Generate DB migration: `npm --prefix backend run db:generate -- --name=<name>`
 - Apply DB migration: `npm --prefix backend run db:migrate`
 - Integration tests: `npm --prefix backend run test:integration`
+- SIH sandbox catalog acceptance: `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run test:integration -- src/modules/providers/sih/sih.sandbox.integration.spec.ts`
 - Full gate: `npm --prefix backend run verify`
 - Dev dependencies: `docker compose -f compose.dev.yaml up -d --wait postgres redis`
 - Integration dependencies: `docker compose -f compose.dev.yaml --profile integration up -d --wait postgres-test redis-test`
+
+Never echo, commit, or paste `SIH_API_KEY_FILE` contents. SIH sandbox acceptance evidence may include only nonsecret counts, game ids, request ids, and hashed item identities.

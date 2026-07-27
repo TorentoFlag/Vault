@@ -1,0 +1,225 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+import {
+  SihClient,
+  SihProviderError,
+  type SihFetch,
+} from "./sih.client";
+
+async function apiKeyFile(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "vault-sih-"));
+  const file = join(directory, "api-key");
+  await writeFile(file, "test-secret-key\n", { mode: 0o600 });
+  return file;
+}
+
+function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  return new Response(JSON.stringify(body), {
+    ...init,
+    headers,
+    status: 200,
+  });
+}
+
+describe("SihClient", () => {
+  it("fetches bounded SIH catalog items with file-backed api key and integer supplier prices", async () => {
+    const seen: { url: string | undefined; apikey: string | undefined; signal: AbortSignal | undefined } = {
+      apikey: undefined,
+      signal: undefined,
+      url: undefined,
+    };
+    const fetcher: SihFetch = (input, init) => {
+      seen.url = input.toString();
+      seen.apikey = new Headers(init?.headers).get("apikey") ?? undefined;
+      seen.signal = init?.signal ?? undefined;
+      return Promise.resolve(jsonResponse({
+        success: true,
+        items: {
+          "AK-47 | Redline (Field-Tested)": {
+            price: 1.011,
+            count: 10,
+            image: "-9a81dlWabc123abc123abc",
+          },
+        },
+      }));
+    };
+    const client = new SihClient({
+      apiKeyFile: await apiKeyFile(),
+      fetcher,
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 4_096,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    const items = await client.getItems({ game: "cs2" });
+
+    expect(seen.url).toBe("https://api.sih.market/api/v1/get-items?appId=730&minified=false&extended=true");
+    expect(seen.apikey).toBe("test-secret-key");
+    expect(seen.signal).toBeInstanceOf(AbortSignal);
+    expect(items).toEqual([
+      {
+        availableQuantity: 10,
+        game: "cs2",
+        imageUrl: "https://community.cloudflare.steamstatic.com/economy/image/-9a81dlWabc123abc123abc",
+        marketHashName: "AK-47 | Redline (Field-Tested)",
+        priceMicrousd: 1_011_000n,
+      },
+    ]);
+  });
+
+  it("redacts secrets and bounds provider response bodies", async () => {
+    const fetcher: SihFetch = () => Promise.resolve(new Response(
+      JSON.stringify({
+        success: true,
+        items: {
+          "test-secret-key leaked by provider": {
+            price: 1.01,
+            count: 1,
+          },
+        },
+      }),
+      {
+        headers: {
+          "content-length": "9000",
+          "content-type": "application/json",
+        },
+        status: 200,
+      },
+    ));
+    const client = new SihClient({
+      apiKeyFile: await apiKeyFile(),
+      fetcher,
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 1_024,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    await expect(client.getItems({ game: "cs2" })).rejects.toMatchObject({
+      code: "SIH_RESPONSE_TOO_LARGE",
+      disposition: "retryable",
+    });
+    await expect(client.getItems({ game: "cs2" })).rejects.not.toThrow(/test-secret-key/);
+  });
+
+  it("checks and pays Steam refill through the separate public API header", async () => {
+    const requests: Array<{ path: string; apiKey: string | null; body: unknown }> = [];
+    const fetcher: SihFetch = (input, init) => {
+      const url = new URL(input.toString());
+      if (typeof init?.body !== "string") throw new Error("Expected JSON request body");
+      requests.push({
+        path: url.pathname,
+        apiKey: new Headers(init.headers).get("api-key"),
+        body: JSON.parse(init.body) as unknown,
+      });
+      if (url.pathname.endsWith("/steam/check")) {
+        return Promise.resolve(jsonResponse({
+          success: true,
+          message: "Steam account found successfully",
+          transactionId: "d34cb700-fcf9-4cab-89b1-7a6b552a0df5",
+        }));
+      }
+      return Promise.resolve(jsonResponse({
+        status: "success",
+        message: "Payment completed successfully",
+        paymentAmount: 50,
+        cashback: 0.003,
+      }));
+    };
+    const client = new SihClient({
+      apiKeyFile: await apiKeyFile(),
+      fetcher,
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 4_096,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    const check = await client.checkSteamAccount({ steamUsername: "igb53" });
+    const paid = await client.paySteamRefill({
+      amountRub: 50,
+      steamUsername: "igb53",
+      transactionId: check.transactionId,
+    });
+
+    expect(requests).toEqual([
+      {
+        path: "/p/api/v1.0/steam/check",
+        apiKey: "test-secret-key",
+        body: { steamUsername: "igb53" },
+      },
+      {
+        path: "/p/api/v1.0/steam/pay",
+        apiKey: "test-secret-key",
+        body: {
+          amount: 50,
+          currency: "RUB",
+          steamUsername: "igb53",
+          transactionId: "d34cb700-fcf9-4cab-89b1-7a6b552a0df5",
+        },
+      },
+    ]);
+    expect(paid).toEqual({
+      cashbackUsd: 3_000n,
+      paymentAmountRub: 5_000n,
+      status: "success",
+    });
+  });
+
+  it("accepts idempotent Steam refill pay responses with zero cashback", async () => {
+    const fetcher: SihFetch = () => Promise.resolve(jsonResponse({
+      cashback: 0,
+      message: "Payment already completed",
+      paymentAmount: 50,
+      status: "success",
+    }));
+    const client = new SihClient({
+      apiKeyFile: await apiKeyFile(),
+      fetcher,
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 4_096,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    await expect(client.paySteamRefill({
+      amountRub: 50,
+      steamUsername: "igb53",
+      transactionId: "d34cb700-fcf9-4cab-89b1-7a6b552a0df5",
+    })).resolves.toEqual({
+      cashbackUsd: 0n,
+      paymentAmountRub: 5_000n,
+      status: "success",
+    });
+  });
+
+  it("rejects invalid configuration before making provider calls", async () => {
+    expect(() => new SihClient({
+      fetcher: () => Promise.resolve(jsonResponse({ success: true, items: {} })),
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 0,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    })).toThrow("SIH_CLIENT_OPTIONS_INVALID");
+
+    const client = new SihClient({
+      fetcher: () => Promise.resolve(jsonResponse({ success: true, items: {} })),
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 4_096,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    await expect(client.getItems({ game: "cs2" })).rejects.toBeInstanceOf(SihProviderError);
+    await expect(client.getItems({ game: "cs2" })).rejects.toMatchObject({
+      code: "SIH_CONFIGURATION_INVALID",
+      disposition: "permanent",
+    });
+  });
+});

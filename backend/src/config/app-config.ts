@@ -12,6 +12,10 @@ export type AppConfig = {
   };
   sih: {
     apiKeyFile?: string;
+    marketBaseUrl: string;
+    maximumBodyBytes: number;
+    requestTimeoutMs: number;
+    steamRefillBaseUrl: string;
   };
   corsOrigins: string[];
 };
@@ -35,6 +39,36 @@ function parsePort(value: string | undefined): number {
     throw new Error("PORT must be between 1 and 65535.");
   }
   return port;
+}
+
+function parseBoundedInteger(
+  name: string,
+  value: string | undefined,
+  defaultValue: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const normalized = value?.trim() || String(defaultValue);
+  if (!/^\d+$/.test(normalized)) throw new Error(`${name} must be between ${minimum} and ${maximum}.`);
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be between ${minimum} and ${maximum}.`);
+  }
+  return parsed;
+}
+
+function parseHttpsUrl(name: string, value: string | undefined, defaultValue: string): string {
+  const normalized = value?.trim() || defaultValue;
+  let url: URL;
+  try {
+    url = new URL(normalized);
+  } catch {
+    throw new Error(`${name} must be a valid HTTPS URL.`);
+  }
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.hash !== "") {
+    throw new Error(`${name} must be a valid HTTPS URL.`);
+  }
+  return url.toString().replace(/\/$/, "");
 }
 
 function parseArcPayEnvironment(value: string | undefined): ArcPayEnvironment {
@@ -67,6 +101,10 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     },
     sih: {
       ...(sihApiKeyFile ? { apiKeyFile: sihApiKeyFile } : {}),
+      marketBaseUrl: parseHttpsUrl("SIH_MARKET_BASE_URL", env.SIH_MARKET_BASE_URL, "https://api.sih.market"),
+      maximumBodyBytes: parseBoundedInteger("SIH_RESPONSE_MAX_BYTES", env.SIH_RESPONSE_MAX_BYTES, 16_777_216, 1_024, 16_777_216),
+      requestTimeoutMs: parseBoundedInteger("SIH_REQUEST_TIMEOUT_MS", env.SIH_REQUEST_TIMEOUT_MS, 60_000, 500, 120_000),
+      steamRefillBaseUrl: parseHttpsUrl("SIH_STEAM_REFILL_BASE_URL", env.SIH_STEAM_REFILL_BASE_URL, "https://core.steaminventoryhelper.com"),
     },
     corsOrigins: parseCorsOrigins(env.CORS_ORIGINS),
   };
