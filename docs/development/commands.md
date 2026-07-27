@@ -34,13 +34,8 @@ Run from `/Users/anton/Finext/Vault`.
 | Check OpenAPI freshness | `npm --prefix backend run openapi:check` |
 | Generate DB migration | `npm --prefix backend run db:generate -- --name=<name>` |
 | Apply DB migration | `npm --prefix backend run db:migrate` |
-| Full backend gate | `npm --prefix backend run verify` |
-
-Planned, not yet created:
-
-| Purpose | Planned command |
-| --- | --- |
 | Backend integration tests | `npm --prefix backend run test:integration` |
+| Full backend gate | `npm --prefix backend run verify` |
 
 ## Local stack commands
 
@@ -50,5 +45,7 @@ Planned, not yet created:
 | Integration dependencies | `docker compose -f compose.dev.yaml --profile integration up -d --wait postgres-test redis-test` |
 
 Vault maps PostgreSQL to host port `55432` and Redis to host port `56379` so it can run beside other Finext projects that already use `5432` and `6379`.
+
+Run `DATABASE_URL=postgres://vault_test:vault_test_password@localhost:55433/vault_test npm --prefix backend run db:migrate` before integration tests when migrations changed or the test database is fresh.
 
 When a script name changes in code, update this file and every runbook/plan that references it in the same change.

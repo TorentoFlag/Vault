@@ -21,11 +21,11 @@ export class AuthController {
 
   @Get("steam/start")
   @Redirect()
-  startSteam(
+  async startSteam(
     @Query("returnTo") returnTo: string | undefined,
     @Res({ passthrough: true }) response: Response,
-  ): { url: string; statusCode: 302 } {
-    const attempt = this.auth.beginSteam(returnTo);
+  ): Promise<{ url: string; statusCode: 302 }> {
+    const attempt = await this.auth.beginSteam(returnTo);
     response.setHeader("Set-Cookie", secureCookie(STEAM_AUTH_BROWSER_COOKIE, attempt.browserToken, attempt.maximumAgeSeconds));
     return { url: attempt.authUrl.toString(), statusCode: 302 };
   }

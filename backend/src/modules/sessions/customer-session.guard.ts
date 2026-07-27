@@ -8,7 +8,7 @@ import { SessionsService } from "./sessions.service";
 export class CustomerSessionGuard implements CanActivate {
   constructor(@Inject(SessionsService) private readonly sessions: SessionsService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<CustomerRequest>();
     let token: string | null;
     try {
@@ -17,7 +17,7 @@ export class CustomerSessionGuard implements CanActivate {
       throw new UnauthorizedException();
     }
     if (token === null) throw new UnauthorizedException();
-    const customer = this.sessions.authenticate(token);
+    const customer = await this.sessions.authenticate(token);
     if (customer === null) throw new UnauthorizedException();
     request[CURRENT_CUSTOMER] = customer;
     return true;

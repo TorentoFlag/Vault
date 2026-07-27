@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
+import { DatabaseService } from "../../common/database/database.service";
 import {
   createCsrfToken,
   createOpaqueToken,
@@ -34,9 +35,27 @@ export class SessionsService {
     .digest();
   private readonly maximumAgeSeconds = 60 * 60 * 24 * 30;
 
-  createSession(userId: string, presentedToken: string | null): CreatedSession {
-    if (presentedToken) this.revoke(presentedToken);
+  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+
+  async createSession(userId: string, presentedToken: string | null): Promise<CreatedSession> {
+    if (presentedToken) await this.revoke(presentedToken);
     const token = createOpaqueToken();
+    if (this.database.isConfigured()) {
+      await this.database.query(
+        `
+          INSERT INTO user_sessions (
+            user_id,
+            token_digest,
+            idle_expires_at,
+            absolute_expires_at
+          )
+          VALUES ($1, $2, clock_timestamp() + ($3 * interval '1 second'), clock_timestamp() + ($3 * interval '1 second'))
+        `,
+        [userId, digestToken(token), this.maximumAgeSeconds],
+      );
+      return { token, maximumAgeSeconds: this.maximumAgeSeconds };
+    }
+
     const session: StoredSession = {
       id: `session_${createOpaqueToken()}`,
       userId,
@@ -48,13 +67,53 @@ export class SessionsService {
     return { token, maximumAgeSeconds: this.maximumAgeSeconds };
   }
 
-  authenticate(token: string): CurrentCustomer | null {
+  async authenticate(token: string): Promise<CurrentCustomer | null> {
+    if (this.database.isConfigured()) {
+      const result = await this.database.query<{ session_id: string; user_id: string }>(
+        `
+          SELECT id AS session_id, user_id
+          FROM user_sessions
+          WHERE token_digest = $1
+            AND revoked_at IS NULL
+            AND idle_expires_at > clock_timestamp()
+            AND absolute_expires_at > clock_timestamp()
+          LIMIT 1
+        `,
+        [digestToken(token)],
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      await this.database.query(
+        `
+          UPDATE user_sessions
+          SET last_seen_at = clock_timestamp()
+          WHERE id = $1
+            AND revoked_at IS NULL
+        `,
+        [row.session_id],
+      );
+      return { sessionId: row.session_id, userId: row.user_id };
+    }
+
     const session = this.sessionsByDigest.get(digestToken(token));
     if (!session || session.revokedAt !== null || session.expiresAt <= Date.now()) return null;
     return { sessionId: session.id, userId: session.userId };
   }
 
-  revoke(token: string): void {
+  async revoke(token: string): Promise<void> {
+    if (this.database.isConfigured()) {
+      await this.database.query(
+        `
+          UPDATE user_sessions
+          SET revoked_at = clock_timestamp()
+          WHERE token_digest = $1
+            AND revoked_at IS NULL
+        `,
+        [digestToken(token)],
+      );
+      return;
+    }
+
     const session = this.sessionsByDigest.get(digestToken(token));
     if (session) this.sessionsByDigest.set(session.tokenDigest, { ...session, revokedAt: Date.now() });
   }

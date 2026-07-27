@@ -13,20 +13,20 @@ export class UsersController {
 
   @UseGuards(CustomerSessionGuard, CsrfGuard)
   @Put("steam-trade-url")
-  putSteamTradeUrl(
+  async putSteamTradeUrl(
     @CurrentCustomerContext() customer: CurrentCustomer,
     @Body() body: { tradeUrl?: unknown },
-  ): { configured: true } {
+  ): Promise<{ configured: true }> {
     if (typeof body.tradeUrl !== "string") throw new Error("Invalid Steam Trade URL");
-    const user = this.users.requireUser(customer.userId);
+    const user = await this.users.requireUser(customer.userId);
     const credential = parseOwnedTradeUrl(body.tradeUrl, user.steam.steamId64);
-    this.users.saveSteamTradeCredential(customer.userId, credential);
+    await this.users.saveSteamTradeCredential(customer.userId, credential);
     return { configured: true };
   }
 
   @UseGuards(CustomerSessionGuard)
   @Get("steam-trade-url/status")
-  steamTradeUrlStatus(@CurrentCustomerContext() customer: CurrentCustomer): { configured: boolean } {
-    return { configured: this.users.hasSteamTradeCredential(customer.userId) };
+  async steamTradeUrlStatus(@CurrentCustomerContext() customer: CurrentCustomer): Promise<{ configured: boolean }> {
+    return { configured: await this.users.hasSteamTradeCredential(customer.userId) };
   }
 }

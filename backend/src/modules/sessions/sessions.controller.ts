@@ -1,7 +1,7 @@
 import { Controller, Get, HttpCode, Inject, Post, Req, Res, UseGuards } from "@nestjs/common";
 import type { Request, Response } from "express";
 
-import { UsersService } from "../users/users.service";
+import { UsersService, type CustomerUser } from "../users/users.service";
 import { CsrfGuard } from "./csrf.guard";
 import { CurrentCustomerContext } from "./current-customer";
 import { CustomerSessionGuard } from "./customer-session.guard";
@@ -17,8 +17,8 @@ export class SessionsController {
 
   @UseGuards(CustomerSessionGuard)
   @Get("me")
-  me(@CurrentCustomerContext() customer: CurrentCustomer): ReturnType<UsersService["requireUser"]> {
-    const user = this.users.requireUser(customer.userId);
+  async me(@CurrentCustomerContext() customer: CurrentCustomer): Promise<CustomerUser> {
+    const user = await this.users.requireUser(customer.userId);
     return {
       id: user.id,
       steam: user.steam,
@@ -36,9 +36,9 @@ export class SessionsController {
   @UseGuards(CustomerSessionGuard, CsrfGuard)
   @Post("logout")
   @HttpCode(204)
-  logout(@Req() request: Request, @Res({ passthrough: true }) response: Response): void {
+  async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response): Promise<void> {
     const token = parseExactCookie(request.headers.cookie, CUSTOMER_SESSION_COOKIE);
-    if (token !== null) this.sessions.revoke(token);
+    if (token !== null) await this.sessions.revoke(token);
     response.setHeader("Set-Cookie", clearSecureCookie(CUSTOMER_SESSION_COOKIE));
   }
 }

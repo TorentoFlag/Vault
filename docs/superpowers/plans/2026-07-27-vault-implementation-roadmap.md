@@ -105,6 +105,7 @@
 - [x] Store sessions in HTTP-only secure cookies; do not use localStorage for session identifiers.
 - [x] Add CSRF protection for cookie-authenticated state-changing requests.
 - [x] Add encrypted write-only Steam Trade URL storage.
+- [x] Persist Steam auth attempts, users, sessions, and Trade URL credential envelopes in PostgreSQL with integration coverage.
 - [x] Generate frontend contract snapshot and implement shared API transport.
 - [ ] Migrate account header/profile/Steam settings from local mock session to backend session.
 

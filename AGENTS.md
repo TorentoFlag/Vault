@@ -84,5 +84,7 @@ Run from the repository root:
 - Check OpenAPI freshness: `npm --prefix backend run openapi:check`
 - Generate DB migration: `npm --prefix backend run db:generate -- --name=<name>`
 - Apply DB migration: `npm --prefix backend run db:migrate`
+- Integration tests: `npm --prefix backend run test:integration`
 - Full gate: `npm --prefix backend run verify`
 - Dev dependencies: `docker compose -f compose.dev.yaml up -d --wait postgres redis`
+- Integration dependencies: `docker compose -f compose.dev.yaml --profile integration up -d --wait postgres-test redis-test`

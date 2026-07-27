@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 
+import { DatabaseService } from "../../common/database/database.service";
 import type { VerifiedSteamIdentity } from "./steam-identity";
 import type { SteamTradeCredential } from "./steam-trade-url";
 
@@ -58,7 +59,32 @@ export class UsersService {
   private readonly idsBySteamId64 = new Map<string, string>();
   private readonly steamTradeCredentialsByUserId = new Map<string, EncryptedSteamTradeCredential>();
 
-  upsertSteamUser(identity: VerifiedSteamIdentity): CustomerUser {
+  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+
+  async upsertSteamUser(identity: VerifiedSteamIdentity): Promise<CustomerUser> {
+    if (this.database.isConfigured()) {
+      const userId = `user_${identity.steamId64}`;
+      const result = await this.database.query<{ id: string; steam_id64: string }>(
+        `
+          INSERT INTO users (id, steam_id64)
+          VALUES ($1, $2)
+          ON CONFLICT (steam_id64) DO UPDATE
+          SET updated_at = clock_timestamp()
+          RETURNING id, steam_id64
+        `,
+        [userId, identity.steamId64],
+      );
+      const row = result.rows[0];
+      if (!row) throw new Error("Steam user was not stored");
+      return {
+        id: row.id,
+        steam: {
+          connected: true,
+          steamId64: row.steam_id64,
+        },
+      };
+    }
+
     const userId = this.idsBySteamId64.get(identity.steamId64) ?? `user_${identity.steamId64}`;
     const existing = this.usersById.get(userId);
     const next: CustomerUser = {
@@ -74,24 +100,101 @@ export class UsersService {
     return next;
   }
 
-  requireUser(userId: string): CustomerUser {
+  async requireUser(userId: string): Promise<CustomerUser> {
+    if (this.database.isConfigured()) {
+      const result = await this.database.query<{ id: string; steam_id64: string }>(
+        "SELECT id, steam_id64 FROM users WHERE id = $1 AND disabled = false LIMIT 1",
+        [userId],
+      );
+      const row = result.rows[0];
+      if (!row) throw new NotFoundException("User not found");
+      return {
+        id: row.id,
+        steam: {
+          connected: true,
+          steamId64: row.steam_id64,
+        },
+      };
+    }
+
     const user = this.usersById.get(userId);
     if (!user) throw new NotFoundException("User not found");
     return user;
   }
 
-  saveSteamTradeCredential(userId: string, credential: SteamTradeCredential): void {
-    this.requireUser(userId);
-    this.steamTradeCredentialsByUserId.set(userId, encryptCredential(credential));
+  async saveSteamTradeCredential(userId: string, credential: SteamTradeCredential): Promise<void> {
+    await this.requireUser(userId);
+    const encrypted = encryptCredential(credential);
+    if (this.database.isConfigured()) {
+      await this.database.query(
+        `
+          INSERT INTO steam_trade_credentials (
+            user_id,
+            partner_account_id,
+            key_version,
+            cipher_version,
+            ciphertext,
+            nonce,
+            auth_tag
+          )
+          VALUES ($1, $2, 'v1', 'aes-256-gcm', $3, $4, $5)
+          ON CONFLICT (user_id) DO UPDATE
+          SET partner_account_id = EXCLUDED.partner_account_id,
+              key_version = EXCLUDED.key_version,
+              cipher_version = EXCLUDED.cipher_version,
+              ciphertext = EXCLUDED.ciphertext,
+              nonce = EXCLUDED.nonce,
+              auth_tag = EXCLUDED.auth_tag,
+              updated_at = clock_timestamp()
+        `,
+        [userId, encrypted.partner, encrypted.ciphertext, encrypted.nonce, encrypted.authTag],
+      );
+      return;
+    }
+
+    this.steamTradeCredentialsByUserId.set(userId, encrypted);
   }
 
-  hasSteamTradeCredential(userId: string): boolean {
-    this.requireUser(userId);
+  async hasSteamTradeCredential(userId: string): Promise<boolean> {
+    await this.requireUser(userId);
+    if (this.database.isConfigured()) {
+      const result = await this.database.query<{ exists: boolean }>(
+        "SELECT EXISTS (SELECT 1 FROM steam_trade_credentials WHERE user_id = $1) AS exists",
+        [userId],
+      );
+      return result.rows[0]?.exists ?? false;
+    }
+
     return this.steamTradeCredentialsByUserId.has(userId);
   }
 
-  requireSteamTradeCredential(userId: string): SteamTradeCredential {
-    this.requireUser(userId);
+  async requireSteamTradeCredential(userId: string): Promise<SteamTradeCredential> {
+    await this.requireUser(userId);
+    if (this.database.isConfigured()) {
+      const result = await this.database.query<{
+        partner_account_id: string;
+        ciphertext: string;
+        nonce: string;
+        auth_tag: string;
+      }>(
+        `
+          SELECT partner_account_id, ciphertext, nonce, auth_tag
+          FROM steam_trade_credentials
+          WHERE user_id = $1
+          LIMIT 1
+        `,
+        [userId],
+      );
+      const row = result.rows[0];
+      if (!row) throw new NotFoundException("Steam Trade URL is not configured");
+      return decryptCredential({
+        partner: row.partner_account_id,
+        ciphertext: row.ciphertext,
+        nonce: row.nonce,
+        authTag: row.auth_tag,
+      });
+    }
+
     const envelope = this.steamTradeCredentialsByUserId.get(userId);
     if (!envelope) throw new NotFoundException("Steam Trade URL is not configured");
     return decryptCredential(envelope);
