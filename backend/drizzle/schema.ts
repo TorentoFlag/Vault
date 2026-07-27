@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint as pgBigint, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable(
   "users",
@@ -143,5 +143,47 @@ export const catalogProducts = pgTable(
     index("catalog_products_kind_public_idx").on(table.kind, table.publicEnabled),
     index("catalog_products_game_idx").on(table.game),
     index("catalog_products_product_type_idx").on(table.productType),
+  ],
+);
+
+export const catalogSyncRuns = pgTable(
+  "catalog_sync_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    source: text("source").notNull(),
+    game: text("game").notNull(),
+    status: text("status").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    rowCount: integer("row_count").default(0).notNull(),
+    errorCode: text("error_code"),
+    metadata: jsonb("metadata").default({}).notNull(),
+  },
+  (table) => [
+    index("catalog_sync_runs_source_game_idx").on(table.source, table.game, table.startedAt),
+    index("catalog_sync_runs_status_idx").on(table.status),
+  ],
+);
+
+export const supplierListings = pgTable(
+  "supplier_listings",
+  {
+    supplier: text("supplier").notNull(),
+    game: text("game").notNull(),
+    marketHashName: text("market_hash_name").notNull(),
+    active: boolean("active").default(true).notNull(),
+    availableQuantity: integer("available_quantity").notNull(),
+    priceMicrousd: pgBigint("price_microusd", { mode: "bigint" }).notNull(),
+    imageUrl: text("image_url"),
+    snapshot: jsonb("snapshot").default({}).notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSyncRunId: uuid("last_sync_run_id").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.supplier, table.game, table.marketHashName] }),
+    index("supplier_listings_active_idx").on(table.supplier, table.game, table.active),
+    index("supplier_listings_last_seen_idx").on(table.lastSeenAt),
   ],
 );
