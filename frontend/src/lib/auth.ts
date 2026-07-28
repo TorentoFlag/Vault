@@ -30,6 +30,7 @@ export type AuthReturnPath =
   | "/account/steam?returnTo=%2Fcart"
   | `/balance/top-up?${string}`;
 export const MOCK_EMAIL_CODE = "482913";
+const STEAM_OPENID_RETURN_PATHS = new Set(["/", "/cart", "/checkout", "/account", "/account/steam"]);
 
 export function validateEmail(value: string) {
   const normalized = value.trim();
@@ -140,6 +141,21 @@ export function createAccountAuthReturnPath(pathname: string, nestedReturnTo: st
   return accountPath === "/account/steam" && (nestedReturnTo === "/checkout" || nestedReturnTo === "/cart")
     ? `/account/steam?returnTo=${encodeURIComponent(nestedReturnTo)}` as AuthReturnPath
     : accountPath;
+}
+
+export function buildSteamAuthStartUrl(returnTo: AuthReturnPath | string | null) {
+  let pathname = "/account";
+  if (typeof returnTo === "string") {
+    try {
+      const parsed = new URL(returnTo, "https://vault.local");
+      if (parsed.origin === "https://vault.local" && STEAM_OPENID_RETURN_PATHS.has(parsed.pathname)) {
+        pathname = parsed.pathname;
+      }
+    } catch {
+      pathname = "/account";
+    }
+  }
+  return `/auth/steam/start?returnTo=${encodeURIComponent(pathname)}`;
 }
 
 export function sanitizeAuthReturnPath(value: AuthSearchValue): AuthReturnPath | null {

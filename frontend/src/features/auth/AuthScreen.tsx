@@ -9,6 +9,7 @@ import { Breadcrumbs, Button, Container, Skeleton } from "@/components/ui/UI";
 import { Icon } from "@/components/ui/Icon";
 import {
   MOCK_EMAIL_CODE,
+  buildSteamAuthStartUrl,
   type AuthMethod,
   type AuthReturnPath,
   type MarketplaceSession,
@@ -51,7 +52,6 @@ export function AuthScreen({
     isAuthenticated,
     hasSteam,
     signInWithEmail,
-    connectSteamDemo,
     signOut,
     notify,
   } = useMarketplace();
@@ -79,6 +79,7 @@ export function AuthScreen({
   const emailError = validateEmail(email);
   const codeError = validateMockCode(code);
   const isLoading = status === "loading";
+  const steamAuthUrl = buildSteamAuthStartUrl(returnTo);
 
   useEffect(() => {
     if (status === "success") successRef.current?.focus();
@@ -143,29 +144,6 @@ export function AuthScreen({
       return;
     }
     submitLock.current = false;
-  }
-
-  async function connectSteam() {
-    if (!isHydrated || hasSteam || submitLock.current) return;
-    submitLock.current = true;
-    setFormError("");
-    setStatus("loading");
-
-    try {
-      const result = await connectSteamDemo();
-      if (!result.ok) {
-        submitLock.current = false;
-        setStatus("error");
-        setFormError(result.message);
-        return;
-      }
-      notify("Steam-профиль подключён к аккаунту.");
-      finishAndReturn(result.session);
-    } catch {
-      submitLock.current = false;
-      setStatus("error");
-      setFormError("Не удалось подключить Steam-профиль. Повторите ещё раз.");
-    }
   }
 
   async function submitEmail(event: FormEvent<HTMLFormElement>) {
@@ -341,9 +319,9 @@ export function AuthScreen({
                     </div>
                   ) : (
                     <>
-                      <Button className={styles.mainButton} type="button" disabled={isLoading} onClick={connectSteam}>
-                        {isLoading ? "Входим через Steam…" : "Войти через Steam"}
-                      </Button>
+                      <Link className={styles.mainButton} href={steamAuthUrl} aria-disabled={isLoading}>
+                        Войти через Steam
+                      </Link>
                       <p className={styles.panelFootnote}>Вход подтверждается в защищённом окне Steam.</p>
                     </>
                   )}

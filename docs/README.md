@@ -9,7 +9,7 @@ This is the entry point for humans and agents. Documentation describes current i
 - Frontend: Next.js 16, React 19, TypeScript, CSS Modules, backend-fed public catalog pages, plus server-backed cart/checkout when a real backend cookie session is present.
 - Current frontend coverage: backend-fed home/catalog/product surfaces, Coins, local cart, checkout gate, account, purchase history, inventory, Steam Trade URL form, support draft, legal routes, footer payment logos, FAQ, and search.
 - Current backend coverage: Steam session foundation, backend-fed catalog/pricing, authenticated server cart, initial Coins wallet ledger/holds, and checkout order creation from wallet balance.
-- Current frontend limitation: no production Arc Pay payment, no real Steam OpenID browser acceptance, no real SIH purchase/refill, and account history/inventory still use local concept state. Cart/checkout keep a local fallback until the frontend auth screen is migrated to backend Steam OpenID.
+- Current frontend limitation: no production Arc Pay payment, no real Steam OpenID browser acceptance, no real SIH purchase/refill, and account history/inventory still use local concept state. Steam login now starts the backend Steam OpenID flow; Email remains a local fallback until a production email-auth decision exists.
 - First release scope: skin purchase and Steam account refill only.
 - Deferred scope: GPT refill until provider API and product rules are supplied.
 

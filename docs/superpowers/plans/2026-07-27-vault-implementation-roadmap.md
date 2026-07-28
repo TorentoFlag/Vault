@@ -107,7 +107,7 @@
 - [x] Add encrypted write-only Steam Trade URL storage.
 - [x] Persist Steam auth attempts, users, sessions, and Trade URL credential envelopes in PostgreSQL with integration coverage.
 - [x] Generate frontend contract snapshot and implement shared API transport.
-- [ ] Migrate account header/profile/Steam settings from local mock session to backend session.
+- [ ] Migrate account header/profile/Steam settings from local mock session to backend session. Current status: the auth screen starts backend Steam OpenID; `MarketplaceProvider` hydrates backend session/cart/wallet when the cookie exists; account history/inventory and Email auth still use local concept state.
 
 **Acceptance:**
 - [x] Backend auth/session tests pass.

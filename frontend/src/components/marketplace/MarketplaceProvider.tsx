@@ -21,7 +21,6 @@ import {
 } from "@/lib/api";
 import {
   createMockEmailUser,
-  createMockSteamUser,
   type MarketplaceSession,
 } from "@/lib/auth";
 import {
@@ -116,7 +115,6 @@ type MarketplaceContextValue = {
   hasSeedData: boolean;
   checkoutCart: (fulfillment: FulfillmentInput, review: CheckoutReview) => Promise<CheckoutResult>;
   signInWithEmail: (email: string) => Promise<AuthActionResult>;
-  connectSteamDemo: () => Promise<AuthActionResult>;
   saveSteamTradeUrl: (value: string) => Promise<boolean>;
   sellInventoryItem: (itemId: string) => Promise<boolean>;
   withdrawInventoryItem: (itemId: string) => Promise<boolean>;
@@ -557,18 +555,6 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         return await activateSession(resolved.session, origin)
           ? { ok: true, session: resolved.session }
           : { ok: false, message: "Не удалось сохранить Email-сессию в этом браузере." };
-      },
-      async connectSteamDemo() {
-        const origin = createMarketplaceMutationOrigin(persistedStateRef.current);
-        const account = createMockSteamUser();
-        const resolved = resolveAccountConnection(persistedStateRef.current.identityLinks, persistedStateRef.current.session, account);
-        if (!resolved.ok) {
-          setNotice(resolved.message);
-          return resolved;
-        }
-        return await activateSession(resolved.session, origin)
-          ? { ok: true, session: resolved.session }
-          : { ok: false, message: "Не удалось сохранить Steam-сессию в этом браузере." };
       },
       async saveSteamTradeUrl(value) {
         const normalized = normalizeSteamTradeUrl(value);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildSteamAuthStartUrl,
   connectAuthAccount,
   createAccountAuthReturnPath,
   createMockEmailUser,
@@ -87,4 +88,13 @@ test("вход из Steam-настроек сохраняет возврат в 
   assert.equal(sanitizeAuthReturnPath("/account/steam?returnTo=%2Fcheckout"), "/account/steam?returnTo=%2Fcheckout");
   assert.equal(createAccountAuthReturnPath("/account/steam", "https://evil.example"), "/account/steam");
   assert.equal(createAccountAuthReturnPath("/unknown", "/checkout"), "/account");
+});
+
+test("Steam auth start URL targets backend route with only backend-accepted return paths", () => {
+  assert.equal(buildSteamAuthStartUrl("/cart"), "/auth/steam/start?returnTo=%2Fcart");
+  assert.equal(buildSteamAuthStartUrl("/checkout"), "/auth/steam/start?returnTo=%2Fcheckout");
+  assert.equal(buildSteamAuthStartUrl("/account/steam?returnTo=%2Fcheckout"), "/auth/steam/start?returnTo=%2Faccount%2Fsteam");
+  assert.equal(buildSteamAuthStartUrl("/balance/top-up?returnTo=%2Fcart&requiredCoins=1000"), "/auth/steam/start?returnTo=%2Faccount");
+  assert.equal(buildSteamAuthStartUrl("https://evil.example"), "/auth/steam/start?returnTo=%2Faccount");
+  assert.equal(buildSteamAuthStartUrl(null), "/auth/steam/start?returnTo=%2Faccount");
 });
