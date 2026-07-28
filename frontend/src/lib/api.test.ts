@@ -16,6 +16,7 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/session/logout",
     "/me/steam-trade-url",
     "/me/steam-trade-url/status",
+    "/wallet/me",
     "/catalog",
     "/catalog/{slug}",
     "/cart",
@@ -84,4 +85,24 @@ test("isApiUser accepts backend Steam identity and rejects leaked Trade URL payl
     steam: { connected: true, steamId64: "76561198000000001" },
     tradeCredential: { token: "secret" },
   }), false);
+});
+
+test("API client maps backend wallet balance from Coins minor units", async () => {
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    fetch: async () => new Response(JSON.stringify({
+      postedCoinMinor: 100_000,
+      heldCoinMinor: 32_100,
+      availableCoinMinor: 67_900,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  });
+
+  await assert.deepEqual(await client.getWalletBalance(), {
+    postedCoins: 1000,
+    heldCoins: 321,
+    availableCoins: 679,
+  });
 });

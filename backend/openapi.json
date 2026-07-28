@@ -551,6 +551,46 @@
         ]
       }
     },
+    "/wallet/me": {
+      "get": {
+        "operationId": "WalletController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "postedCoinMinor",
+                    "heldCoinMinor",
+                    "availableCoinMinor"
+                  ],
+                  "properties": {
+                    "postedCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "heldCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "availableCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Wallet"
+        ]
+      }
+    },
     "/cart": {
       "get": {
         "operationId": "CartController_get",

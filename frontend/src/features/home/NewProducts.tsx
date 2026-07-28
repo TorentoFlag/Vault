@@ -46,7 +46,7 @@ export function NewProducts({ products }: { products: Product[] }) {
                   type="button"
                   tone={selected ? "secondary" : "primary"}
                   disabled={selected}
-                  onClick={() => { void addToCart({ id: product.id, title: product.title }); }}
+                  onClick={() => { void addToCart({ id: product.id, slug: product.slug, title: product.title }); }}
                 >
                   {selected ? "Добавлено" : "В корзину"}
                 </Button>

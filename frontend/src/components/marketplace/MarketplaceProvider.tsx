@@ -16,10 +16,23 @@ import {
   normalizeSteamTradeUrl,
 } from "@/lib/account";
 import {
+  createApiClient,
+  type ApiUser,
+} from "@/lib/api";
+import {
   createMockEmailUser,
   createMockSteamUser,
   type MarketplaceSession,
 } from "@/lib/auth";
+import {
+  CartApiError,
+  checkoutServerCart,
+  fetchHydratedCart,
+  removeServerCartItem,
+  setServerCartItem,
+  type HydratedServerCart,
+  type ServerCartProduct,
+} from "@/lib/cart-api";
 import {
   getCartSummary,
   normalizeCartIds,
@@ -51,7 +64,7 @@ import { sellInventoryItem, withdrawInventoryItem } from "@/lib/inventory-action
 import type { Product } from "@/types/commerce";
 import type { CoinTransaction, MarketplaceOrder, TradeEvent } from "@/types/account";
 
-export type CartItemInput = { id: string; title?: string };
+export type CartItemInput = { id: string; slug?: string; title?: string };
 export type CheckoutResult =
   | { status: "empty" | "insufficient" | "auth-required" | "steam-required" | "trade-url-required" | "fulfillment-invalid" | "storage-error" | "busy" | "lock-unavailable" }
   | {
@@ -115,8 +128,23 @@ type MarketplaceContextValue = {
 
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null);
 
+function sessionFromApiUser(user: ApiUser): MarketplaceSession {
+  return {
+    emailAccount: null,
+    steamAccount: {
+      id: `steam:${user.steam.steamId64}`,
+      method: "steam",
+      displayName: "Steam user",
+      steamId: user.steam.steamId64,
+      steamConnected: true,
+    },
+  };
+}
+
 export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [cartIds, setCartIds] = useState<string[]>([]);
+  const [serverCart, setServerCart] = useState<HydratedServerCart | null>(null);
+  const [serverSyncStatus, setServerSyncStatus] = useState<"checking" | "authenticated" | "fallback">("checking");
   const [balanceCoins, setBalanceCoins] = useState(0);
   const [session, setSession] = useState<MarketplaceSession | null>(null);
   const [orders, setOrders] = useState<MarketplaceOrder[]>([]);
@@ -129,6 +157,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [marketplaceRevision, setMarketplaceRevision] = useState(0);
   const [notice, setNotice] = useState("");
   const persistedStateRef = useRef(migrateMarketplaceState(null));
+  const csrfTokenRef = useRef<string | null>(null);
 
   const applyPersistedState = useCallback((state: ReturnType<typeof migrateMarketplaceState>) => {
     const validCartIds = normalizeCartIds(state.cartIds, catalogProducts);
@@ -183,13 +212,26 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     };
   }, [applyPersistedState]);
 
-  const cart = useMemo(
-    () => resolveCartProducts(catalogProducts, cartIds),
-    [cartIds],
+  const isServerBacked = serverSyncStatus === "authenticated";
+  const cart = useMemo<Product[]>(
+    () => isServerBacked ? serverCart?.products ?? [] : resolveCartProducts(catalogProducts, cartIds),
+    [cartIds, isServerBacked, serverCart],
   );
   const cartSummary = useMemo(
-    () => getCartSummary(cart, balanceCoins),
-    [balanceCoins, cart],
+    () => {
+      if (!isServerBacked || !serverCart) return getCartSummary(cart, balanceCoins);
+      const totalCoins = serverCart.totalCoins;
+      const shortfallCoins = Math.max(0, totalCoins - balanceCoins);
+      return {
+        itemCount: cart.length,
+        totalCoins,
+        balanceCoins,
+        shortfallCoins,
+        remainingCoins: Math.max(0, balanceCoins - totalCoins),
+        canPurchase: cart.length > 0 && shortfallCoins === 0,
+      };
+    },
+    [balanceCoins, cart, isServerBacked, serverCart],
   );
   const isAuthenticated = !!(session?.emailAccount || session?.steamAccount);
   const hasSteam = !!session?.steamAccount;
@@ -197,6 +239,55 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const canPurchase =
     cartSummary.canPurchase && isAuthenticated && (!requiresSteam || hasSteam);
   const accountKey = getSessionAccountKey(session);
+  const exposedHydrated = isHydrated && serverSyncStatus !== "checking";
+
+  const applyServerCart = useCallback((cartResponse: HydratedServerCart) => {
+    setServerCart(cartResponse);
+  }, []);
+
+  const ensureCsrfToken = useCallback(async () => {
+    if (csrfTokenRef.current) return csrfTokenRef.current;
+    const token = await createApiClient().getCsrfToken();
+    csrfTokenRef.current = token;
+    return token;
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    let cancelled = false;
+
+    async function synchronizeServerState() {
+      const client = createApiClient();
+      try {
+        const user = await client.getCurrentUser();
+        const [wallet, tradeUrlStatus, cartResponse] = await Promise.all([
+          client.getWalletBalance(),
+          client.getSteamTradeUrlStatus(),
+          fetchHydratedCart(),
+        ]);
+        if (cancelled) return;
+        setServerSyncStatus("authenticated");
+        setSession(sessionFromApiUser(user));
+        setBalanceCoins(wallet.availableCoins);
+        setOrders([]);
+        setTransactions([]);
+        setTradeEvents([]);
+        setSteamTradeUrl(tradeUrlStatus.configured ? "Steam Trade URL сохранён на сервере" : "");
+        setHasSeedData(false);
+        applyServerCart(cartResponse);
+      } catch {
+        if (cancelled) return;
+        setServerSyncStatus("fallback");
+        setServerCart(null);
+      }
+    }
+
+    void synchronizeServerState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyServerCart, isHydrated]);
 
   const persistCurrentState = useCallback(async (overrides: {
     cartIds?: string[] | ((current: string[]) => string[]);
@@ -332,10 +423,27 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       hasSteam,
       accountKey,
       hasSeedData,
-      isHydrated,
+      isHydrated: exposedHydrated,
       marketplaceRevision,
       notice,
       async addToCart(item) {
+        if (isServerBacked) {
+          const productSlug = item.slug;
+          if (!productSlug) {
+            setNotice("Не удалось определить товар для серверной корзины. Обновите страницу и повторите действие.");
+            return false;
+          }
+          try {
+            await ensureCsrfToken();
+            const nextCart = await setServerCartItem(productSlug, { quantity: 1 }, { csrfToken: () => csrfTokenRef.current });
+            applyServerCart(nextCart);
+            setNotice(getCartNotice(item.title ?? productSlug));
+            return true;
+          } catch {
+            setNotice("Не удалось обновить серверную корзину. Проверьте сессию и повторите действие.");
+            return false;
+          }
+        }
         const product = catalogProducts.find((entry) => entry.id === item.id);
         if (!product) return false;
         const persisted = await persistCurrentState({ cartIds: (current) => current.includes(item.id) ? current : [...current, item.id] });
@@ -344,10 +452,57 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         return true;
       },
       async removeFromCart(id) {
+        if (isServerBacked) {
+          const product = serverCart?.products.find((entry) => entry.id === id);
+          if (!product) return false;
+          try {
+            await ensureCsrfToken();
+            const nextCart = await removeServerCartItem(product.slug, { csrfToken: () => csrfTokenRef.current });
+            applyServerCart(nextCart);
+            return true;
+          } catch {
+            setNotice("Не удалось удалить товар из серверной корзины. Повторите действие.");
+            return false;
+          }
+        }
         const persisted = await persistCurrentState({ cartIds: (current) => current.filter((itemId) => itemId !== id) });
         return Boolean(persisted);
       },
       async checkoutCart(fulfillment, review) {
+        if (isServerBacked) {
+          if (!exposedHydrated) return { status: "busy" };
+          try {
+            await ensureCsrfToken();
+            let latestServerCart = serverCart;
+            for (const product of cart) {
+              if (product.kind !== "steam") continue;
+              latestServerCart = await setServerCartItem(product.slug, {
+                quantity: (product as ServerCartProduct).cartQuantity ?? 1,
+                recipient: { steamLogin: fulfillment.steamLogin },
+              }, { csrfToken: () => csrfTokenRef.current });
+            }
+            if (latestServerCart) applyServerCart(latestServerCart);
+            const uniqueId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            const order = await checkoutServerCart({
+              idempotencyKey: `checkout-${uniqueId}`,
+            }, { csrfToken: () => csrfTokenRef.current });
+            const wallet = await createApiClient().getWalletBalance();
+            setBalanceCoins(wallet.availableCoins);
+            applyServerCart({ items: [], totalCoins: 0, products: [] });
+            return {
+              status: "success",
+              orderNumber: order.id,
+              itemCount: order.itemCount,
+              totalCoins: order.totalCoins,
+              remainingCoins: wallet.availableCoins,
+            };
+          } catch (error) {
+            if (error instanceof CartApiError && error.status === 402) return { status: "insufficient" };
+            if (error instanceof CartApiError && error.status === 400) return { status: "fulfillment-invalid" };
+            if (error instanceof CartApiError && error.status === 401) return { status: "auth-required" };
+            return { status: "busy" };
+          }
+        }
         if (!isHydrated) return { status: "busy" };
         try {
           return await requestMarketplaceLock({
@@ -445,6 +600,18 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         return true;
       },
       async signOut() {
+        if (isServerBacked) {
+          try {
+            await ensureCsrfToken();
+            await createApiClient({ csrfToken: () => csrfTokenRef.current }).logout();
+            csrfTokenRef.current = null;
+            setServerSyncStatus("fallback");
+            setServerCart(null);
+          } catch {
+            setNotice("Не удалось завершить серверную сессию. Повторите действие.");
+            return false;
+          }
+        }
         const persisted = await persistCurrentState({ session: null });
         return Boolean(persisted);
       },
@@ -461,18 +628,23 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       accountKey,
       activateSession,
       applyPersistedState,
+      applyServerCart,
       canPurchase,
       cart,
       cartSummary,
+      ensureCsrfToken,
+      exposedHydrated,
       hasSteam,
       hasSeedData,
       isAuthenticated,
       isHydrated,
+      isServerBacked,
       marketplaceRevision,
       notice,
       orders,
       persistCurrentState,
       requiresSteam,
+      serverCart,
       session,
       steamTradeUrl,
       transactions,

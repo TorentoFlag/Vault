@@ -10,7 +10,7 @@ import { AppModule } from "./app.module";
 const openApiPath = resolve(__dirname, "..", "openapi.json");
 
 export async function createOpenApiJson(): Promise<string> {
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create(AppModule, { logger: false, abortOnError: false });
   await app.init();
 
   const config = new DocumentBuilder()
@@ -42,5 +42,8 @@ async function main(): Promise<void> {
 }
 
 if (require.main === module) {
-  void main();
+  void main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 }

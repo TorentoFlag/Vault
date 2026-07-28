@@ -17,7 +17,7 @@ export function ProductPurchaseAction({ product }: { product: Product }) {
         className={styles.addButton}
         type="button"
         disabled={selected}
-        onClick={() => { void addToCart({ id: product.id, title: product.title }); }}
+        onClick={() => { void addToCart({ id: product.id, slug: product.slug, title: product.title }); }}
       >
         {selected ? "Добавлено в корзину" : "Добавить в корзину"}
       </Button>

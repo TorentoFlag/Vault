@@ -180,7 +180,7 @@
 - [x] Snapshot nonsecret Steam Trade recipient and Steam refill recipient data immutably at checkout.
 - [x] Create wallet holds atomically with orders.
 - [ ] Create fulfillment outbox commands atomically after fulfillment module exists.
-- [ ] Migrate frontend cart/checkout from localStorage purchase records to backend API.
+- [ ] Migrate frontend cart/checkout from localStorage purchase records to backend API. Current status: backend-cookie sessions use `/wallet/me`, `/cart`, and `/checkout/cart`; unauthenticated/demo frontend auth still falls back to local concept state until Phase 3 account/session migration is complete.
 
 **Acceptance:**
 - [ ] User cannot reach final checkout without sufficient balance or provider-approved direct-payment route.

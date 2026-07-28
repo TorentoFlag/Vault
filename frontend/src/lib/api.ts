@@ -8,6 +8,7 @@ export const apiPaths = [
   "/session/logout",
   "/me/steam-trade-url",
   "/me/steam-trade-url/status",
+  "/wallet/me",
   "/catalog",
   "/catalog/{slug}",
   "/cart",
@@ -38,6 +39,12 @@ export type ApiUser = {
 
 export type ApiSteamTradeUrlStatus = {
   configured: boolean;
+};
+
+export type ApiWalletBalance = {
+  postedCoins: number;
+  heldCoins: number;
+  availableCoins: number;
 };
 
 export class ApiProblemError extends Error {
@@ -98,6 +105,29 @@ export function isApiUser(value: unknown): value is ApiUser {
     typeof value.steam.steamId64 === "string" &&
     /^(?:0|[1-9][0-9]{0,19})$/.test(value.steam.steamId64)
   );
+}
+
+function isWalletBalanceResponse(value: unknown): value is {
+  postedCoinMinor: number;
+  heldCoinMinor: number;
+  availableCoinMinor: number;
+} {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.postedCoinMinor === "number" &&
+    Number.isSafeInteger(value.postedCoinMinor) &&
+    value.postedCoinMinor >= 0 &&
+    typeof value.heldCoinMinor === "number" &&
+    Number.isSafeInteger(value.heldCoinMinor) &&
+    value.heldCoinMinor >= 0 &&
+    typeof value.availableCoinMinor === "number" &&
+    Number.isSafeInteger(value.availableCoinMinor) &&
+    value.availableCoinMinor >= 0
+  );
+}
+
+function coinMinorToCoins(amountMinor: number) {
+  return amountMinor / 100;
 }
 
 async function parseJson(response: Response): Promise<unknown> {
@@ -173,6 +203,16 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const body = await requestJson("/me/steam-trade-url/status");
       if (!isRecord(body) || typeof body.configured !== "boolean") throw new Error("Steam Trade URL status is malformed.");
       return { configured: body.configured };
+    },
+
+    async getWalletBalance(): Promise<ApiWalletBalance> {
+      const body = await requestJson("/wallet/me");
+      if (!isWalletBalanceResponse(body)) throw new Error("Wallet balance response is malformed.");
+      return {
+        postedCoins: coinMinorToCoins(body.postedCoinMinor),
+        heldCoins: coinMinorToCoins(body.heldCoinMinor),
+        availableCoins: coinMinorToCoins(body.availableCoinMinor),
+      };
     },
   };
 }

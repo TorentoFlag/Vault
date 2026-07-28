@@ -105,7 +105,7 @@ export function ProductCard({
           <Button
             tone={selected ? "secondary" : "primary"}
             type="button"
-            onClick={() => { void addToCart({ id: product.id, title: product.title }); }}
+            onClick={() => { void addToCart({ id: product.id, slug: product.slug, title: product.title }); }}
             disabled={selected}
           >
             {selected ? "Добавлено" : "В корзину"}
