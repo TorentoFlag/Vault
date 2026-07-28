@@ -247,6 +247,38 @@ export const walletLedgerEntries = pgTable(
   ],
 );
 
+export const carts = pgTable(
+  "carts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    status: text("status").default("active").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("carts_user_active_uidx").on(table.userId, table.status),
+    index("carts_user_updated_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
+export const cartItems = pgTable(
+  "cart_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cartId: uuid("cart_id").notNull(),
+    productSlug: text("product_slug").notNull(),
+    quantity: integer("quantity").notNull(),
+    recipient: jsonb("recipient").default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("cart_items_cart_product_uidx").on(table.cartId, table.productSlug),
+    index("cart_items_cart_idx").on(table.cartId),
+  ],
+);
+
 export const orders = pgTable(
   "orders",
   {

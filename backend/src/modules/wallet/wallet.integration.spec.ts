@@ -40,6 +40,8 @@ describe.skipIf(!databaseUrl)("wallet PostgreSQL persistence", () => {
     if (app) await app.close();
     await pool.query(`
       TRUNCATE
+        cart_items,
+        carts,
         order_lines,
         orders,
         wallet_holds,

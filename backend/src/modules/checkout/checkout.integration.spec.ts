@@ -47,6 +47,8 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     if (app) await app.close();
     await pool.query(`
       TRUNCATE
+        cart_items,
+        carts,
         order_lines,
         orders,
         wallet_holds,
@@ -60,6 +62,9 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
         users
       RESTART IDENTITY
     `);
+    await pool.query(
+      "UPDATE catalog_products SET price_coin_minor = 318000 WHERE slug = 'desert-eagle-printstream'",
+    );
     const currentApp = await createApp();
     app = currentApp;
     checkout = currentApp.get(CheckoutService);

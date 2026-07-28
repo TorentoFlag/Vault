@@ -42,4 +42,56 @@ describe("OpenAPI contract", () => {
       },
     });
   });
+
+  it("documents server-side cart routes and item mutation body", async () => {
+    const document = JSON.parse(await createOpenApiJson()) as {
+      paths: {
+        "/cart"?: {
+          get?: unknown;
+          delete?: unknown;
+        };
+        "/cart/items/{productSlug}"?: {
+          put?: {
+            requestBody?: {
+              required?: boolean;
+              content?: {
+                "application/json"?: {
+                  schema?: {
+                    required?: string[];
+                    properties?: Record<string, unknown>;
+                  };
+                };
+              };
+            };
+          };
+          delete?: unknown;
+        };
+        "/checkout/cart"?: {
+          post?: {
+            parameters?: Array<{ name: string; in: string; required?: boolean }>;
+          };
+        };
+      };
+    };
+
+    expect(document.paths["/cart"]?.get).toBeDefined();
+    expect(document.paths["/cart"]?.delete).toBeDefined();
+    expect(document.paths["/cart/items/{productSlug}"]?.delete).toBeDefined();
+    expect(document.paths["/cart/items/{productSlug}"]?.put?.requestBody?.required).toBe(true);
+    expect(document.paths["/cart/items/{productSlug}"]?.put?.requestBody?.content?.["application/json"]?.schema).toMatchObject({
+      required: ["quantity"],
+      properties: {
+        quantity: {
+          type: "integer",
+          minimum: 1,
+          maximum: 50,
+        },
+      },
+    });
+    expect(document.paths["/checkout/cart"]?.post?.parameters).toContainEqual(expect.objectContaining({
+      name: "idempotency-key",
+      in: "header",
+      required: true,
+    }));
+  });
 });

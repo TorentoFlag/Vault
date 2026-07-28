@@ -551,6 +551,354 @@
         ]
       }
     },
+    "/cart": {
+      "get": {
+        "operationId": "CartController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "totalCoinMinor"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "productId",
+                          "productSlug",
+                          "kind",
+                          "title",
+                          "quantity",
+                          "unitPriceCoinMinor",
+                          "lineTotalCoinMinor",
+                          "recipient"
+                        ],
+                        "properties": {
+                          "productId": {
+                            "type": "string"
+                          },
+                          "productSlug": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "skins",
+                              "steam"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          "unitPriceCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "lineTotalCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "recipient": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    },
+                    "totalCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Cart"
+        ]
+      },
+      "delete": {
+        "operationId": "CartController_clear",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "totalCoinMinor"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "productId",
+                          "productSlug",
+                          "kind",
+                          "title",
+                          "quantity",
+                          "unitPriceCoinMinor",
+                          "lineTotalCoinMinor",
+                          "recipient"
+                        ],
+                        "properties": {
+                          "productId": {
+                            "type": "string"
+                          },
+                          "productSlug": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "skins",
+                              "steam"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          "unitPriceCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "lineTotalCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "recipient": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    },
+                    "totalCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Cart"
+        ]
+      }
+    },
+    "/cart/items/{productSlug}": {
+      "put": {
+        "operationId": "CartController_setItem",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "quantity"
+                ],
+                "properties": {
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  },
+                  "recipient": {
+                    "type": "object",
+                    "properties": {
+                      "steamLogin": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "totalCoinMinor"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "productId",
+                          "productSlug",
+                          "kind",
+                          "title",
+                          "quantity",
+                          "unitPriceCoinMinor",
+                          "lineTotalCoinMinor",
+                          "recipient"
+                        ],
+                        "properties": {
+                          "productId": {
+                            "type": "string"
+                          },
+                          "productSlug": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "skins",
+                              "steam"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          "unitPriceCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "lineTotalCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "recipient": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    },
+                    "totalCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Cart"
+        ]
+      },
+      "delete": {
+        "operationId": "CartController_removeItem",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "totalCoinMinor"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "productId",
+                          "productSlug",
+                          "kind",
+                          "title",
+                          "quantity",
+                          "unitPriceCoinMinor",
+                          "lineTotalCoinMinor",
+                          "recipient"
+                        ],
+                        "properties": {
+                          "productId": {
+                            "type": "string"
+                          },
+                          "productSlug": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "skins",
+                              "steam"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          "unitPriceCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "lineTotalCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "recipient": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    },
+                    "totalCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Cart"
+        ]
+      }
+    },
     "/checkout": {
       "post": {
         "operationId": "CheckoutController_create",
@@ -609,6 +957,76 @@
             }
           }
         },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "status",
+                    "totalCoinMinor",
+                    "recipientSnapshots",
+                    "lines"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "held"
+                      ]
+                    },
+                    "totalCoinMinor": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "recipientSnapshots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Checkout"
+        ]
+      }
+    },
+    "/checkout/cart": {
+      "post": {
+        "operationId": "CheckoutController_createFromServerCart",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Unique customer-scoped checkout command key.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": "",

@@ -172,8 +172,9 @@
 - Modify: `frontend/src/features/checkout/*`
 
 **Tasks:**
-- [ ] Implement authenticated server-side cart.
-- [ ] Implement quote refresh and price-increase confirmation.
+- [x] Implement authenticated server-side cart.
+- [x] Implement server cart quote refresh from current backend catalog prices.
+- [ ] Implement explicit customer confirmation for price increases.
 - [x] Implement checkout from Coins wallet only.
 - [x] Expand each quantity unit into an independent order line.
 - [x] Snapshot nonsecret Steam Trade recipient and Steam refill recipient data immutably at checkout.

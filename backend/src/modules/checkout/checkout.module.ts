@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { DatabaseModule } from "../../common/database/database.module";
+import { CartModule } from "../cart/cart.module";
 import { CatalogModule } from "../catalog/catalog.module";
 import { SessionsModule } from "../sessions/sessions.module";
 import { UsersModule } from "../users/users.module";
@@ -9,7 +10,7 @@ import { CheckoutController } from "./checkout.controller";
 import { CheckoutService } from "./checkout.service";
 
 @Module({
-  imports: [DatabaseModule, CatalogModule, UsersModule, WalletModule, SessionsModule],
+  imports: [DatabaseModule, CatalogModule, UsersModule, WalletModule, SessionsModule, CartModule],
   controllers: [CheckoutController],
   providers: [CheckoutService],
   exports: [CheckoutService],
