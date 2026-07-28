@@ -17,14 +17,7 @@ export const categories: Category[] = [
     action: "Открыть каталог",
     href: "/catalog?category=skins",
   },
-  {
-    id: "gpt",
-    title: "GPT",
-    description: "Предложения GPT и API в Coins.",
-    action: "Открыть каталог",
-    href: "/catalog?category=gpt",
-  },
-];
+] satisfies Category[];
 
 const homeProductIds = [
   "ak-redline",
@@ -32,8 +25,8 @@ const homeProductIds = [
   "m4-printstream",
   "deagle-printstream",
   "steam-top-up-1000",
-  "gpt-plus",
-  "gpt-api-balance",
+  "steam-top-up-2000",
+  "steam-top-up-5000",
 ];
 
 function getCatalogProduct(id: string) {
@@ -52,7 +45,7 @@ const newProductIds = [
   "m4-printstream",
   "deagle-printstream",
   "steam-top-up-1000",
-  "gpt-plus",
+  "steam-top-up-2000",
 ];
 
 export const newProducts: Product[] = newProductIds.map(getCatalogProduct);

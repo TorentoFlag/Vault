@@ -8,6 +8,8 @@ export const apiPaths = [
   "/session/logout",
   "/me/steam-trade-url",
   "/me/steam-trade-url/status",
+  "/catalog",
+  "/catalog/{slug}",
 ] as const satisfies readonly ServerApiPath[];
 
 type ApiPath = typeof apiPaths[number];

@@ -16,6 +16,8 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/session/logout",
     "/me/steam-trade-url",
     "/me/steam-trade-url/status",
+    "/catalog",
+    "/catalog/{slug}",
   ]);
 });
 

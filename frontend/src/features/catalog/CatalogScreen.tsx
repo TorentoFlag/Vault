@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { ProductCard } from "@/components/marketplace/ProductCard";
 import { Breadcrumbs, Button, Checkbox, Container, EmptyState } from "@/components/ui/UI";
-import { catalogProducts } from "@/data/products";
 import {
   createDefaultCatalogFilters,
   filterAndSortCatalog,
@@ -22,14 +21,13 @@ import {
   getNextCatalogFeedSize,
 } from "@/lib/catalog-feed";
 import type { ProductFilter } from "@/lib/marketplace";
-import type { ProductAvailability, ProductFulfillmentMode } from "@/types/commerce";
+import type { Product, ProductAvailability, ProductFulfillmentMode } from "@/types/commerce";
 
 import styles from "./catalog.module.css";
 
 const categories: { value: ProductFilter; label: string }[] = [
   { value: "all", label: "Все" },
   { value: "steam", label: "Steam" },
-  { value: "gpt", label: "GPT" },
   { value: "skins", label: "Игровые предметы" },
 ];
 
@@ -37,18 +35,6 @@ const statuses: { value: ProductAvailability; label: string }[] = [
   { value: "available", label: "В наличии" },
   { value: "on-request", label: "Под заказ" },
 ];
-
-const typeOptions = [...new Set(
-  catalogProducts
-    .filter((product) => product.kind !== "skins")
-    .map((product) => product.productType),
-)];
-
-const weaponOptions = [...new Set(
-  catalogProducts
-    .filter((product) => product.kind === "skins")
-    .map((product) => product.productType),
-)];
 
 const fulfillmentOptions: { value: ProductFulfillmentMode; label: string }[] = [
   { value: "automatic", label: "Цифровой заказ" },
@@ -101,6 +87,7 @@ function FilterPanel({
   hasActiveFilters,
   dialogRef,
   closeButtonRef,
+  products,
 }: {
   filters: CatalogFilters;
   onChange: (next: CatalogFilters) => void;
@@ -111,16 +98,27 @@ function FilterPanel({
   hasActiveFilters: boolean;
   dialogRef: RefObject<HTMLElement | null>;
   closeButtonRef: RefObject<HTMLButtonElement | null>;
+  products: Product[];
 }) {
-  const relevantStatuses = statuses.filter((status) => catalogProducts.some((product) => (
+  const typeOptions = [...new Set(
+    products
+      .filter((product) => product.kind !== "skins")
+      .map((product) => product.productType),
+  )];
+  const weaponOptions = [...new Set(
+    products
+      .filter((product) => product.kind === "skins")
+      .map((product) => product.productType),
+  )];
+  const relevantStatuses = statuses.filter((status) => products.some((product) => (
     (filters.category === "all" || product.kind === filters.category)
     && product.availability === status.value
   )));
-  const relevantFulfillmentOptions = fulfillmentOptions.filter((mode) => catalogProducts.some((product) => (
+  const relevantFulfillmentOptions = fulfillmentOptions.filter((mode) => products.some((product) => (
     (filters.category === "all" || product.kind === filters.category)
     && product.fulfillmentMode === mode.value
   )));
-  const relevantTypeOptions = typeOptions.filter((type) => catalogProducts.some((product) => (
+  const relevantTypeOptions = typeOptions.filter((type) => products.some((product) => (
     product.kind !== "skins"
     && (filters.category === "all" || product.kind === filters.category)
     && product.productType === type
@@ -348,7 +346,7 @@ function getActiveChips(filters: CatalogFilters): ActiveChip[] {
   return chips;
 }
 
-export function CatalogScreen() {
+export function CatalogScreen({ products }: { products: Product[] }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -361,8 +359,8 @@ export function CatalogScreen() {
   const filters = useMemo(() => parseCatalogSearchParams(searchParams), [searchParams]);
   const [draftFilters, setDraftFilters] = useState<CatalogFilters>(() => createDefaultCatalogFilters());
   const visibleProducts = useMemo(
-    () => filterAndSortCatalog(catalogProducts, filters),
-    [filters],
+    () => filterAndSortCatalog(products, filters),
+    [filters, products],
   );
   const filtersKey = useMemo(() => serializeCatalogFilters(filters).toString(), [filters]);
   const visibleCount = feedState.key === filtersKey
@@ -504,7 +502,7 @@ export function CatalogScreen() {
         <div className={styles.intro}>
           <Breadcrumbs items={[{ label: "Главная", href: "/" }, { label: "Каталог" }]} />
           <h1>Каталог цифровых товаров</h1>
-          <p>Пополнение Steam, GPT и игровые предметы.</p>
+          <p>Пополнение Steam и игровые предметы с ценами в Coins.</p>
         </div>
 
         <div className={styles.categoryTabs} role="group" aria-label="Категории каталога">
@@ -601,6 +599,7 @@ export function CatalogScreen() {
             hasActiveFilters={(filtersOpen ? draftChips : activeChips).length > 0}
             dialogRef={filterDialogRef}
             closeButtonRef={closeFilterButtonRef}
+            products={products}
           />
 
           <div className={styles.results}>

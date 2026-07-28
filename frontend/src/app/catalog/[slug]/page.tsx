@@ -1,24 +1,20 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { catalogProducts } from "@/data/products";
 import { ProductDetailScreen } from "@/features/product/ProductDetailScreen";
 import { sanitizeCatalogReturnPath } from "@/lib/catalog";
-import { getProductBySlug, getRelatedProducts } from "@/lib/products";
+import { fetchCatalogList, fetchCatalogProductBySlug } from "@/lib/catalog-api";
+import { getRelatedProducts } from "@/lib/products";
 
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export const dynamicParams = false;
-
-export function generateStaticParams() {
-  return catalogProducts.map(({ slug }) => ({ slug }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = getProductBySlug(catalogProducts, slug);
+  const product = await fetchCatalogProductBySlug(slug);
 
   if (!product) {
     return { title: "Товар не найден — Vault" };
@@ -32,14 +28,15 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = getProductBySlug(catalogProducts, slug);
+  const product = await fetchCatalogProductBySlug(slug);
 
   if (!product) notFound();
+  const catalog = await fetchCatalogList();
 
   return (
     <ProductDetailScreen
       product={product}
-      relatedProducts={getRelatedProducts(catalogProducts, product, 4)}
+      relatedProducts={getRelatedProducts(catalog.items, product, 4)}
       catalogReturnHref={sanitizeCatalogReturnPath("/catalog")}
     />
   );

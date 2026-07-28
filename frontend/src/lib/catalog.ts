@@ -36,7 +36,7 @@ export function createDefaultCatalogFilters(): CatalogFilters {
   };
 }
 
-const productFilters: ProductFilter[] = ["all", "steam", "skins", "gpt"];
+const productFilters: ProductFilter[] = ["all", "steam", "skins"];
 const availabilityStatuses: ProductAvailability[] = ["available", "on-request"];
 const fulfillmentModes: ProductFulfillmentMode[] = ["automatic", "steam-trade", "manual"];
 const catalogSorts: CatalogSort[] = ["relevance", "price-asc", "price-desc", "newest"];

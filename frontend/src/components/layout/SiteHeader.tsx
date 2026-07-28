@@ -14,13 +14,14 @@ import { formatCoinRate } from "@/lib/marketplace";
 
 import styles from "./layout.module.css";
 
+const firstReleaseSearchProducts = catalogProducts.filter((product) => product.kind !== "gpt");
+
 const serviceNavigation: { label: string; href: string; icon: IconName }[] = [
   { label: "Все товары", href: "/catalog", icon: "bag" },
   { label: "Пополнение Steam", href: "/catalog?category=steam", icon: "steam" },
   { label: "Скины CS2", href: "/catalog?category=skins&q=CS2", icon: "shield" },
   { label: "Скины Dota 2", href: "/catalog?category=skins&q=Dota%202", icon: "shield" },
   { label: "Скины Rust", href: "/catalog?category=skins&q=Rust", icon: "shield" },
-  { label: "GPT-сервисы", href: "/catalog?category=gpt", icon: "grid" },
   { label: "Пополнить Coins", href: "/balance/top-up", icon: "coin" },
 ];
 
@@ -28,12 +29,12 @@ function SyncedHeaderSearch() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") ?? "";
   const currentSearch = searchParams.toString();
-  return <MarketplaceSearch key={`${query}:${currentSearch}`} products={catalogProducts} initialQuery={query} currentSearch={currentSearch} />;
+  return <MarketplaceSearch key={`${query}:${currentSearch}`} products={firstReleaseSearchProducts} initialQuery={query} currentSearch={currentSearch} />;
 }
 
 function HeaderSearch() {
   return (
-    <Suspense fallback={<MarketplaceSearch products={catalogProducts} />}>
+    <Suspense fallback={<MarketplaceSearch products={firstReleaseSearchProducts} />}>
       <SyncedHeaderSearch />
     </Suspense>
   );
@@ -182,7 +183,6 @@ export function SiteHeader() {
             <Link href="/catalog" onClick={() => setMenuOpen(false)}>Все товары</Link>
             <Link href="/catalog?category=steam" onClick={() => setMenuOpen(false)}>Пополнение Steam</Link>
             <Link href="/catalog?category=skins" onClick={() => setMenuOpen(false)}>Игровые предметы</Link>
-            <Link href="/catalog?category=gpt" onClick={() => setMenuOpen(false)}>GPT</Link>
             {isHydrated && session ? (
               <Link className={styles.mobileAccountLink} href="/balance/top-up" onClick={() => setMenuOpen(false)}>
                 Баланс: {balanceCoins.toLocaleString("ru-RU")} Coins

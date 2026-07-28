@@ -4,11 +4,11 @@ This is the entry point for humans and agents. Documentation describes current i
 
 ## Current project state
 
-- Root Git repository: not initialized at the time this document was written.
+- Root Git repository: initialized on `main`.
 - `frontend/.git`: removed; `frontend/` is now a normal project folder.
-- Frontend: Next.js 16, React 19, TypeScript, CSS Modules, localStorage-backed concept app.
-- Current frontend coverage: local catalog, Coins, cart, checkout gate, account, purchase history, inventory, Steam Trade URL form, support draft, legal routes, footer payment logos, FAQ, and search.
-- Current frontend limitation: no production backend, no real Arc Pay payment, no real Steam OpenID, no real SIH purchase/refill, no authoritative wallet/order state.
+- Frontend: Next.js 16, React 19, TypeScript, CSS Modules, backend-fed public catalog pages with remaining local concept flows.
+- Current frontend coverage: backend-fed home/catalog/product surfaces, Coins, local cart, checkout gate, account, purchase history, inventory, Steam Trade URL form, support draft, legal routes, footer payment logos, FAQ, and search.
+- Current frontend limitation: no production Arc Pay payment, no real Steam OpenID, no real SIH purchase/refill, no authoritative wallet/order state.
 - First release scope: skin purchase and Steam account refill only.
 - Deferred scope: GPT refill until provider API and product rules are supplied.
 

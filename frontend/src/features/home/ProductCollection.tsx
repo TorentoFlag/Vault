@@ -15,7 +15,6 @@ import styles from "./home.module.css";
 const categoryFilters: { value: ProductFilter; label: string }[] = [
   { value: "all", label: "Все" },
   { value: "steam", label: "Steam" },
-  { value: "gpt", label: "GPT" },
   { value: "skins", label: "Игровые предметы" },
 ];
 

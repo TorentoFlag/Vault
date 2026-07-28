@@ -28,7 +28,6 @@ test("под поиском отображается навигация по у�
     "Скины CS2",
     "Скины Dota 2",
     "Скины Rust",
-    "GPT-сервисы",
     "Пополнить Coins",
   ]) {
     assert.match(headerSource, new RegExp(label));
@@ -45,11 +44,11 @@ test("ссылки меню ведут в существующие раздел�
     "/catalog?category=skins&q=CS2",
     "/catalog?category=skins&q=Dota%202",
     "/catalog?category=skins&q=Rust",
-    "/catalog?category=gpt",
     "/balance/top-up",
   ]) {
     assert.match(headerSource, new RegExp(href.replace(/[?]/g, "\\?")));
   }
+  assert.doesNotMatch(headerSource, /category=gpt/);
 });
 
 test("пункты Dota 2 и Rust открывают непустую выдачу игровых предметов", () => {

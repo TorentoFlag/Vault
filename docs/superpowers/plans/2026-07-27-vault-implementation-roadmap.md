@@ -131,7 +131,7 @@
 - [x] Implement integer price conversion into Coins with append-only pricing settings.
 - [x] Implement public catalog/search/facet endpoints and product detail endpoint.
 - [x] Hide/defer GPT products in first release backend catalog.
-- [ ] Migrate home/catalog/product pages to backend data while preserving visual layout.
+- [x] Migrate home/catalog/product pages to backend data while preserving visual layout.
 
 **Acceptance:**
 - [x] Search returns exact keyword results for terms such as `Пистолет` and `Автомат` in backend catalog API.

@@ -33,7 +33,7 @@ export type Product = {
   fulfillmentMode: ProductFulfillmentMode;
   createdAt: string;
   popularity: number;
-  isMock: true;
+  isMock?: true;
   image?: string;
   imageAlt?: string;
   meta: string[];
