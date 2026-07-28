@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { CatalogPricingService } from "./catalog-pricing.service";
 import { firstReleaseCatalogProducts } from "./catalog.seed";
 import type {
   CatalogFacetOption,
@@ -20,6 +21,10 @@ const relatedTerms: Record<CatalogProductKind, string[]> = {
   skins: ["скин", "скины", "предмет", "предметы", "cs2", "dota"],
 };
 
+type LoadedCatalogProduct = CatalogProduct & {
+  priceCoinMinor?: number;
+};
+
 function normalize(value: string): string {
   return value.trim().toLocaleLowerCase("ru-RU");
 }
@@ -35,17 +40,22 @@ function numberQuery(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
-function priceDto(priceCoins: number) {
-  const amountMinor = priceCoins * 100;
+function priceDto(amountMinor: number) {
   return {
     currency: "COINS" as const,
     amountMinor,
     scale: 2 as const,
-    display: `${priceCoins.toLocaleString("ru-RU")} Coins`,
+    display: amountMinor % 100 === 0
+      ? `${(amountMinor / 100).toLocaleString("ru-RU")} Coins`
+      : `${(amountMinor / 100).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Coins`,
   };
 }
 
-function productDto(product: CatalogProduct): CatalogProductDto {
+function priceCoinMinor(product: LoadedCatalogProduct): number {
+  return product.priceCoinMinor ?? product.priceCoins * 100;
+}
+
+function productDto(product: LoadedCatalogProduct): CatalogProductDto {
   return {
     id: product.id,
     slug: product.slug,
@@ -64,7 +74,7 @@ function productDto(product: CatalogProduct): CatalogProductDto {
     meta: product.meta,
     keywords: product.keywords,
     details: product.details,
-    price: priceDto(product.priceCoins),
+    price: priceDto(priceCoinMinor(product)),
   };
 }
 
@@ -110,13 +120,13 @@ function relevance(product: CatalogProduct, query: string): number {
   );
 }
 
-function facetOptions(products: CatalogProduct[], selector: (product: CatalogProduct) => string | undefined): CatalogFacetOption[] {
+function facetOptions(products: LoadedCatalogProduct[], selector: (product: LoadedCatalogProduct) => string | undefined): CatalogFacetOption[] {
   return [...new Set(products.map(selector).filter((value): value is string => Boolean(value)))]
     .sort((left, right) => left.localeCompare(right, "ru-RU"))
     .map((value) => ({ id: value, title: value }));
 }
 
-function facets(products: CatalogProduct[]): CatalogFacetsDto {
+function facets(products: LoadedCatalogProduct[]): CatalogFacetsDto {
   return {
     kinds: [
       { id: "skins", title: "Игровые предметы" },
@@ -134,7 +144,11 @@ function facets(products: CatalogProduct[]): CatalogFacetsDto {
 
 @Injectable()
 export class CatalogService {
-  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(CatalogPricingService)
+    private readonly pricing: CatalogPricingService,
+  ) {}
 
   async list(query: CatalogListQuery): Promise<CatalogListDto> {
     const products = await this.loadProducts();
@@ -147,6 +161,8 @@ export class CatalogService {
     const max = numberQuery(query.max);
     const minPrice = min !== undefined && max !== undefined && min > max ? max : min;
     const maxPrice = min !== undefined && max !== undefined && min > max ? min : max;
+    const minPriceCoinMinor = minPrice === undefined ? undefined : minPrice * 100;
+    const maxPriceCoinMinor = maxPrice === undefined ? undefined : maxPrice * 100;
     const sort = allowedSorts.has(query.sort as CatalogSort) ? query.sort as CatalogSort : "relevance";
     const search = query.q ?? "";
 
@@ -156,12 +172,12 @@ export class CatalogService {
       .filter((product) => types.length === 0 || types.some((type) => normalize(product.productType).includes(type)))
       .filter((product) => fulfillmentModes.size === 0 || fulfillmentModes.has(product.fulfillmentMode))
       .filter((product) => weaponTerms.length === 0 || weaponTerms.some((term) => searchableText(product).includes(term)))
-      .filter((product) => minPrice === undefined || product.priceCoins >= minPrice)
-      .filter((product) => maxPrice === undefined || product.priceCoins <= maxPrice)
+      .filter((product) => minPriceCoinMinor === undefined || priceCoinMinor(product) >= minPriceCoinMinor)
+      .filter((product) => maxPriceCoinMinor === undefined || priceCoinMinor(product) <= maxPriceCoinMinor)
       .filter((product) => matchesQuery(product, search))
       .sort((left, right) => {
-        if (sort === "price-asc") return left.priceCoins - right.priceCoins;
-        if (sort === "price-desc") return right.priceCoins - left.priceCoins;
+        if (sort === "price-asc") return priceCoinMinor(left) - priceCoinMinor(right);
+        if (sort === "price-desc") return priceCoinMinor(right) - priceCoinMinor(left);
         if (sort === "newest") return Date.parse(right.createdAt) - Date.parse(left.createdAt);
         return relevance(right, search) - relevance(left, search) || left.id.localeCompare(right.id);
       });
@@ -186,7 +202,7 @@ export class CatalogService {
     return productDto(product);
   }
 
-  private async loadProducts(): Promise<CatalogProduct[]> {
+  private async loadProducts(): Promise<LoadedCatalogProduct[]> {
     if (!this.database.isConfigured()) return firstReleaseCatalogProducts;
     const result = await this.database.query<{
       id: string;
@@ -207,52 +223,69 @@ export class CatalogService {
       meta: string[];
       keywords: string[];
       details: CatalogProduct["details"];
+      supplier_price_microusd: string | null;
     }>(
       `
         SELECT
-          id,
-          slug,
-          kind,
-          category,
-          game,
-          product_type,
-          title,
-          description,
-          price_coin_minor,
-          availability,
-          fulfillment_mode,
-          created_at,
-          popularity,
-          image,
-          image_alt,
-          meta,
-          keywords,
-          details
+          catalog_products.id,
+          catalog_products.slug,
+          catalog_products.kind,
+          catalog_products.category,
+          catalog_products.game,
+          catalog_products.product_type,
+          catalog_products.title,
+          catalog_products.description,
+          catalog_products.price_coin_minor,
+          catalog_products.availability,
+          catalog_products.fulfillment_mode,
+          catalog_products.created_at,
+          catalog_products.popularity,
+          catalog_products.image,
+          catalog_products.image_alt,
+          catalog_products.meta,
+          catalog_products.keywords,
+          catalog_products.details,
+          supplier_listings.price_microusd::text AS supplier_price_microusd
         FROM catalog_products
-        WHERE public_enabled = true
-          AND kind IN ('skins', 'steam')
-        ORDER BY popularity DESC, created_at DESC, id ASC
+        LEFT JOIN supplier_listings
+          ON catalog_products.supplier_provider = 'sih'
+          AND supplier_listings.supplier = 'sih'
+          AND supplier_listings.game = lower(catalog_products.game)
+          AND supplier_listings.market_hash_name = catalog_products.supplier_item_id
+          AND supplier_listings.active = true
+        WHERE catalog_products.public_enabled = true
+          AND catalog_products.kind IN ('skins', 'steam')
+        ORDER BY catalog_products.popularity DESC, catalog_products.created_at DESC, catalog_products.id ASC
       `,
     );
-    return result.rows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      kind: row.kind,
-      category: row.category,
-      ...(row.game === null ? {} : { game: row.game }),
-      productType: row.product_type,
-      title: row.title,
-      description: row.description,
-      priceCoins: Math.floor(row.price_coin_minor / 100),
-      availability: row.availability,
-      fulfillmentMode: row.fulfillment_mode,
-      createdAt: row.created_at.toISOString(),
-      popularity: row.popularity,
-      ...(row.image === null ? {} : { image: row.image }),
-      ...(row.image_alt === null ? {} : { imageAlt: row.image_alt }),
-      meta: row.meta,
-      keywords: row.keywords,
-      details: row.details,
+    return Promise.all(result.rows.map(async (row) => {
+      const livePrice = row.supplier_price_microusd === null
+        ? undefined
+        : await this.pricing.quoteSupplierPrice({
+          scope: "sih-skins",
+          supplierAmountMicrounit: BigInt(row.supplier_price_microusd),
+        });
+      return {
+        id: row.id,
+        slug: row.slug,
+        kind: row.kind,
+        category: row.category,
+        ...(row.game === null ? {} : { game: row.game }),
+        productType: row.product_type,
+        title: row.title,
+        description: row.description,
+        priceCoins: Math.floor(row.price_coin_minor / 100),
+        ...(livePrice === undefined ? {} : { priceCoinMinor: livePrice.amountMinor }),
+        availability: row.availability,
+        fulfillmentMode: row.fulfillment_mode,
+        createdAt: row.created_at.toISOString(),
+        popularity: row.popularity,
+        ...(row.image === null ? {} : { image: row.image }),
+        ...(row.image_alt === null ? {} : { imageAlt: row.image_alt }),
+        meta: row.meta,
+        keywords: row.keywords,
+        details: row.details,
+      };
     }));
   }
 }
