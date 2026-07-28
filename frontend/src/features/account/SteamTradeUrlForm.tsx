@@ -12,11 +12,11 @@ import styles from "./account.module.css";
 
 export function SteamTradeUrlForm({ returnTo }: { returnTo: "/account/steam" | "/account/inventory" | "/checkout" | "/cart" }) {
   const router = useRouter();
-  const { hasSteam, steamTradeUrl, saveSteamTradeUrl, notify } = useMarketplace();
+  const { hasSteam, hasSteamTradeUrl, saveSteamTradeUrl, notify } = useMarketplace();
   const [draftValue, setDraftValue] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [saved, setSaved] = useState(false);
-  const value = draftValue ?? steamTradeUrl;
+  const value = draftValue ?? "";
   const error = validateSteamTradeUrl(value);
   const checkoutConnectHref = "/auth?method=steam&returnTo=%2Faccount%2Fsteam%3FreturnTo%3D%252Fcheckout";
   const cartConnectHref = "/auth?method=steam&returnTo=%2Faccount%2Fsteam%3FreturnTo%3D%252Fcart";
@@ -55,11 +55,12 @@ export function SteamTradeUrlForm({ returnTo }: { returnTo: "/account/steam" | "
         onChange={(event) => { setDraftValue(event.target.value); setSaved(false); }}
       />
       <p id="trade-url-help">Найдите ссылку в Steam: Инвентарь → Предложения обмена → Кто может отправлять мне предложения.</p>
+      {hasSteam ? <p className={styles.inlineWarning}>{hasSteamTradeUrl ? "Trade URL сохранён" : "Trade URL не добавлен"}</p> : null}
       {!hasSteam ? <p className={styles.inlineWarning}>Сначала подключите Steam-профиль.</p> : null}
       {touched && error && hasSteam ? <p id="trade-url-error" className={styles.inlineError} role="alert">{error}</p> : null}
       {saved ? <p className={styles.inlineSuccess} role="status">Trade URL сохранён.{returnTo === "/checkout" ? " Возвращаем к оформлению заказа." : returnTo === "/cart" ? " Возвращаем в корзину." : ""}</p> : null}
       <div className={styles.tradeActions}>
-        <Button type="submit" disabled={!hasSteam || !!error || value === steamTradeUrl}>Сохранить Trade URL</Button>
+        <Button type="submit" disabled={!hasSteam || !!error}>Сохранить Trade URL</Button>
         {!hasSteam ? <Link className={styles.primaryLink} href={connectHref}>Подключить Steam</Link> : null}
       </div>
     </form>

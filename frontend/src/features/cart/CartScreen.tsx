@@ -64,7 +64,7 @@ export function CartScreen() {
     canPurchase,
     isAuthenticated,
     hasSteam,
-    steamTradeUrl,
+    hasSteamTradeUrl,
     isHydrated,
     removeFromCart,
     notify,
@@ -180,7 +180,7 @@ export function CartScreen() {
                   <strong>Для этого заказа нужен Steam</strong>
                   <span>Steam обязателен для сохранения данных заказа игрового предмета.</span>
                 </div>
-              ) : requiresSteam && !steamTradeUrl ? (
+              ) : requiresSteam && !hasSteamTradeUrl ? (
                 <div className={styles.authNotice} id="trade-url-required-note">
                   <strong>Добавьте Steam Trade URL</strong>
                   <span>Без персональной ссылки невозможно подготовить получение игрового предмета.</span>
@@ -198,7 +198,7 @@ export function CartScreen() {
               )}
 
               <div className={styles.summaryActions}>
-                {requiresSteam && hasSteam && !steamTradeUrl ? (
+                {requiresSteam && hasSteam && !hasSteamTradeUrl ? (
                   <Button
                     className={styles.primaryLink}
                     type="button"

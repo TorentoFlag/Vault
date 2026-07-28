@@ -101,6 +101,7 @@ export function CheckoutScreen() {
     requiresSteam,
     hasSteam,
     steamTradeUrl,
+    hasSteamTradeUrl,
     session,
     isHydrated,
     marketplaceRevision,
@@ -122,8 +123,9 @@ export function CheckoutScreen() {
   const sessionSignature = [session?.emailAccount?.id, session?.steamAccount?.id].filter(Boolean).sort().join("|");
   const reviewedRevision = marketplaceRevision;
   const reviewedCartIds = cart.map((product) => product.id);
-  const reviewKey = createCheckoutReviewKey({ revision: reviewedRevision, sessionSignature, cartIds: reviewedCartIds, steamTradeUrl, steamLogin: "", gptEmail: "" });
-  const consentReviewKey = createCheckoutReviewKey({ revision: reviewedRevision, sessionSignature, cartIds: reviewedCartIds, steamTradeUrl, steamLogin: fulfillment.steamLogin, gptEmail: fulfillment.gptEmail });
+  const reviewedTradeUrlState = hasSteamTradeUrl ? steamTradeUrl || "server-configured" : "";
+  const reviewKey = createCheckoutReviewKey({ revision: reviewedRevision, sessionSignature, cartIds: reviewedCartIds, steamTradeUrl: reviewedTradeUrlState, steamLogin: "", gptEmail: "" });
+  const consentReviewKey = createCheckoutReviewKey({ revision: reviewedRevision, sessionSignature, cartIds: reviewedCartIds, steamTradeUrl: reviewedTradeUrlState, steamLogin: fulfillment.steamLogin, gptEmail: fulfillment.gptEmail });
 
   const gate = getCheckoutGate({
     itemCount: cart.length,
@@ -132,7 +134,7 @@ export function CheckoutScreen() {
     isAuthenticated,
     requiresSteam,
     hasSteam,
-    hasTradeUrl: !!steamTradeUrl,
+    hasTradeUrl: hasSteamTradeUrl,
   });
   const fulfillmentErrors = validateFulfillmentInput([...new Set(cart.map((product) => product.kind))], fulfillment);
   const canSubmit = canSubmitCheckout(gate, accepted && acceptedReviewKey === consentReviewKey) && Object.keys(fulfillmentErrors).length === 0 && status === "idle";
@@ -187,7 +189,7 @@ export function CheckoutScreen() {
       cartIds: reviewedCartIds,
       sessionSignature,
       accountKey: session?.emailAccount?.id ?? session?.steamAccount?.id ?? null,
-      steamTradeUrl,
+      steamTradeUrl: reviewedTradeUrlState,
     };
     const result = await checkoutCart(fulfillment, review);
 
@@ -234,7 +236,7 @@ export function CheckoutScreen() {
                 {requiresSteam && session?.steamAccount ? (
                   <div className={styles.steamReview}>
                     <div><span>Steam-профиль</span><strong>{session.steamAccount.displayName}</strong><small>Steam ID: {session.steamAccount.steamId}</small></div>
-                    <div><span>Steam Trade URL</span><strong>{steamTradeUrl}</strong><small>Ссылка будет сохранена в неизменяемой записи заказа.</small></div>
+                    <div><span>Steam Trade URL</span><strong>{steamTradeUrl || "Сохранён на сервере"}</strong><small>Ссылка будет сохранена в неизменяемой записи заказа.</small></div>
                     <Link href="/account/steam?returnTo=%2Fcheckout">Настроить Steam</Link>
                   </div>
                 ) : null}

@@ -104,6 +104,7 @@ type MarketplaceContextValue = {
   transactions: CoinTransaction[];
   tradeEvents: TradeEvent[];
   steamTradeUrl: string;
+  hasSteamTradeUrl: boolean;
   session: MarketplaceSession | null;
   isAuthenticated: boolean;
   hasSteam: boolean;
@@ -149,6 +150,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [tradeEvents, setTradeEvents] = useState<TradeEvent[]>([]);
   const [steamTradeUrl, setSteamTradeUrl] = useState("");
+  const [serverSteamTradeUrlConfigured, setServerSteamTradeUrlConfigured] = useState(false);
   const [hasSeedData, setHasSeedData] = useState(false);
   const [accounts, setAccounts] = useState<Record<string, AccountSnapshot>>({});
   const [isHydrated, setIsHydrated] = useState(false);
@@ -234,6 +236,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!(session?.emailAccount || session?.steamAccount);
   const hasSteam = !!session?.steamAccount;
   const requiresSteam = cart.some((product) => product.kind === "skins");
+  const hasSteamTradeUrl = isServerBacked ? serverSteamTradeUrlConfigured : !!steamTradeUrl;
   const canPurchase =
     cartSummary.canPurchase && isAuthenticated && (!requiresSteam || hasSteam);
   const accountKey = getSessionAccountKey(session);
@@ -270,13 +273,15 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         setOrders([]);
         setTransactions([]);
         setTradeEvents([]);
-        setSteamTradeUrl(tradeUrlStatus.configured ? "Steam Trade URL сохранён на сервере" : "");
+        setSteamTradeUrl("");
+        setServerSteamTradeUrlConfigured(tradeUrlStatus.configured);
         setHasSeedData(false);
         applyServerCart(cartResponse);
       } catch {
         if (cancelled) return;
         setServerSyncStatus("fallback");
         setServerCart(null);
+        setServerSteamTradeUrlConfigured(false);
       }
     }
 
@@ -416,6 +421,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       transactions,
       tradeEvents,
       steamTradeUrl,
+      hasSteamTradeUrl,
       session,
       isAuthenticated,
       hasSteam,
@@ -559,6 +565,18 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       async saveSteamTradeUrl(value) {
         const normalized = normalizeSteamTradeUrl(value);
         if (!normalized) return false;
+        if (isServerBacked) {
+          try {
+            await ensureCsrfToken();
+            await createApiClient({ csrfToken: () => csrfTokenRef.current }).putSteamTradeUrl(normalized);
+            setSteamTradeUrl("");
+            setServerSteamTradeUrlConfigured(true);
+            return true;
+          } catch {
+            setNotice("Не удалось сохранить Steam Trade URL на сервере. Проверьте сессию и повторите действие.");
+            return false;
+          }
+        }
         const persisted = await persistCurrentState({ steamTradeUrl: normalized });
         return Boolean(persisted);
       },
@@ -593,6 +611,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
             csrfTokenRef.current = null;
             setServerSyncStatus("fallback");
             setServerCart(null);
+            setServerSteamTradeUrlConfigured(false);
           } catch {
             setNotice("Не удалось завершить серверную сессию. Повторите действие.");
             return false;
@@ -621,6 +640,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       ensureCsrfToken,
       exposedHydrated,
       hasSteam,
+      hasSteamTradeUrl,
       hasSeedData,
       isAuthenticated,
       isHydrated,

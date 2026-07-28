@@ -174,7 +174,7 @@ function TradeLog({ events }: { events: TradeEvent[] }) {
 }
 
 function Overview() {
-  const { balanceCoins, orders, transactions, tradeEvents, session, hasSteam, steamTradeUrl } = useMarketplace();
+  const { balanceCoins, orders, transactions, tradeEvents, session, hasSteam, hasSteamTradeUrl } = useMarketplace();
   const recentOrders = useMemo(() => sortOrdersNewestFirst(orders).slice(0, 3), [orders]);
   const inventory = useMemo(() => getInventoryItems(orders, tradeEvents), [orders, tradeEvents]);
   const activeOrders = orders.filter((order) => order.status === "processing").length;
@@ -189,7 +189,7 @@ function Overview() {
           <div><dt>Без внешней выдачи</dt><dd>{activeOrders}</dd></div>
           <div><dt>В инвентаре</dt><dd>{inventory.length}</dd></div>
         </dl>
-        <div className={styles.accountReadiness}><span>Настройки аккаунта</span><strong>{hasSteam && steamTradeUrl ? "Данные Steam настроены" : "Нужна настройка Steam"}</strong><small>Email {session?.emailAccount ? "подтверждён" : "не подключён"} · Steam {hasSteam ? "подключён" : "не подключён"}</small><Link href="/account/steam">Проверить Steam</Link></div>
+        <div className={styles.accountReadiness}><span>Настройки аккаунта</span><strong>{hasSteam && hasSteamTradeUrl ? "Данные Steam настроены" : "Нужна настройка Steam"}</strong><small>Email {session?.emailAccount ? "подтверждён" : "не подключён"} · Steam {hasSteam ? "подключён" : "не подключён"}</small><Link href="/account/steam">Проверить Steam</Link></div>
       </section>
 
       <section className={styles.panel}>
@@ -224,12 +224,12 @@ function Payments() {
 }
 
 function Inventory() {
-  const { orders, tradeEvents, hasSteam, steamTradeUrl, sellInventoryItem, withdrawInventoryItem } = useMarketplace();
+  const { orders, tradeEvents, hasSteam, hasSteamTradeUrl, sellInventoryItem, withdrawInventoryItem } = useMarketplace();
   const items = useMemo(() => getInventoryItems(orders, tradeEvents), [orders, tradeEvents]);
-  const isSteamDataConfigured = hasSteam && !!steamTradeUrl;
+  const isSteamDataConfigured = hasSteam && hasSteamTradeUrl;
   const withdrawalReason = !hasSteam
     ? "Вывод недоступен: подключите Steam-профиль."
-    : !steamTradeUrl
+    : !hasSteamTradeUrl
       ? "Вывод недоступен: сохраните Steam Trade URL."
     : "Данные готовы, но отправка станет доступна после подключения обработки Steam Trade.";
   const saleReason = "Coins зачисляются сразу после локального подтверждения продажи.";
@@ -237,8 +237,8 @@ function Inventory() {
   return (
     <div className={styles.sectionStack}>
       <section className={styles.readinessPanel}>
-        <div><span>Настройки Steam</span><h2>{isSteamDataConfigured ? "Данные Steam настроены" : "Завершите настройку Steam"}</h2><p>Профиль и Trade URL сохраняются локально. Внешняя передача предметов не подключена.</p></div>
-        <dl><div><dt>Steam</dt><dd>{hasSteam ? "Подключён локально" : "Не подключён"}</dd></div><div><dt>Trade URL</dt><dd>{steamTradeUrl ? "Сохранён" : "Не добавлен"}</dd></div><div><dt>Передача</dt><dd>Не подключена</dd></div></dl>
+        <div><span>Настройки Steam</span><h2>{isSteamDataConfigured ? "Данные Steam настроены" : "Завершите настройку Steam"}</h2><p>Профиль и Trade URL сохраняются для заказов игровых предметов. Внешняя передача предметов не подключена.</p></div>
+        <dl><div><dt>Steam</dt><dd>{hasSteam ? "Подключён" : "Не подключён"}</dd></div><div><dt>Trade URL</dt><dd>{hasSteamTradeUrl ? "Сохранён" : "Не добавлен"}</dd></div><div><dt>Передача</dt><dd>Не подключена</dd></div></dl>
         <Link className={styles.primaryLink} href="/account/steam">Профиль Steam</Link>
       </section>
 
@@ -296,7 +296,7 @@ function SteamSettings({ returnTo }: { returnTo?: "/checkout" | "/cart" | null }
     <div className={styles.sectionStack}>
       <section className={styles.steamProfile}>
         <span className={styles.steamMark}>ST</span>
-        <div><span>Steam-профиль</span><h2>{hasSteam ? session?.steamAccount?.displayName : "Steam не подключён"}</h2><p>{hasSteam ? `Steam ID: ${session?.steamAccount?.steamId}` : "Подключите локальную Steam-сессию для оформления игровых предметов."}</p></div>
+        <div><span>Steam-профиль</span><h2>{hasSteam ? session?.steamAccount?.displayName : "Steam не подключён"}</h2><p>{hasSteam ? `Steam ID: ${session?.steamAccount?.steamId}` : "Подключите Steam-профиль для оформления игровых предметов."}</p></div>
         {hasSteam ? <StatusBadge>Подключён</StatusBadge> : <Link className={styles.primaryLink} href={connectHref}>Подключить Steam</Link>}
       </section>
       <section className={styles.panel}>

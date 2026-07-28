@@ -17,10 +17,19 @@ test("auth commits immediately from click-bound provider intents and cannot log 
 test("skin cart gates Steam and Trade URL before balance top-up", () => {
   const cart = source("src/features/cart/CartScreen.tsx");
   const steamGate = cart.indexOf("requiresSteam && !hasSteam");
-  const tradeGate = cart.indexOf("requiresSteam && !steamTradeUrl");
+  const tradeGate = cart.indexOf("requiresSteam && !hasSteamTradeUrl");
   const balanceGate = cart.indexOf("!hasSufficientBalance");
   assert.ok(steamGate >= 0 && tradeGate > steamGate && balanceGate > tradeGate);
   assert.match(cart, /account\/steam\?returnTo=%2Fcart/);
+});
+
+test("Steam Trade URL settings persist through backend without exposing saved token in the input", () => {
+  const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
+  const form = source("src/features/account/SteamTradeUrlForm.tsx");
+  assert.match(provider, /isServerBacked[\s\S]{0,500}putSteamTradeUrl\(normalized\)/);
+  assert.match(provider, /setServerSteamTradeUrlConfigured\(true\)/);
+  assert.match(form, /const value = draftValue \?\? \"\"/);
+  assert.match(form, /hasSteamTradeUrl \? "Trade URL сохранён" : "Trade URL не добавлен"/);
 });
 
 test("storage events compare against the live persisted ref", () => {
