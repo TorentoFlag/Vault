@@ -1122,6 +1122,123 @@
           "Checkout"
         ]
       }
+    },
+    "/orders/me": {
+      "get": {
+        "operationId": "OrdersController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "orders"
+                  ],
+                  "properties": {
+                    "orders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "userId",
+                          "status",
+                          "totalCoinMinor",
+                          "recipientSnapshots",
+                          "createdAt",
+                          "lines"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "held"
+                            ]
+                          },
+                          "totalCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "recipientSnapshots": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "lines": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "productSlug",
+                                "kind",
+                                "title",
+                                "quantity",
+                                "unitPriceCoinMinor",
+                                "recipientSnapshot"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "productSlug": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "steam",
+                                    "skins"
+                                  ]
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "quantity": {
+                                  "type": "integer",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                "unitPriceCoinMinor": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "recipientSnapshot": {
+                                  "type": "object"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Orders"
+        ]
+      }
     }
   },
   "info": {

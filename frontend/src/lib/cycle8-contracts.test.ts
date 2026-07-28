@@ -32,6 +32,12 @@ test("Steam Trade URL settings persist through backend without exposing saved to
   assert.match(form, /hasSteamTradeUrl \? "Trade URL сохранён" : "Trade URL не добавлен"/);
 });
 
+test("backend sessions hydrate account purchases from backend order history", () => {
+  const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
+  assert.match(provider, /client\.getOrderHistory\(\)/);
+  assert.match(provider, /setOrders\(orderHistory\)/);
+});
+
 test("storage events compare against the live persisted ref", () => {
   const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
   assert.match(provider, /parseMarketplaceStorageEvent\(STORAGE_KEY, event, persistedStateRef\.current\.revision\)/);

@@ -10,10 +10,11 @@ import { CartModule } from "./modules/cart/cart.module";
 import { CatalogModule } from "./modules/catalog/catalog.module";
 import { CheckoutModule } from "./modules/checkout/checkout.module";
 import { HealthModule } from "./modules/health/health.module";
+import { OrdersModule } from "./modules/orders/orders.module";
 import { WalletModule } from "./modules/wallet/wallet.module";
 
 @Module({
-  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AuthModule, CatalogModule, WalletModule, CartModule, CheckoutModule],
+  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AuthModule, CatalogModule, WalletModule, CartModule, CheckoutModule, OrdersModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

@@ -261,16 +261,17 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const client = createApiClient();
       try {
         const user = await client.getCurrentUser();
-        const [wallet, tradeUrlStatus, cartResponse] = await Promise.all([
+        const [wallet, tradeUrlStatus, cartResponse, orderHistory] = await Promise.all([
           client.getWalletBalance(),
           client.getSteamTradeUrlStatus(),
           fetchHydratedCart(),
+          client.getOrderHistory(),
         ]);
         if (cancelled) return;
         setServerSyncStatus("authenticated");
         setSession(sessionFromApiUser(user));
         setBalanceCoins(wallet.availableCoins);
-        setOrders([]);
+        setOrders(orderHistory);
         setTransactions([]);
         setTradeEvents([]);
         setSteamTradeUrl("");
@@ -490,8 +491,13 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
             const order = await checkoutServerCart({
               idempotencyKey: `checkout-${uniqueId}`,
             }, { csrfToken: () => csrfTokenRef.current });
-            const wallet = await createApiClient().getWalletBalance();
+            const client = createApiClient();
+            const [wallet, orderHistory] = await Promise.all([
+              client.getWalletBalance(),
+              client.getOrderHistory(),
+            ]);
             setBalanceCoins(wallet.availableCoins);
+            setOrders(orderHistory);
             applyServerCart({ items: [], totalCoins: 0, products: [] });
             return {
               status: "success",

@@ -23,6 +23,7 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/cart/items/{productSlug}",
     "/checkout",
     "/checkout/cart",
+    "/orders/me",
   ]);
 });
 
@@ -105,4 +106,57 @@ test("API client maps backend wallet balance from Coins minor units", async () =
     heldCoins: 321,
     availableCoins: 679,
   });
+});
+
+test("API client maps backend order history without exposing internal request fields", async () => {
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    fetch: async () => new Response(JSON.stringify({
+      orders: [
+        {
+          id: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+          userId: "user_76561198000000002",
+          status: "held",
+          totalCoinMinor: 318_000,
+          createdAt: "2026-07-28T08:00:00.000Z",
+          recipientSnapshots: [
+            { kind: "steam-trade", steamId64: "76561198000000002", steamTradePartnerAccountId: "39734273" },
+          ],
+          lines: [
+            {
+              id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+              productSlug: "desert-eagle-printstream",
+              kind: "skins",
+              title: "Desert Eagle | Printstream",
+              quantity: 1,
+              unitPriceCoinMinor: 318_000,
+              recipientSnapshot: { kind: "steam-trade", steamId64: "76561198000000002", steamTradePartnerAccountId: "39734273" },
+            },
+          ],
+        },
+      ],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  });
+
+  assert.deepEqual(await client.getOrderHistory(), [{
+    id: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+    number: "VLT-2FDB9DE9",
+    createdAt: "2026-07-28T08:00:00.000Z",
+    totalCoins: 3180,
+    status: "processing",
+    isDemo: false,
+    items: [{
+      id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+      productId: "desert-eagle-printstream",
+      slug: "desert-eagle-printstream",
+      title: "Desert Eagle | Printstream",
+      kind: "skins",
+      priceCoins: 3180,
+      fulfillmentMode: "steam-trade",
+      deliveryStatus: "pending",
+    }],
+  }]);
 });

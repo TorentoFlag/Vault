@@ -236,4 +236,82 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     );
     expect(holds.rows[0]).toEqual({ count: "1", total: "318000" });
   });
+
+  it("lists only the current user's orders newest first without internal request fields", async () => {
+    await users.saveSteamTradeCredential(userId, { partner: "39734273", token: "secretToken" });
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 954_000,
+      idempotencyKey: "topup-credit-order-history-owner",
+      reason: "test-credit",
+    });
+    const olderOrder = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-history-older",
+      items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
+    });
+    const newerOrder = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-history-newer",
+      items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
+    });
+    await pool.query("UPDATE orders SET created_at = $1 WHERE id = $2", ["2026-07-28T07:00:00.000Z", olderOrder.id]);
+    await pool.query("UPDATE orders SET created_at = $1 WHERE id = $2", ["2026-07-28T08:00:00.000Z", newerOrder.id]);
+
+    const otherSteamId64 = "76561198000000003";
+    const otherUserId = `user_${otherSteamId64}`;
+    await users.upsertSteamUser({
+      claimedIdentifier: `https://steamcommunity.com/openid/id/${otherSteamId64}`,
+      providerEndpoint: "https://steamcommunity.com/openid/login",
+      responseNonce: "2026-07-28T10:00:01Znonce",
+      steamId64: otherSteamId64,
+    });
+    await users.saveSteamTradeCredential(otherUserId, { partner: "39734274", token: "otherSecretToken" });
+    await wallet.creditUser({
+      userId: otherUserId,
+      amountCoinMinor: 318_000,
+      idempotencyKey: "topup-credit-order-history-other",
+      reason: "test-credit",
+    });
+    await checkout.checkoutFromCart({
+      userId: otherUserId,
+      idempotencyKey: "checkout-history-other",
+      items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
+    });
+
+    const session = await sessions.createSession(userId, null);
+    await request(app?.getHttpServer() as Parameters<typeof request>[0])
+      .get("/orders/me")
+      .set("Cookie", `${CUSTOMER_SESSION_COOKIE}=${session.token}`)
+      .expect(200)
+      .expect(({ body }) => {
+        const responseBody = body as { orders: Array<{ id: string }> };
+        expect(responseBody.orders).toHaveLength(2);
+        expect(responseBody.orders.map((order) => order.id)).toEqual([newerOrder.id, olderOrder.id]);
+        expect(responseBody.orders[0]).toMatchObject({
+          id: newerOrder.id,
+          userId,
+          status: "held",
+          totalCoinMinor: 318_000,
+          createdAt: "2026-07-28T08:00:00.000Z",
+          lines: [
+            {
+              productSlug: "desert-eagle-printstream",
+              kind: "skins",
+              title: "Desert Eagle | Printstream",
+              quantity: 1,
+              unitPriceCoinMinor: 318_000,
+              recipientSnapshot: {
+                kind: "steam-trade",
+                steamId64,
+                steamTradePartnerAccountId: "39734273",
+              },
+            },
+          ],
+        });
+        expect(JSON.stringify(body)).not.toContain("checkout-history-newer");
+        expect(JSON.stringify(body)).not.toContain("secretToken");
+        expect(JSON.stringify(body)).not.toContain(otherUserId);
+      });
+  });
 });

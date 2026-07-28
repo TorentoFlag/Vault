@@ -1,4 +1,6 @@
 import openApiDocument from "../generated/api-contract.json" with { type: "json" };
+import type { MarketplaceOrder, OrderDeliveryStatus, OrderStatus } from "../types/account.ts";
+import type { Product } from "../types/commerce.ts";
 
 type ServerApiPath = keyof typeof openApiDocument.paths;
 
@@ -15,6 +17,7 @@ export const apiPaths = [
   "/cart/items/{productSlug}",
   "/checkout",
   "/checkout/cart",
+  "/orders/me",
 ] as const satisfies readonly ServerApiPath[];
 
 type ApiPath = typeof apiPaths[number];
@@ -45,6 +48,37 @@ export type ApiWalletBalance = {
   postedCoins: number;
   heldCoins: number;
   availableCoins: number;
+};
+
+type ApiOrderRecipientSnapshot =
+  | {
+    kind: "steam-trade";
+    steamId64: string;
+    steamTradePartnerAccountId: string;
+  }
+  | {
+    kind: "steam-refill";
+    steamLogin: string;
+  };
+
+type ApiOrderLine = {
+  id: string;
+  productSlug: string;
+  kind: Product["kind"];
+  title: string;
+  quantity: 1;
+  unitPriceCoinMinor: number;
+  recipientSnapshot: ApiOrderRecipientSnapshot;
+};
+
+type ApiOrder = {
+  id: string;
+  userId: string;
+  status: "held";
+  totalCoinMinor: number;
+  recipientSnapshots: ApiOrderRecipientSnapshot[];
+  createdAt: string;
+  lines: ApiOrderLine[];
 };
 
 export class ApiProblemError extends Error {
@@ -126,8 +160,96 @@ function isWalletBalanceResponse(value: unknown): value is {
   );
 }
 
+function isApiOrderRecipientSnapshot(value: unknown): value is ApiOrderRecipientSnapshot {
+  if (!isRecord(value)) return false;
+  if (value.kind === "steam-trade") {
+    return typeof value.steamId64 === "string"
+      && typeof value.steamTradePartnerAccountId === "string"
+      && !("token" in value)
+      && !("tradeUrl" in value);
+  }
+  return value.kind === "steam-refill" && typeof value.steamLogin === "string";
+}
+
+function isApiOrderLine(value: unknown): value is ApiOrderLine {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.productSlug === "string" &&
+    (value.kind === "skins" || value.kind === "steam") &&
+    typeof value.title === "string" &&
+    value.quantity === 1 &&
+    typeof value.unitPriceCoinMinor === "number" &&
+    Number.isSafeInteger(value.unitPriceCoinMinor) &&
+    value.unitPriceCoinMinor > 0 &&
+    isApiOrderRecipientSnapshot(value.recipientSnapshot)
+  );
+}
+
+function isApiOrder(value: unknown): value is ApiOrder {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.userId === "string" &&
+    value.status === "held" &&
+    typeof value.totalCoinMinor === "number" &&
+    Number.isSafeInteger(value.totalCoinMinor) &&
+    value.totalCoinMinor > 0 &&
+    typeof value.createdAt === "string" &&
+    Array.isArray(value.recipientSnapshots) &&
+    value.recipientSnapshots.every(isApiOrderRecipientSnapshot) &&
+    Array.isArray(value.lines) &&
+    value.lines.every(isApiOrderLine) &&
+    !("idempotencyKey" in value) &&
+    !("requestHash" in value)
+  );
+}
+
+function isOrderHistoryResponse(value: unknown): value is { orders: ApiOrder[] } {
+  return isRecord(value) && Array.isArray(value.orders) && value.orders.every(isApiOrder);
+}
+
 function coinMinorToCoins(amountMinor: number) {
   return amountMinor / 100;
+}
+
+function orderNumberFromId(id: string) {
+  return `VLT-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
+function fulfillmentModeForKind(kind: Product["kind"]): Product["fulfillmentMode"] {
+  return kind === "skins" ? "steam-trade" : "automatic";
+}
+
+function deliveryStatusForStatus(status: ApiOrder["status"]): OrderDeliveryStatus {
+  return status === "held" ? "pending" : "pending";
+}
+
+function orderStatusForApiStatus(status: ApiOrder["status"]): OrderStatus {
+  return status === "held" ? "processing" : "processing";
+}
+
+function mapApiOrder(order: ApiOrder): MarketplaceOrder {
+  const steamRefillRecipient = order.recipientSnapshots.find((snapshot) => snapshot.kind === "steam-refill");
+  return {
+    id: order.id,
+    number: orderNumberFromId(order.id),
+    createdAt: order.createdAt,
+    totalCoins: coinMinorToCoins(order.totalCoinMinor),
+    status: orderStatusForApiStatus(order.status),
+    isDemo: false,
+    ...(steamRefillRecipient?.kind === "steam-refill" ? { recipient: { steamLogin: steamRefillRecipient.steamLogin } } : {}),
+    items: order.lines.map((line) => ({
+      id: line.id,
+      productId: line.productSlug,
+      slug: line.productSlug,
+      title: line.title,
+      kind: line.kind,
+      priceCoins: coinMinorToCoins(line.unitPriceCoinMinor),
+      fulfillmentMode: fulfillmentModeForKind(line.kind),
+      deliveryStatus: deliveryStatusForStatus(order.status),
+    })),
+  };
 }
 
 async function parseJson(response: Response): Promise<unknown> {
@@ -213,6 +335,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
         heldCoins: coinMinorToCoins(body.heldCoinMinor),
         availableCoins: coinMinorToCoins(body.availableCoinMinor),
       };
+    },
+
+    async getOrderHistory(): Promise<MarketplaceOrder[]> {
+      const body = await requestJson("/orders/me");
+      if (!isOrderHistoryResponse(body)) throw new Error("Order history response is malformed.");
+      return body.orders.map(mapApiOrder);
     },
   };
 }

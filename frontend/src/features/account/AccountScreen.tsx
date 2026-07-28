@@ -27,7 +27,7 @@ export type AccountSection = "overview" | "purchases" | "payments" | "inventory"
 
 const orderStatus = {
   completed: { label: "Выполнен", tone: "success" as const },
-  processing: { label: "Сохранён локально", tone: "warning" as const },
+  processing: { label: "В обработке", tone: "warning" as const },
   cancelled: { label: "Отменён", tone: "neutral" as const },
 };
 
@@ -101,7 +101,7 @@ function OrderTable({ orders, compact = false }: { orders: MarketplaceOrder[]; c
                 <tr className={styles.detailRow}>
                   <td colSpan={5}>
                     <div id={`order-details-${order.id}`} className={styles.inlineOrderDetails}>
-                      <span>Данные локального заказа</span>
+                      <span>Данные заказа</span>
                       <p>{order.items.length === 1 ? order.items[0].title : `${order.items.length} товара в заказе`}</p>
                       <dl className={styles.orderDetailFacts}>
                         {recipient?.steamLogin ? <div><dt>Логин Steam</dt><dd>{recipient.steamLogin}</dd></div> : null}

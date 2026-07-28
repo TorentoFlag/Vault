@@ -107,7 +107,7 @@
 - [x] Add encrypted write-only Steam Trade URL storage.
 - [x] Persist Steam auth attempts, users, sessions, and Trade URL credential envelopes in PostgreSQL with integration coverage.
 - [x] Generate frontend contract snapshot and implement shared API transport.
-- [ ] Migrate account header/profile/Steam settings from local mock session to backend session. Current status: the auth screen starts backend Steam OpenID; `MarketplaceProvider` hydrates backend session/cart/wallet and Steam Trade URL configured status when the cookie exists; Steam Trade URL saves through `/me/steam-trade-url` for backend sessions without exposing the saved token back into the form; account history/inventory and Email auth still use local concept state.
+- [ ] Migrate account header/profile/Steam settings from local mock session to backend session. Current status: the auth screen starts backend Steam OpenID; `MarketplaceProvider` hydrates backend session/cart/wallet, purchase history, and Steam Trade URL configured status when the cookie exists; Steam Trade URL saves through `/me/steam-trade-url` for backend sessions without exposing the saved token back into the form; inventory/trade/payment history and Email auth still use local concept state.
 
 **Acceptance:**
 - [x] Backend auth/session tests pass.
@@ -180,12 +180,12 @@
 - [x] Snapshot nonsecret Steam Trade recipient and Steam refill recipient data immutably at checkout.
 - [x] Create wallet holds atomically with orders.
 - [ ] Create fulfillment outbox commands atomically after fulfillment module exists.
-- [ ] Migrate frontend cart/checkout from localStorage purchase records to backend API. Current status: backend-cookie sessions use `/wallet/me`, `/cart`, `/checkout/cart`, and backend-owned Steam Trade URL readiness; unauthenticated/demo frontend auth still falls back to local concept state until Phase 3 account/session migration is complete.
+- [ ] Migrate frontend cart/checkout from localStorage purchase records to backend API. Current status: backend-cookie sessions use `/wallet/me`, `/cart`, `/checkout/cart`, `/orders/me`, and backend-owned Steam Trade URL readiness; unauthenticated/demo frontend auth still falls back to local concept state until Phase 3 account/session migration is complete.
 
 **Acceptance:**
 - [ ] User cannot reach final checkout without sufficient balance or provider-approved direct-payment route.
 - [ ] Legal consent checkbox blocks payment/purchase button.
-- [ ] Purchase history shows prior purchases from backend.
+- [x] Purchase history shows prior purchases from backend for backend-cookie sessions.
 
 ### Phase 7: Fulfillment
 
