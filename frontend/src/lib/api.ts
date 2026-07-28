@@ -53,7 +53,7 @@ export type ApiWalletBalance = {
 
 export type ApiTopUpSession = {
   id: string;
-  status: "provider_configuration_required";
+  status: "provider_configuration_required" | "checkout_pending" | "paid" | "failed";
   provider: "arc_pay";
   coinAmountMinor: number;
   fiatAmountMinor: number;
@@ -221,9 +221,15 @@ function isOrderHistoryResponse(value: unknown): value is { orders: ApiOrder[] }
 }
 
 function isTopUpSessionResponse(value: unknown): value is ApiTopUpSession {
+  const validStatus = isRecord(value) && (
+    value.status === "provider_configuration_required" ||
+    value.status === "checkout_pending" ||
+    value.status === "paid" ||
+    value.status === "failed"
+  );
   return isRecord(value) &&
     typeof value.id === "string" &&
-    value.status === "provider_configuration_required" &&
+    validStatus &&
     value.provider === "arc_pay" &&
     typeof value.coinAmountMinor === "number" &&
     Number.isSafeInteger(value.coinAmountMinor) &&

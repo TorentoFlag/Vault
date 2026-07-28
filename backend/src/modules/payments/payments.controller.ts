@@ -18,7 +18,7 @@ const topUpSessionSchema = {
   properties: {
     id: { type: "string", format: "uuid" },
     userId: { type: "string" },
-    status: { type: "string", enum: ["provider_configuration_required"] },
+    status: { type: "string", enum: ["provider_configuration_required", "checkout_pending", "paid", "failed"] },
     provider: { type: "string", enum: ["arc_pay"] },
     coinAmountMinor: { type: "integer", minimum: 10_000, maximum: 10_000_000 },
     fiatAmountMinor: { type: "integer", minimum: 1 },

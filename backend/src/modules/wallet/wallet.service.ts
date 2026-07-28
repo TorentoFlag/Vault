@@ -4,7 +4,7 @@ import type { QueryResult, QueryResultRow } from "pg";
 import { DatabaseService } from "../../common/database/database.service";
 import { normalizeIdempotencyKey } from "../../common/idempotency/idempotency-key";
 
-type Queryable = {
+export type WalletQueryable = {
   query: <Row extends QueryResultRow = QueryResultRow>(text: string, values?: readonly unknown[]) => Promise<QueryResult<Row>>;
 };
 
@@ -65,58 +65,60 @@ export class WalletService {
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
 
   async creditUser(command: CreditUserCommand): Promise<void> {
+    await this.database.transaction(async (client) => this.creditUserWithClient(client, command));
+  }
+
+  async creditUserWithClient(client: WalletQueryable, command: CreditUserCommand): Promise<void> {
     assertPositiveCoinMinor(command.amountCoinMinor);
     const idempotencyKey = requireIdempotencyKey(command.idempotencyKey);
-    await this.database.transaction(async (client) => {
-      const transaction = await client.query<{ id: string }>(
+    const transaction = await client.query<{ id: string }>(
+      `
+        INSERT INTO wallet_transactions (user_id, idempotency_key, type, metadata)
+        VALUES ($1, $2, 'top_up_credit', jsonb_build_object('reason', $3::text, 'amountCoinMinor', $4::int))
+        ON CONFLICT (user_id, idempotency_key) DO NOTHING
+        RETURNING id
+      `,
+      [command.userId, idempotencyKey, command.reason, command.amountCoinMinor],
+    );
+    const transactionId = transaction.rows[0]?.id;
+    if (transactionId === undefined) {
+      const existing = await client.query<{ amount_coin_minor: number | null }>(
         `
-          INSERT INTO wallet_transactions (user_id, idempotency_key, type, metadata)
-          VALUES ($1, $2, 'top_up_credit', jsonb_build_object('reason', $3::text, 'amountCoinMinor', $4::int))
-          ON CONFLICT (user_id, idempotency_key) DO NOTHING
-          RETURNING id
+          SELECT (metadata ->> 'amountCoinMinor')::int AS amount_coin_minor
+          FROM wallet_transactions
+          WHERE user_id = $1
+            AND idempotency_key = $2
+            AND type = 'top_up_credit'
+          LIMIT 1
         `,
-        [command.userId, idempotencyKey, command.reason, command.amountCoinMinor],
+        [command.userId, idempotencyKey],
       );
-      const transactionId = transaction.rows[0]?.id;
-      if (transactionId === undefined) {
-        const existing = await client.query<{ amount_coin_minor: number | null }>(
-          `
-            SELECT (metadata ->> 'amountCoinMinor')::int AS amount_coin_minor
-            FROM wallet_transactions
-            WHERE user_id = $1
-              AND idempotency_key = $2
-              AND type = 'top_up_credit'
-            LIMIT 1
-          `,
-          [command.userId, idempotencyKey],
-        );
-        if (existing.rows[0]?.amount_coin_minor !== command.amountCoinMinor) {
-          throw new WalletIdempotencyConflictError();
-        }
-        return;
+      if (existing.rows[0]?.amount_coin_minor !== command.amountCoinMinor) {
+        throw new WalletIdempotencyConflictError();
       }
+      return;
+    }
 
-      await client.query(
-        `
-          INSERT INTO wallet_ledger_entries (transaction_id, user_id, account_key, amount_coin_minor)
-          VALUES
-            ($1, $2, $3, $4),
-            ($1, NULL, 'vault:coins-liability', $5)
-        `,
-        [transactionId, command.userId, customerAccount(command.userId), command.amountCoinMinor, -command.amountCoinMinor],
-      );
-    });
+    await client.query(
+      `
+        INSERT INTO wallet_ledger_entries (transaction_id, user_id, account_key, amount_coin_minor)
+        VALUES
+          ($1, $2, $3, $4),
+          ($1, NULL, 'vault:coins-liability', $5)
+      `,
+      [transactionId, command.userId, customerAccount(command.userId), command.amountCoinMinor, -command.amountCoinMinor],
+    );
   }
 
   async getBalance(userId: string): Promise<WalletBalanceDto> {
     return this.getBalanceWithClient(this.database, userId);
   }
 
-  async lockUserBalance(client: Queryable, userId: string): Promise<void> {
+  async lockUserBalance(client: WalletQueryable, userId: string): Promise<void> {
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`wallet:${userId}`]);
   }
 
-  async createHold(client: Queryable, command: CreateHoldCommand): Promise<void> {
+  async createHold(client: WalletQueryable, command: CreateHoldCommand): Promise<void> {
     assertPositiveCoinMinor(command.amountCoinMinor);
     const balance = await this.getBalanceWithClient(client, command.userId);
     if (balance.availableCoinMinor < command.amountCoinMinor) {
@@ -131,7 +133,7 @@ export class WalletService {
     );
   }
 
-  private async getBalanceWithClient(client: Queryable, userId: string): Promise<WalletBalanceDto> {
+  private async getBalanceWithClient(client: WalletQueryable, userId: string): Promise<WalletBalanceDto> {
     const result = await client.query<{ posted: string; held: string }>(
       `
         SELECT

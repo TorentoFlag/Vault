@@ -1,5 +1,6 @@
 export type AppNodeEnv = "development" | "test" | "production";
 export type ArcPayEnvironment = "sandbox" | "live";
+export type ArcPayProviderMode = "disabled" | "fake";
 
 export type AppConfig = {
   nodeEnv: AppNodeEnv;
@@ -8,7 +9,10 @@ export type AppConfig = {
   redisUrl?: string;
   arcPay: {
     environment: ArcPayEnvironment;
+    providerMode: ArcPayProviderMode;
     secretKeyFile?: string;
+    fakeCheckoutBaseUrl?: string;
+    webhookSigningSecretFile?: string;
   };
   sih: {
     apiKeyFile?: string;
@@ -77,6 +81,32 @@ function parseArcPayEnvironment(value: string | undefined): ArcPayEnvironment {
   throw new Error("ARC_PAY_ENVIRONMENT must be sandbox or live.");
 }
 
+function parseArcPayProviderMode(nodeEnv: AppNodeEnv, value: string | undefined): ArcPayProviderMode {
+  const normalized = value?.trim() || "disabled";
+  if (normalized !== "disabled" && normalized !== "fake") {
+    throw new Error("ARC_PAY_PROVIDER_MODE must be disabled or fake.");
+  }
+  if (nodeEnv === "production" && normalized === "fake") {
+    throw new Error("ARC_PAY_PROVIDER_MODE=fake is not allowed in production.");
+  }
+  return normalized;
+}
+
+function parseHttpOrHttpsBaseUrl(name: string, value: string | undefined): string | undefined {
+  const normalized = optionalString(value);
+  if (normalized === undefined) return undefined;
+  let url: URL;
+  try {
+    url = new URL(normalized);
+  } catch {
+    throw new Error(`${name} must be a valid HTTP(S) URL.`);
+  }
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username !== "" || url.password !== "" || url.hash !== "") {
+    throw new Error(`${name} must be a valid HTTP(S) URL.`);
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
 function parseCorsOrigins(value: string | undefined): string[] {
   return (value ?? "")
     .split(",")
@@ -85,19 +115,26 @@ function parseCorsOrigins(value: string | undefined): string[] {
 }
 
 export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
+  const nodeEnv = parseNodeEnv(env.NODE_ENV);
   const databaseUrl = optionalString(env.DATABASE_URL);
   const redisUrl = optionalString(env.REDIS_URL);
   const arcPaySecretKeyFile = optionalString(env.ARC_PAY_SECRET_KEY_FILE);
+  const arcPayProviderMode = parseArcPayProviderMode(nodeEnv, env.ARC_PAY_PROVIDER_MODE);
+  const arcPayFakeCheckoutBaseUrl = parseHttpOrHttpsBaseUrl("ARC_PAY_FAKE_CHECKOUT_BASE_URL", env.ARC_PAY_FAKE_CHECKOUT_BASE_URL);
+  const arcPayWebhookSigningSecretFile = optionalString(env.ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE);
   const sihApiKeyFile = optionalString(env.SIH_API_KEY_FILE);
 
   return {
-    nodeEnv: parseNodeEnv(env.NODE_ENV),
+    nodeEnv,
     port: parsePort(env.PORT),
     ...(databaseUrl ? { databaseUrl } : {}),
     ...(redisUrl ? { redisUrl } : {}),
     arcPay: {
       environment: parseArcPayEnvironment(env.ARC_PAY_ENVIRONMENT),
+      providerMode: arcPayProviderMode,
       ...(arcPaySecretKeyFile ? { secretKeyFile: arcPaySecretKeyFile } : {}),
+      ...(arcPayFakeCheckoutBaseUrl ? { fakeCheckoutBaseUrl: arcPayFakeCheckoutBaseUrl } : {}),
+      ...(arcPayWebhookSigningSecretFile ? { webhookSigningSecretFile: arcPayWebhookSigningSecretFile } : {}),
     },
     sih: {
       ...(sihApiKeyFile ? { apiKeyFile: sihApiKeyFile } : {}),

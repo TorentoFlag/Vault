@@ -205,3 +205,37 @@ test("API client creates top-up sessions with idempotency and maps provider-disa
   assert.equal((calls[0]?.headers as Record<string, string>)["idempotency-key"], "topup-session-client");
   assert.equal(calls[0]?.body, JSON.stringify({ coinAmountMinor: 150_000 }));
 });
+
+test("API client accepts checkout-pending top-up sessions with backend checkout URL", async () => {
+  const client = createApiClient({
+    fetch: async () => new Response(JSON.stringify({
+      id: "368b8584-a88d-4798-8df7-2a8568f0711d",
+      userId: "user_76561198000000004",
+      status: "checkout_pending",
+      provider: "arc_pay",
+      coinAmountMinor: 150_000,
+      fiatAmountMinor: 100_000,
+      fiatCurrency: "RUB",
+      rate: { fiatMinor: 100, coinMinor: 150 },
+      checkoutUrl: "https://pay.example/checkout/session_1",
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  });
+
+  await assert.deepEqual(await client.createTopUpSession({
+    coinAmountMinor: 150_000,
+    idempotencyKey: "topup-session-checkout",
+  }), {
+    id: "368b8584-a88d-4798-8df7-2a8568f0711d",
+    status: "checkout_pending",
+    provider: "arc_pay",
+    coinAmountMinor: 150_000,
+    fiatAmountMinor: 100_000,
+    fiatCurrency: "RUB",
+    rate: { fiatMinor: 100, coinMinor: 150 },
+    userId: "user_76561198000000004",
+    checkoutUrl: "https://pay.example/checkout/session_1",
+  });
+});

@@ -55,6 +55,7 @@ Architecture implication:
 - Top-up amount is RUB kopecks at Arc Pay and Coins minor units in Vault's wallet journal.
 - The frontend shows active rate, Coins credited, and final RUB amount before redirecting to Arc Pay.
 - Browser return may show pending/success UI copy, but must not post Coins by itself.
+- Current deterministic implementation includes `ARC_PAY_PROVIDER_MODE=fake` for local tests: it creates a fake checkout URL, accepts only a local HMAC-signed fake webhook, deduplicates by webhook id, validates amount/currency, and posts Coins through the wallet journal in the same database transaction as webhook processing. This is not real Arc Pay signature verification or acceptance evidence.
 
 ## BreenX findings, not selected
 

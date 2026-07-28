@@ -10,7 +10,10 @@ describe("loadAppConfig", () => {
       DATABASE_URL: "postgres://vault:test@localhost:5432/vault",
       REDIS_URL: "redis://localhost:6379/0",
       ARC_PAY_ENVIRONMENT: "sandbox",
+      ARC_PAY_PROVIDER_MODE: "fake",
       ARC_PAY_SECRET_KEY_FILE: "/run/secrets/arc-pay-secret",
+      ARC_PAY_FAKE_CHECKOUT_BASE_URL: "http://localhost:3999",
+      ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE: "/run/secrets/arc-pay-webhook-secret",
       SIH_API_KEY_FILE: "/run/secrets/sih-api-key",
       SIH_MARKET_BASE_URL: "https://api.sih.market",
       SIH_STEAM_REFILL_BASE_URL: "https://core.steaminventoryhelper.com",
@@ -24,7 +27,10 @@ describe("loadAppConfig", () => {
       redisUrl: "redis://localhost:6379/0",
       arcPay: {
         environment: "sandbox",
+        providerMode: "fake",
         secretKeyFile: "/run/secrets/arc-pay-secret",
+        fakeCheckoutBaseUrl: "http://localhost:3999",
+        webhookSigningSecretFile: "/run/secrets/arc-pay-webhook-secret",
       },
       sih: {
         apiKeyFile: "/run/secrets/sih-api-key",
@@ -40,6 +46,9 @@ describe("loadAppConfig", () => {
   it("fails closed on invalid ports and Arc Pay environments", () => {
     expect(() => loadAppConfig({ PORT: "0" })).toThrow("PORT must be between 1 and 65535.");
     expect(() => loadAppConfig({ ARC_PAY_ENVIRONMENT: "qa" })).toThrow("ARC_PAY_ENVIRONMENT must be sandbox or live.");
+    expect(() => loadAppConfig({ ARC_PAY_PROVIDER_MODE: "live" })).toThrow("ARC_PAY_PROVIDER_MODE must be disabled or fake.");
+    expect(() => loadAppConfig({ NODE_ENV: "production", ARC_PAY_PROVIDER_MODE: "fake" })).toThrow("ARC_PAY_PROVIDER_MODE=fake is not allowed in production.");
+    expect(() => loadAppConfig({ ARC_PAY_FAKE_CHECKOUT_BASE_URL: "not-url" })).toThrow("ARC_PAY_FAKE_CHECKOUT_BASE_URL must be a valid HTTP(S) URL.");
     expect(() => loadAppConfig({ SIH_REQUEST_TIMEOUT_MS: "499" })).toThrow("SIH_REQUEST_TIMEOUT_MS must be between 500 and 120000.");
     expect(() => loadAppConfig({ SIH_RESPONSE_MAX_BYTES: "1023" })).toThrow("SIH_RESPONSE_MAX_BYTES must be between 1024 and 16777216.");
   });

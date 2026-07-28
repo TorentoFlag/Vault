@@ -151,10 +151,10 @@
 **Tasks:**
 - [x] Implement double-entry Coins wallet journal, active holds, and available balance projection.
 - [ ] Implement wallet reconciliation.
-- [x] Implement top-up/payment aggregate with immutable displayed terms. Current status: `/payments/top-up/sessions` creates idempotent Arc Pay top-up intents and provider attempts; without Arc Pay secret/adapter it returns `provider_configuration_required` and does not credit Coins.
-- [ ] Implement Arc Pay checkout-session creation, method discovery, webhook verification, status/reconciliation, refund and chargeback adapters.
-- [ ] Implement webhook inbox, status polling, idempotent posting, and reconciliation.
-- [ ] Implement top-up UI with active rate, Coins credited, fiat amount, accepted legal checkbox, and disabled payment until consent. Current status: UI shows active rate/fiat amount, requires legal consent, creates backend top-up sessions, and shows provider-configuration state when no checkout URL exists.
+- [x] Implement top-up/payment aggregate with immutable displayed terms. Current status: `/payments/top-up/sessions` creates idempotent Arc Pay top-up intents and provider attempts; disabled mode returns `provider_configuration_required`, while deterministic fake mode returns `checkout_pending` plus a fake checkout URL.
+- [ ] Implement Arc Pay checkout-session creation, method discovery, real webhook verification, status/reconciliation, refund and chargeback adapters. Current status: fake checkout creation exists only for local deterministic tests; no real Arc Pay API request is made.
+- [ ] Implement webhook inbox, status polling, idempotent posting, and reconciliation. Current status: fake signed webhook inbox and idempotent wallet posting exist; status polling and real reconciliation remain.
+- [ ] Implement top-up UI with active rate, Coins credited, fiat amount, accepted legal checkbox, and disabled payment until consent. Current status: UI shows active rate/fiat amount, requires legal consent, creates backend top-up sessions, redirects when backend returns a checkout URL, and shows provider-configuration state when no checkout URL exists.
 - [x] Ensure browser return never credits wallet by itself.
 
 **Acceptance:**
