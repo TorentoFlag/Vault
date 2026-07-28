@@ -149,7 +149,8 @@
 - Modify: `frontend/src/features/account/*`
 
 **Tasks:**
-- [ ] Implement double-entry Coins wallet journal, holds, available balance projection, and reconciliation.
+- [x] Implement double-entry Coins wallet journal, active holds, and available balance projection.
+- [ ] Implement wallet reconciliation.
 - [ ] Implement top-up/payment aggregate with immutable displayed terms.
 - [ ] Implement Arc Pay checkout-session creation, method discovery, webhook verification, status/reconciliation, refund and chargeback adapters.
 - [ ] Implement webhook inbox, status polling, idempotent posting, and reconciliation.
@@ -173,10 +174,11 @@
 **Tasks:**
 - [ ] Implement authenticated server-side cart.
 - [ ] Implement quote refresh and price-increase confirmation.
-- [ ] Implement checkout from Coins wallet only.
-- [ ] Expand each quantity unit into an independent order line.
-- [ ] Snapshot Steam Trade URL and recipient data immutably at checkout.
-- [ ] Create wallet holds atomically with orders and outbox commands.
+- [x] Implement checkout from Coins wallet only.
+- [x] Expand each quantity unit into an independent order line.
+- [x] Snapshot nonsecret Steam Trade recipient and Steam refill recipient data immutably at checkout.
+- [x] Create wallet holds atomically with orders.
+- [ ] Create fulfillment outbox commands atomically after fulfillment module exists.
 - [ ] Migrate frontend cart/checkout from localStorage purchase records to backend API.
 
 **Acceptance:**

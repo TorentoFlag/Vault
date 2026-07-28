@@ -212,3 +212,99 @@ export const pricingSettings = pgTable(
     index("pricing_settings_source_idx").on(table.source),
   ],
 );
+
+export const walletTransactions = pgTable(
+  "wallet_transactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    type: text("type").notNull(),
+    status: text("status").default("posted").notNull(),
+    metadata: jsonb("metadata").default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("wallet_transactions_user_idempotency_uidx").on(table.userId, table.idempotencyKey),
+    index("wallet_transactions_user_created_idx").on(table.userId, table.createdAt),
+  ],
+);
+
+export const walletLedgerEntries = pgTable(
+  "wallet_ledger_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    transactionId: uuid("transaction_id").notNull(),
+    userId: text("user_id"),
+    accountKey: text("account_key").notNull(),
+    amountCoinMinor: integer("amount_coin_minor").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("wallet_ledger_entries_transaction_idx").on(table.transactionId),
+    index("wallet_ledger_entries_account_idx").on(table.accountKey, table.createdAt),
+    index("wallet_ledger_entries_user_idx").on(table.userId, table.createdAt),
+  ],
+);
+
+export const orders = pgTable(
+  "orders",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    status: text("status").notNull(),
+    totalCoinMinor: integer("total_coin_minor").notNull(),
+    recipientSnapshots: jsonb("recipient_snapshots").default([]).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("orders_user_idempotency_uidx").on(table.userId, table.idempotencyKey),
+    index("orders_user_created_idx").on(table.userId, table.createdAt),
+    index("orders_status_idx").on(table.status),
+  ],
+);
+
+export const orderLines = pgTable(
+  "order_lines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id").notNull(),
+    lineIndex: integer("line_index").notNull(),
+    productId: text("product_id").notNull(),
+    productSlug: text("product_slug").notNull(),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    unitPriceCoinMinor: integer("unit_price_coin_minor").notNull(),
+    quantity: integer("quantity").notNull(),
+    recipientSnapshot: jsonb("recipient_snapshot").default({}).notNull(),
+    status: text("status").default("held").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("order_lines_order_line_uidx").on(table.orderId, table.lineIndex),
+    index("order_lines_product_idx").on(table.productId),
+    index("order_lines_status_idx").on(table.status),
+  ],
+);
+
+export const walletHolds = pgTable(
+  "wallet_holds",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    orderId: uuid("order_id").notNull(),
+    amountCoinMinor: integer("amount_coin_minor").notNull(),
+    status: text("status").default("active").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    capturedAt: timestamp("captured_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("wallet_holds_order_uidx").on(table.orderId),
+    index("wallet_holds_user_status_idx").on(table.userId, table.status),
+  ],
+);

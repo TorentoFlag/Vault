@@ -1,0 +1,336 @@
+import { createHash } from "node:crypto";
+import { BadRequestException, ConflictException, HttpException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import type { QueryResult, QueryResultRow } from "pg";
+
+import { DatabaseService } from "../../common/database/database.service";
+import { normalizeIdempotencyKey } from "../../common/idempotency/idempotency-key";
+import { CatalogService } from "../catalog/catalog.service";
+import type { CatalogProductDto } from "../catalog/catalog.types";
+import { UsersService } from "../users/users.service";
+import { WalletInsufficientFundsError, WalletService } from "../wallet/wallet.service";
+
+type Queryable = {
+  query: <Row extends QueryResultRow = QueryResultRow>(text: string, values?: readonly unknown[]) => Promise<QueryResult<Row>>;
+};
+
+export type CheckoutCartItem = {
+  productSlug: string;
+  quantity: number;
+  recipient?: {
+    steamLogin?: string;
+  };
+};
+
+export type CheckoutFromCartCommand = {
+  userId: string;
+  idempotencyKey: string;
+  items: CheckoutCartItem[];
+};
+
+export type CheckoutRecipientSnapshot =
+  | {
+    kind: "steam-trade";
+    steamId64: string;
+    steamTradePartnerAccountId: string;
+  }
+  | {
+    kind: "steam-refill";
+    steamLogin: string;
+  };
+
+export type CheckoutOrderLineDto = {
+  id: string;
+  productSlug: string;
+  kind: CatalogProductDto["kind"];
+  title: string;
+  quantity: 1;
+  unitPriceCoinMinor: number;
+  recipientSnapshot: CheckoutRecipientSnapshot;
+};
+
+export type CheckoutOrderDto = {
+  id: string;
+  userId: string;
+  status: "held";
+  totalCoinMinor: number;
+  recipientSnapshots: CheckoutRecipientSnapshot[];
+  lines: CheckoutOrderLineDto[];
+};
+
+type PreparedLine = Omit<CheckoutOrderLineDto, "id"> & {
+  productId: string;
+  lineIndex: number;
+};
+
+type OrderRow = {
+  id: string;
+  user_id: string;
+  status: CheckoutOrderDto["status"];
+  total_coin_minor: number;
+  recipient_snapshots: CheckoutRecipientSnapshot[];
+  request_hash: string;
+};
+
+type OrderLineRow = {
+  id: string;
+  product_slug: string;
+  kind: CatalogProductDto["kind"];
+  title: string;
+  quantity: number;
+  unit_price_coin_minor: number;
+  recipient_snapshot: CheckoutRecipientSnapshot;
+};
+
+export class CheckoutInsufficientBalanceError extends HttpException {
+  readonly code = "CHECKOUT_INSUFFICIENT_BALANCE";
+
+  constructor(readonly requiredCoinMinor: number, readonly availableCoinMinor: number) {
+    super({
+      statusCode: 402,
+      code: "CHECKOUT_INSUFFICIENT_BALANCE",
+      message: "Insufficient Coins balance for checkout",
+      requiredCoinMinor,
+      availableCoinMinor,
+    }, 402);
+  }
+}
+
+export class CheckoutSteamTradeUrlRequiredError extends BadRequestException {
+  readonly code = "STEAM_TRADE_URL_REQUIRED";
+
+  constructor() {
+    super({
+      statusCode: 400,
+      code: "STEAM_TRADE_URL_REQUIRED",
+      message: "Steam Trade URL is required for skin checkout",
+    });
+  }
+}
+
+function requireIdempotencyKey(value: string): string {
+  const normalized = normalizeIdempotencyKey(value);
+  if (normalized === undefined) throw new BadRequestException("Idempotency key is required");
+  return normalized;
+}
+
+function assertQuantity(quantity: number): void {
+  if (!Number.isSafeInteger(quantity) || quantity <= 0 || quantity > 50) {
+    throw new BadRequestException("Cart item quantity is invalid");
+  }
+}
+
+function requestHash(command: CheckoutFromCartCommand): string {
+  const normalized = {
+    userId: command.userId,
+    items: command.items.map((item) => ({
+      productSlug: item.productSlug,
+      quantity: item.quantity,
+      recipient: item.recipient ?? {},
+    })),
+  };
+  return createHash("sha256").update(JSON.stringify(normalized), "utf8").digest("hex");
+}
+
+function uniqueSnapshots(lines: PreparedLine[]): CheckoutRecipientSnapshot[] {
+  const seen = new Set<string>();
+  const snapshots: CheckoutRecipientSnapshot[] = [];
+  for (const line of lines) {
+    const key = JSON.stringify(line.recipientSnapshot);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    snapshots.push(line.recipientSnapshot);
+  }
+  return snapshots;
+}
+
+@Injectable()
+export class CheckoutService {
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(CatalogService) private readonly catalog: CatalogService,
+    @Inject(UsersService) private readonly users: UsersService,
+    @Inject(WalletService) private readonly wallet: WalletService,
+  ) {}
+
+  async checkoutFromCart(command: CheckoutFromCartCommand): Promise<CheckoutOrderDto> {
+    if (!Array.isArray(command.items) || command.items.length === 0) throw new BadRequestException("Cart is empty");
+    const idempotencyKey = requireIdempotencyKey(command.idempotencyKey);
+    const user = await this.users.requireUser(command.userId);
+    const lines = await this.prepareLines(command.userId, user.steam.steamId64, command.items);
+    const totalCoinMinor = lines.reduce((total, line) => total + line.unitPriceCoinMinor, 0);
+    if (!Number.isSafeInteger(totalCoinMinor) || totalCoinMinor <= 0) {
+      throw new BadRequestException("Cart total is invalid");
+    }
+    const hash = requestHash(command);
+    return this.database.transaction(async (client) => {
+      await this.wallet.lockUserBalance(client, command.userId);
+      const existing = await this.findOrderByIdempotencyKey(client, command.userId, idempotencyKey);
+      if (existing !== null) {
+        if (existing.request_hash !== hash) throw new ConflictException("Idempotency key is already used for a different checkout request");
+        return this.loadOrder(client, existing.id);
+      }
+
+      const order = await client.query<{ id: string }>(
+        `
+          INSERT INTO orders (user_id, idempotency_key, request_hash, status, total_coin_minor, recipient_snapshots)
+          VALUES ($1, $2, $3, 'held', $4, $5::jsonb)
+          RETURNING id
+        `,
+        [command.userId, idempotencyKey, hash, totalCoinMinor, JSON.stringify(uniqueSnapshots(lines))],
+      );
+      const orderId = order.rows[0]?.id;
+      if (orderId === undefined) throw new Error("CHECKOUT_ORDER_NOT_CREATED");
+
+      try {
+        await this.wallet.createHold(client, {
+          userId: command.userId,
+          orderId,
+          amountCoinMinor: totalCoinMinor,
+          reason: "checkout",
+        });
+      } catch (error) {
+        if (error instanceof WalletInsufficientFundsError) {
+          throw new CheckoutInsufficientBalanceError(totalCoinMinor, error.balance.availableCoinMinor);
+        }
+        throw error;
+      }
+
+      for (const line of lines) {
+        await client.query(
+          `
+            INSERT INTO order_lines (
+              order_id,
+              line_index,
+              product_id,
+              product_slug,
+              kind,
+              title,
+              unit_price_coin_minor,
+              quantity,
+              recipient_snapshot,
+              status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8::jsonb, 'held')
+          `,
+          [
+            orderId,
+            line.lineIndex,
+            line.productId,
+            line.productSlug,
+            line.kind,
+            line.title,
+            line.unitPriceCoinMinor,
+            JSON.stringify(line.recipientSnapshot),
+          ],
+        );
+      }
+
+      return this.loadOrder(client, orderId);
+    });
+  }
+
+  private async prepareLines(userId: string, steamId64: string, items: CheckoutCartItem[]): Promise<PreparedLine[]> {
+    const lines: PreparedLine[] = [];
+    const products = await Promise.all(items.map(async (item) => {
+      assertQuantity(item.quantity);
+      return this.catalog.getBySlug(item.productSlug);
+    }));
+    const tradeCredential = await this.requiredTradeCredentialIfNeeded(userId, products);
+    for (const [itemIndex, item] of items.entries()) {
+      const product = products[itemIndex];
+      if (product === undefined) throw new BadRequestException("Cart item is invalid");
+      if (product.availability !== "available") throw new BadRequestException("Product is not available");
+      const recipientSnapshot: CheckoutRecipientSnapshot = product.kind === "skins"
+        ? {
+          kind: "steam-trade",
+          steamId64,
+          steamTradePartnerAccountId: tradeCredential?.partner ?? "",
+        }
+        : this.steamRefillRecipient(item);
+      if (recipientSnapshot.kind === "steam-trade" && recipientSnapshot.steamTradePartnerAccountId === "") {
+        throw new CheckoutSteamTradeUrlRequiredError();
+      }
+      for (let unit = 0; unit < item.quantity; unit += 1) {
+        lines.push({
+          lineIndex: lines.length,
+          productId: product.id,
+          productSlug: product.slug,
+          kind: product.kind,
+          title: product.title,
+          quantity: 1,
+          unitPriceCoinMinor: product.price.amountMinor,
+          recipientSnapshot,
+        });
+      }
+    }
+    return lines;
+  }
+
+  private async requiredTradeCredentialIfNeeded(userId: string, products: CatalogProductDto[]): Promise<{ partner: string } | null> {
+    if (!products.some((product) => product.kind === "skins")) return null;
+    try {
+      return await this.users.requireSteamTradeCredential(userId);
+    } catch {
+      throw new CheckoutSteamTradeUrlRequiredError();
+    }
+  }
+
+  private steamRefillRecipient(item: CheckoutCartItem): CheckoutRecipientSnapshot {
+    const steamLogin = item.recipient?.steamLogin?.trim();
+    if (!steamLogin) throw new BadRequestException("Steam login is required for Steam refill checkout");
+    return { kind: "steam-refill", steamLogin };
+  }
+
+  private async findOrderByIdempotencyKey(client: Queryable, userId: string, idempotencyKey: string): Promise<OrderRow | null> {
+    const result = await client.query<OrderRow>(
+      `
+        SELECT id, user_id, status, total_coin_minor, recipient_snapshots, request_hash
+        FROM orders
+        WHERE user_id = $1
+          AND idempotency_key = $2
+        LIMIT 1
+      `,
+      [userId, idempotencyKey],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  private async loadOrder(client: Queryable, orderId: string): Promise<CheckoutOrderDto> {
+    const order = await client.query<OrderRow>(
+      `
+        SELECT id, user_id, status, total_coin_minor, recipient_snapshots, request_hash
+        FROM orders
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [orderId],
+    );
+    const row = order.rows[0];
+    if (row === undefined) throw new NotFoundException("Order not found");
+    const lines = await client.query<OrderLineRow>(
+      `
+        SELECT id, product_slug, kind, title, quantity, unit_price_coin_minor, recipient_snapshot
+        FROM order_lines
+        WHERE order_id = $1
+        ORDER BY line_index ASC
+      `,
+      [orderId],
+    );
+    return {
+      id: row.id,
+      userId: row.user_id,
+      status: row.status,
+      totalCoinMinor: row.total_coin_minor,
+      recipientSnapshots: row.recipient_snapshots,
+      lines: lines.rows.map((line) => ({
+        id: line.id,
+        productSlug: line.product_slug,
+        kind: line.kind,
+        title: line.title,
+        quantity: 1,
+        unitPriceCoinMinor: line.unit_price_coin_minor,
+        recipientSnapshot: line.recipient_snapshot,
+      })),
+    };
+  }
+}

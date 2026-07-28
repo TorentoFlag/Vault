@@ -43,6 +43,13 @@
       "when": 1785225519000,
       "tag": "0005_catalog_supplier_links",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785281330000,
+      "tag": "0006_wallet_checkout",
+      "breakpoints": true
     }
   ]
 }

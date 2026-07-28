@@ -10,6 +10,7 @@ export const apiPaths = [
   "/me/steam-trade-url/status",
   "/catalog",
   "/catalog/{slug}",
+  "/checkout",
 ] as const satisfies readonly ServerApiPath[];
 
 type ApiPath = typeof apiPaths[number];
