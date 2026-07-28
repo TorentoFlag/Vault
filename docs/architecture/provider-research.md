@@ -31,7 +31,7 @@ Relevant API facts:
 - OpenAPI is published at `https://api.arcpay.space/openapi.json` and `https://api.arcpay.space/openapi.yaml`.
 - Create Hosted Checkout: `POST /v1/checkout/sessions`.
 - Authentication uses `Authorization: Bearer <secret-api-key>`.
-- Mutating server-side operations require `Idempotency-Key`; duplicate same-key/same-payload requests are retained for 72 hours, and same-key/different-payload requests conflict.
+- Mutating server-side operations require UUID-shaped `Idempotency-Key`; duplicate same-key/same-payload requests are retained for 72 hours, and same-key/different-payload requests conflict.
 - Checkout session request uses integer `amount` in minor units and `currency` such as `RUB`, `KZT`, or `UZS`.
 - Use `capture_mode: "one_stage"` for immediate capture.
 - `success_url`, `fail_url`, and `cancel_url` must be HTTPS URLs.
@@ -55,6 +55,7 @@ Architecture implication:
 - Top-up amount is RUB kopecks at Arc Pay and Coins minor units in Vault's wallet journal.
 - The frontend shows active rate, Coins credited, and final RUB amount before redirecting to Arc Pay.
 - Browser return may show pending/success UI copy, but must not post Coins by itself.
+- Current real checkout implementation uses only `sbp/h2h` in the Arc Pay Hosted Checkout request, even if the Arc Pay shop also has card methods available.
 - Current deterministic implementation includes `ARC_PAY_PROVIDER_MODE=fake` for local tests: it creates a fake checkout URL, accepts only a local HMAC-signed fake webhook, deduplicates by webhook id, validates amount/currency, and posts Coins through the wallet journal in the same database transaction as webhook processing. This is not real Arc Pay signature verification or acceptance evidence.
 
 ## BreenX findings, not selected

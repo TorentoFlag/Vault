@@ -1,0 +1,124 @@
+import { readFile } from "node:fs/promises";
+
+const DEFAULT_ARC_PAY_BASE_URL = "https://api.arcpay.space/v1";
+
+type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+export type CreateHostedCheckoutCommand = {
+  amountMinor: number;
+  cancelUrl: string;
+  description: string;
+  externalId: string;
+  failUrl: string;
+  idempotencyKey: string;
+  successUrl: string;
+};
+
+export type HostedCheckoutResult = {
+  providerSessionId: string;
+  checkoutUrl: string;
+};
+
+export type ArcPayClientOptions = {
+  apiKeyFile: string;
+  baseUrl?: string;
+  fetch?: FetchLike;
+};
+
+function assertHttpsUrl(name: string, value: string): void {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name}_INVALID`);
+  }
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.hash !== "") {
+    throw new Error(`${name}_INVALID`);
+  }
+}
+
+function assertPositiveMinor(value: number): void {
+  if (!Number.isSafeInteger(value) || value <= 0) throw new Error("ARC_PAY_AMOUNT_INVALID");
+}
+
+function assertNonBlank(name: string, value: string): void {
+  if (value.trim().length === 0) throw new Error(`${name}_REQUIRED`);
+}
+
+function assertUuid(name: string, value: string): void {
+  if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(value)) {
+    throw new Error(`${name}_INVALID`);
+  }
+}
+
+function parseCheckoutResponse(value: unknown): HostedCheckoutResult {
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as { id?: unknown }).id === "string" &&
+    typeof (value as { url?: unknown }).url === "string"
+  ) {
+    return {
+      providerSessionId: (value as { id: string }).id,
+      checkoutUrl: (value as { url: string }).url,
+    };
+  }
+  throw new Error("ARC_PAY_RESPONSE_INVALID");
+}
+
+export class ArcPayClient {
+  private readonly baseUrl: string;
+  private readonly fetch: FetchLike;
+
+  constructor(private readonly options: ArcPayClientOptions) {
+    this.baseUrl = (options.baseUrl ?? DEFAULT_ARC_PAY_BASE_URL).replace(/\/$/, "");
+    this.fetch = options.fetch ?? fetch;
+  }
+
+  async createHostedCheckout(command: CreateHostedCheckoutCommand): Promise<HostedCheckoutResult> {
+    assertPositiveMinor(command.amountMinor);
+    assertNonBlank("ARC_PAY_IDEMPOTENCY_KEY", command.idempotencyKey);
+    assertUuid("ARC_PAY_IDEMPOTENCY_KEY", command.idempotencyKey);
+    assertNonBlank("ARC_PAY_DESCRIPTION", command.description);
+    assertNonBlank("ARC_PAY_EXTERNAL_ID", command.externalId);
+    assertHttpsUrl("ARC_PAY_SUCCESS_URL", command.successUrl);
+    assertHttpsUrl("ARC_PAY_FAIL_URL", command.failUrl);
+    assertHttpsUrl("ARC_PAY_CANCEL_URL", command.cancelUrl);
+
+    const apiKey = (await readFile(this.options.apiKeyFile, "utf8")).trim();
+    if (!apiKey.startsWith("sk_test_")) throw new Error("ARC_PAY_SECRET_KEY_INVALID");
+
+    const response = await this.fetch(`${this.baseUrl}/checkout/sessions`, {
+      method: "POST",
+      headers: {
+        "authorization": `Bearer ${apiKey}`,
+        "content-type": "application/json",
+        "idempotency-key": command.idempotencyKey,
+      },
+      body: JSON.stringify({
+        amount: command.amountMinor,
+        cancel_url: command.cancelUrl,
+        capture_mode: "one_stage",
+        currency: "RUB",
+        description: command.description,
+        external_id: command.externalId,
+        fail_url: command.failUrl,
+        locale: "ru",
+        metadata: {
+          vault_top_up_id: command.externalId,
+        },
+        payment_methods: [{
+          method: "sbp",
+          payment_mode: "h2h",
+        }],
+        success_url: command.successUrl,
+      }),
+    });
+
+    const body = await response.json().catch(() => {
+      throw new Error("ARC_PAY_RESPONSE_INVALID");
+    });
+    if (!response.ok) throw new Error("ARC_PAY_CHECKOUT_CREATE_FAILED");
+    return parseCheckoutResponse(body);
+  }
+}

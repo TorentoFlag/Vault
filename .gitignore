@@ -15,6 +15,7 @@ coverage/
 # local environment and secrets
 .env
 .env.*
+.secrets/
 *.pem
 *.key
 *.crt

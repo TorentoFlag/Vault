@@ -7,6 +7,7 @@ import { DatabaseService } from "../../common/database/database.service";
 import { normalizeIdempotencyKey } from "../../common/idempotency/idempotency-key";
 import { APP_CONFIG } from "../../config/app-config.module";
 import type { AppConfig } from "../../config/app-config";
+import { ArcPayClient } from "../providers/arc-pay/arc-pay.client";
 import { verifyFakeArcPayWebhookSignature } from "../providers/arc-pay/arc-pay-fake-webhook";
 import { WalletService } from "../wallet/wallet.service";
 
@@ -29,7 +30,7 @@ export type CreateTopUpSessionCommand = {
 export type TopUpSessionDto = {
   id: string;
   userId: string;
-  status: "provider_configuration_required" | "checkout_pending" | "paid" | "failed";
+  status: "provider_configuration_required" | "provider_creation_pending" | "checkout_pending" | "paid" | "failed";
   provider: "arc_pay";
   coinAmountMinor: number;
   fiatAmountMinor: number;
@@ -110,6 +111,26 @@ function assertCoinAmountMinor(value: number): void {
 
 function fiatMinorForCoinMinor(coinAmountMinor: number): number {
   return Math.ceil((coinAmountMinor * COIN_RATE_FIAT_MINOR) / COIN_RATE_COIN_MINOR);
+}
+
+function topUpReturnUrls(publicOrigin: string): { cancelUrl: string; failUrl: string; successUrl: string } {
+  const base = new URL("/balance/top-up", publicOrigin);
+  const success = new URL(base);
+  success.searchParams.set("payment", "success");
+  const fail = new URL(base);
+  fail.searchParams.set("payment", "failed");
+  const cancel = new URL(base);
+  cancel.searchParams.set("payment", "cancelled");
+  return {
+    cancelUrl: cancel.href,
+    failUrl: fail.href,
+    successUrl: success.href,
+  };
+}
+
+function providerErrorCode(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) return error.message.slice(0, 120);
+  return "ARC_PAY_CHECKOUT_CREATE_FAILED";
 }
 
 function toDto(row: TopUpPaymentRow): TopUpSessionDto {
@@ -193,11 +214,18 @@ export class PaymentsService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(WalletService) private readonly wallet: WalletService,
+    @Inject(ArcPayClient) private readonly arcPay: ArcPayClient,
   ) {}
 
   async createTopUpSession(command: CreateTopUpSessionCommand): Promise<TopUpSessionDto> {
     assertCoinAmountMinor(command.coinAmountMinor);
     const idempotencyKey = requireIdempotencyKey(command.idempotencyKey);
+    if (this.config.arcPay.providerMode === "real") {
+      return this.createRealTopUpSession({
+        ...command,
+        idempotencyKey,
+      });
+    }
     const hash = requestHash(command);
     return this.database.transaction(async (client) => {
       const existing = await this.findTopUpPayment(client, command.userId, idempotencyKey);
@@ -343,6 +371,193 @@ export class PaymentsService {
 
       const created = await this.findTopUpPayment(client, command.userId, idempotencyKey);
       if (created === null) throw new Error("TOP_UP_PAYMENT_NOT_FOUND_AFTER_CREATE");
+      return toDto(created);
+    });
+  }
+
+  private async createRealTopUpSession(command: CreateTopUpSessionCommand): Promise<TopUpSessionDto> {
+    const publicOrigin = this.config.arcPay.publicOrigin;
+    if (publicOrigin === undefined) throw new ServiceUnavailableException("Arc Pay public origin is not configured");
+    if (this.config.arcPay.secretKeyFile === undefined) throw new ServiceUnavailableException("Arc Pay secret key is not configured");
+    const hash = requestHash(command);
+    const initial = await this.database.transaction(async (client) => {
+      const existing = await this.findTopUpPayment(client, command.userId, command.idempotencyKey);
+      if (existing !== null) {
+        if (existing.request_hash !== hash) throw new ConflictException("Idempotency key is already used for different top-up terms");
+        return toDto(existing);
+      }
+
+      const fiatAmountMinor = fiatMinorForCoinMinor(command.coinAmountMinor);
+      const inserted = await client.query<{ id: string }>(
+        `
+          INSERT INTO top_up_payments (
+            user_id,
+            idempotency_key,
+            request_hash,
+            provider,
+            status,
+            coin_amount_minor,
+            fiat_amount_minor,
+            fiat_currency,
+            rate_fiat_minor,
+            rate_coin_minor,
+            metadata
+          )
+          VALUES ($1, $2, $3, $4, 'provider_creation_pending', $5, $6, 'RUB', $7, $8, $9::jsonb)
+          RETURNING id
+        `,
+        [
+          command.userId,
+          command.idempotencyKey,
+          hash,
+          TOP_UP_PROVIDER,
+          command.coinAmountMinor,
+          fiatAmountMinor,
+          COIN_RATE_FIAT_MINOR,
+          COIN_RATE_COIN_MINOR,
+          JSON.stringify({
+            arcPayConfigured: true,
+            environment: this.config.arcPay.environment,
+          }),
+        ],
+      );
+      const id = inserted.rows[0]?.id;
+      if (id === undefined) throw new Error("TOP_UP_PAYMENT_NOT_CREATED");
+      const providerIdempotencyKey = id;
+      await client.query(
+        `
+          INSERT INTO payment_provider_attempts (
+            top_up_payment_id,
+            provider,
+            idempotency_key,
+            status,
+            request_hash,
+            request_snapshot
+          )
+          VALUES ($1, $2, $3, 'pending', $4, $5::jsonb)
+        `,
+        [
+          id,
+          TOP_UP_PROVIDER,
+          providerIdempotencyKey,
+          hash,
+          JSON.stringify({
+            amount: fiatAmountMinor,
+            coinAmountMinor: command.coinAmountMinor,
+            currency: "RUB",
+            provider: TOP_UP_PROVIDER,
+            providerPaymentMethod: "sbp",
+            rate: {
+              fiatMinor: COIN_RATE_FIAT_MINOR,
+              coinMinor: COIN_RATE_COIN_MINOR,
+            },
+          }),
+        ],
+      );
+      const created = await this.findTopUpPayment(client, command.userId, command.idempotencyKey);
+      if (created === null) throw new Error("TOP_UP_PAYMENT_NOT_FOUND_AFTER_CREATE");
+      return toDto(created);
+    });
+
+    if (initial.checkoutUrl !== null || initial.status !== "provider_creation_pending") return initial;
+
+    const providerIdempotencyKey = initial.id;
+    const urls = topUpReturnUrls(publicOrigin);
+    let checkout: Awaited<ReturnType<ArcPayClient["createHostedCheckout"]>>;
+    try {
+      checkout = await this.arcPay.createHostedCheckout({
+        amountMinor: initial.fiatAmountMinor,
+        cancelUrl: urls.cancelUrl,
+        description: "Пополнение баланса Vault Coins",
+        externalId: initial.id,
+        failUrl: urls.failUrl,
+        idempotencyKey: providerIdempotencyKey,
+        successUrl: urls.successUrl,
+      });
+    } catch (error) {
+      const errorCode = providerErrorCode(error);
+      await this.database.transaction(async (client) => {
+        await client.query(
+          `
+            UPDATE top_up_payments
+            SET
+              status = 'failed',
+              provider_status = 'checkout_create_failed',
+              metadata = metadata || $2::jsonb,
+              updated_at = now()
+            WHERE id = $1
+          `,
+          [
+            initial.id,
+            JSON.stringify({
+              providerErrorCode: errorCode,
+            }),
+          ],
+        );
+        await client.query(
+          `
+            UPDATE payment_provider_attempts
+            SET
+              status = 'failed',
+              response_snapshot = $4::jsonb,
+              error_code = $5,
+              finished_at = now()
+            WHERE provider = $1
+              AND idempotency_key = $2
+              AND top_up_payment_id = $3
+          `,
+          [
+            TOP_UP_PROVIDER,
+            providerIdempotencyKey,
+            initial.id,
+            JSON.stringify({
+              providerStatus: "checkout_create_failed",
+            }),
+            errorCode,
+          ],
+        );
+      });
+      throw new ServiceUnavailableException("Arc Pay checkout creation failed");
+    }
+
+    return this.database.transaction(async (client) => {
+      await client.query(
+        `
+          UPDATE top_up_payments
+          SET
+            status = 'checkout_pending',
+            provider_session_id = $2,
+            provider_checkout_url = $3,
+            provider_status = 'created',
+            updated_at = now()
+          WHERE id = $1
+        `,
+        [initial.id, checkout.providerSessionId, checkout.checkoutUrl],
+      );
+      await client.query(
+        `
+          UPDATE payment_provider_attempts
+          SET
+            status = 'succeeded',
+            response_snapshot = $4::jsonb,
+            finished_at = now()
+          WHERE provider = $1
+            AND idempotency_key = $2
+            AND top_up_payment_id = $3
+        `,
+        [
+          TOP_UP_PROVIDER,
+          providerIdempotencyKey,
+          initial.id,
+          JSON.stringify({
+            checkoutUrl: checkout.checkoutUrl,
+            providerSessionId: checkout.providerSessionId,
+            providerStatus: "created",
+          }),
+        ],
+      );
+      const created = await this.findTopUpPayment(client, command.userId, command.idempotencyKey);
+      if (created === null) throw new Error("TOP_UP_PAYMENT_NOT_FOUND_AFTER_PROVIDER_CREATE");
       return toDto(created);
     });
   }

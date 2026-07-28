@@ -1,6 +1,6 @@
 export type AppNodeEnv = "development" | "test" | "production";
 export type ArcPayEnvironment = "sandbox" | "live";
-export type ArcPayProviderMode = "disabled" | "fake";
+export type ArcPayProviderMode = "disabled" | "fake" | "real";
 
 export type AppConfig = {
   nodeEnv: AppNodeEnv;
@@ -12,6 +12,7 @@ export type AppConfig = {
     providerMode: ArcPayProviderMode;
     secretKeyFile?: string;
     fakeCheckoutBaseUrl?: string;
+    publicOrigin?: string;
     webhookSigningSecretFile?: string;
   };
   sih: {
@@ -83,8 +84,8 @@ function parseArcPayEnvironment(value: string | undefined): ArcPayEnvironment {
 
 function parseArcPayProviderMode(nodeEnv: AppNodeEnv, value: string | undefined): ArcPayProviderMode {
   const normalized = value?.trim() || "disabled";
-  if (normalized !== "disabled" && normalized !== "fake") {
-    throw new Error("ARC_PAY_PROVIDER_MODE must be disabled or fake.");
+  if (normalized !== "disabled" && normalized !== "fake" && normalized !== "real") {
+    throw new Error("ARC_PAY_PROVIDER_MODE must be disabled, fake, or real.");
   }
   if (nodeEnv === "production" && normalized === "fake") {
     throw new Error("ARC_PAY_PROVIDER_MODE=fake is not allowed in production.");
@@ -107,6 +108,21 @@ function parseHttpOrHttpsBaseUrl(name: string, value: string | undefined): strin
   return url.toString().replace(/\/$/, "");
 }
 
+function parseHttpsOrigin(name: string, value: string | undefined): string | undefined {
+  const normalized = optionalString(value);
+  if (normalized === undefined) return undefined;
+  let url: URL;
+  try {
+    url = new URL(normalized);
+  } catch {
+    throw new Error(`${name} must be a valid HTTPS origin.`);
+  }
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.pathname !== "/" || url.search !== "" || url.hash !== "") {
+    throw new Error(`${name} must be a valid HTTPS origin.`);
+  }
+  return url.origin;
+}
+
 function parseCorsOrigins(value: string | undefined): string[] {
   return (value ?? "")
     .split(",")
@@ -121,6 +137,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const arcPaySecretKeyFile = optionalString(env.ARC_PAY_SECRET_KEY_FILE);
   const arcPayProviderMode = parseArcPayProviderMode(nodeEnv, env.ARC_PAY_PROVIDER_MODE);
   const arcPayFakeCheckoutBaseUrl = parseHttpOrHttpsBaseUrl("ARC_PAY_FAKE_CHECKOUT_BASE_URL", env.ARC_PAY_FAKE_CHECKOUT_BASE_URL);
+  const arcPayPublicOrigin = parseHttpsOrigin("ARC_PAY_PUBLIC_ORIGIN", env.ARC_PAY_PUBLIC_ORIGIN);
   const arcPayWebhookSigningSecretFile = optionalString(env.ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE);
   const sihApiKeyFile = optionalString(env.SIH_API_KEY_FILE);
 
@@ -134,6 +151,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       providerMode: arcPayProviderMode,
       ...(arcPaySecretKeyFile ? { secretKeyFile: arcPaySecretKeyFile } : {}),
       ...(arcPayFakeCheckoutBaseUrl ? { fakeCheckoutBaseUrl: arcPayFakeCheckoutBaseUrl } : {}),
+      ...(arcPayPublicOrigin ? { publicOrigin: arcPayPublicOrigin } : {}),
       ...(arcPayWebhookSigningSecretFile ? { webhookSigningSecretFile: arcPayWebhookSigningSecretFile } : {}),
     },
     sih: {

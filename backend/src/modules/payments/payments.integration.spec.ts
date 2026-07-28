@@ -10,6 +10,7 @@ import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AppModule } from "../../app.module";
+import { DatabaseService } from "../../common/database/database.service";
 import { CUSTOMER_SESSION_COOKIE } from "../sessions/session-cookies";
 import { SessionsService } from "../sessions/sessions.service";
 import { UsersService } from "../users/users.service";
@@ -51,6 +52,12 @@ function requireCreatedTopUpResponse(value: unknown): CreatedTopUpResponse {
   throw new Error("Unexpected top-up response shape");
 }
 
+function fetchInputUrl(input: Parameters<typeof fetch>[0]): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
 async function createApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
@@ -67,10 +74,12 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
   let users: UsersService;
   let wallet: WalletService;
   let tempDir: string | null = null;
+  let originalFetch: typeof globalThis.fetch;
 
   beforeAll(() => {
     process.env.DATABASE_URL = databaseUrl;
     pool = new Pool({ connectionString: databaseUrl });
+    originalFetch = globalThis.fetch;
   });
 
   afterAll(async () => {
@@ -78,13 +87,19 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     delete process.env.ARC_PAY_PROVIDER_MODE;
     delete process.env.ARC_PAY_FAKE_CHECKOUT_BASE_URL;
     delete process.env.ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE;
+    delete process.env.ARC_PAY_SECRET_KEY_FILE;
+    delete process.env.ARC_PAY_PUBLIC_ORIGIN;
+    globalThis.fetch = originalFetch;
     await app?.close();
     await pool.end();
     if (tempDir !== null) await rm(tempDir, { recursive: true, force: true });
   });
 
   beforeEach(async () => {
-    if (app) await app.close();
+    if (app) {
+      await app.close();
+      app = null;
+    }
     await pool.query(`
       TRUNCATE
         payment_webhook_events,
@@ -202,6 +217,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
 
   it("credits Coins only from a verified captured fake Arc Pay webhook and deduplicates retries", async () => {
     await app?.close();
+    app = null;
     tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-"));
     const secretFile = join(tempDir, "webhook-secret");
     await writeFile(secretFile, fakeWebhookSecret, "utf8");
@@ -315,6 +331,155 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
       webhook_status: "processed",
       wallet_transactions: "1",
       liability_entries: "1",
+    });
+  });
+
+  it("creates a real Arc Pay hosted checkout request with SBP only without crediting Coins", async () => {
+    await app?.close();
+    app = null;
+    tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-"));
+    const secretFile = join(tempDir, "secret-key");
+    await writeFile(secretFile, "sk_test_vault_real_checkout\n", "utf8");
+    process.env.ARC_PAY_PROVIDER_MODE = "real";
+    process.env.ARC_PAY_SECRET_KEY_FILE = secretFile;
+    process.env.ARC_PAY_PUBLIC_ORIGIN = "https://vault.example";
+    const providerRequests: Array<{ input: string; init: RequestInit }> = [];
+    globalThis.fetch = (input, init) => {
+      providerRequests.push({ input: fetchInputUrl(input), init: init ?? {} });
+      return Promise.resolve(new Response(JSON.stringify({
+        id: "019f7841-4b12-7a2f-a42b-5c3a72e3b277",
+        url: "https://checkout.arcpay.space/sessions/019f7841",
+      }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }));
+    };
+
+    const currentApp = await createApp();
+    app = currentApp;
+    sessions = currentApp.get(SessionsService);
+    users = currentApp.get(UsersService);
+    wallet = currentApp.get(WalletService);
+    await users.upsertSteamUser({
+      claimedIdentifier: `https://steamcommunity.com/openid/id/${steamId64}`,
+      providerEndpoint: "https://steamcommunity.com/openid/login",
+      responseNonce: "2026-07-28T11:10:00Znonce",
+      steamId64,
+    });
+    const session = await sessions.createSession(userId, null);
+    const csrfToken = sessions.createCsrfToken(session.token);
+
+    const created = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/top-up/sessions")
+      .set("Cookie", `${CUSTOMER_SESSION_COOKIE}=${session.token}`)
+      .set("x-csrf-token", csrfToken)
+      .set("idempotency-key", "topup-session-real-sbp-1500")
+      .send({ coinAmountMinor: 150_000 })
+      .expect(200);
+
+    expect(created.body).toMatchObject({
+      status: "checkout_pending",
+      provider: "arc_pay",
+      coinAmountMinor: 150_000,
+      fiatAmountMinor: 100_000,
+      checkoutUrl: "https://checkout.arcpay.space/sessions/019f7841",
+    });
+    expect(providerRequests).toHaveLength(1);
+    expect(providerRequests[0]?.input).toBe("https://api.arcpay.space/v1/checkout/sessions");
+    expect(providerRequests[0]?.init.headers).toMatchObject({
+      authorization: "Bearer sk_test_vault_real_checkout",
+      "idempotency-key": (created.body as { id: string }).id,
+    });
+    const providerBody = providerRequests[0]?.init.body;
+    if (typeof providerBody !== "string") throw new Error("Expected provider JSON body string");
+    expect(JSON.parse(providerBody)).toMatchObject({
+      amount: 100_000,
+      capture_mode: "one_stage",
+      currency: "RUB",
+      external_id: (created.body as { id: string }).id,
+      payment_methods: [{
+        method: "sbp",
+        payment_mode: "h2h",
+      }],
+      success_url: "https://vault.example/balance/top-up?payment=success",
+      fail_url: "https://vault.example/balance/top-up?payment=failed",
+      cancel_url: "https://vault.example/balance/top-up?payment=cancelled",
+    });
+    await expect(wallet.getBalance(userId)).resolves.toEqual({
+      postedCoinMinor: 0,
+      heldCoinMinor: 0,
+      availableCoinMinor: 0,
+    });
+  });
+
+  it("marks a real Arc Pay top-up failed when checkout creation is rejected", async () => {
+    await app?.close();
+    app = null;
+    tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-failed-"));
+    const secretFile = join(tempDir, "secret-key");
+    await writeFile(secretFile, "sk_test_vault_real_checkout\n", "utf8");
+    process.env.ARC_PAY_PROVIDER_MODE = "real";
+    process.env.ARC_PAY_SECRET_KEY_FILE = secretFile;
+    process.env.ARC_PAY_PUBLIC_ORIGIN = "https://vault.example";
+    globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify({
+      code: "method_not_available",
+    }), {
+      status: 422,
+      headers: { "content-type": "application/json" },
+    }));
+
+    const currentApp = await createApp();
+    app = currentApp;
+    sessions = currentApp.get(SessionsService);
+    users = currentApp.get(UsersService);
+    await users.upsertSteamUser({
+      claimedIdentifier: `https://steamcommunity.com/openid/id/${steamId64}`,
+      providerEndpoint: "https://steamcommunity.com/openid/login",
+      responseNonce: "2026-07-28T11:10:00Znonce",
+      steamId64,
+    });
+    const session = await sessions.createSession(userId, null);
+    const csrfToken = sessions.createCsrfToken(session.token);
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/top-up/sessions")
+      .set("Cookie", `${CUSTOMER_SESSION_COOKIE}=${session.token}`)
+      .set("x-csrf-token", csrfToken)
+      .set("idempotency-key", "topup-session-real-sbp-provider-fail")
+      .send({ coinAmountMinor: 150_000 })
+      .expect(503);
+
+    const database = currentApp.get(DatabaseService);
+    const persisted = await database.query<{ payment_status: string }>(
+      `
+        SELECT
+          (SELECT status FROM top_up_payments WHERE user_id = $1 AND idempotency_key = $2) AS payment_status
+      `,
+      [userId, "topup-session-real-sbp-provider-fail"],
+    );
+    expect(persisted.rows[0]).toEqual({ payment_status: "failed" });
+
+    const attempt = await database.query<{
+      error_code: string;
+      idempotency_key_is_uuid: boolean;
+      status: string;
+    }>(
+      `
+        SELECT
+          status,
+          error_code,
+          idempotency_key ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$' AS idempotency_key_is_uuid
+        FROM payment_provider_attempts
+        WHERE top_up_payment_id = (
+          SELECT id FROM top_up_payments WHERE user_id = $1 AND idempotency_key = $2
+        )
+      `,
+      [userId, "topup-session-real-sbp-provider-fail"],
+    );
+    expect(attempt.rows[0]).toEqual({
+      status: "failed",
+      error_code: "ARC_PAY_CHECKOUT_CREATE_FAILED",
+      idempotency_key_is_uuid: true,
     });
   });
 });
