@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import { useMarketplace } from "@/components/marketplace/MarketplaceProvider";
-import { Breadcrumbs, Button, Container, Skeleton } from "@/components/ui/UI";
+import { Breadcrumbs, Button, Checkbox, Container, Skeleton } from "@/components/ui/UI";
 import { siteConfig } from "@/config/site";
+import { createApiClient } from "@/lib/api";
 import { createTopUpAuthReturnPath, getTopUpQuote, validateTopUpAmount } from "@/lib/top-up";
 
 import styles from "./top-up.module.css";
@@ -30,6 +31,9 @@ export function TopUpScreen({
   const [amount, setAmount] = useState(String(suggestedCoins));
   const [isDirty, setIsDirty] = useState(false);
   const [isTouched, setIsTouched] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<"idle" | "submitting">("idle");
+  const [submitError, setSubmitError] = useState("");
 
   const authoritativeSuggestion =
     returnTo === "/cart" && cartShortfallCoins > 0 ? cartShortfallCoins : suggestedCoins;
@@ -47,9 +51,33 @@ export function TopUpScreen({
     setIsTouched(true);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsTouched(true);
+    if (amountError || !acceptedTerms || submitStatus === "submitting") return;
+    setSubmitStatus("submitting");
+    setSubmitError("");
+    try {
+      const csrfClient = createApiClient();
+      const csrfToken = await csrfClient.getCsrfToken();
+      const session = await createApiClient({ csrfToken: () => csrfToken }).createTopUpSession({
+        coinAmountMinor: quote.coins * 100,
+        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `topup-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      });
+      if (session.checkoutUrl) {
+        window.location.assign(session.checkoutUrl);
+        return;
+      }
+      if (session.status === "provider_configuration_required") {
+        setSubmitError("Платёжная страница Arc Pay ещё не настроена. Расчёт сохранён на сервере, Coins не зачислены.");
+        return;
+      }
+      setSubmitError("Платёжная страница недоступна. Coins не зачислены.");
+    } catch {
+      setSubmitError("Не удалось создать платёжную сессию. Проверьте вход в аккаунт и повторите действие.");
+    } finally {
+      setSubmitStatus("idle");
+    }
   }
 
   return (
@@ -57,13 +85,13 @@ export function TopUpScreen({
       <Container>
         <Breadcrumbs items={[{ label: "Главная", href: "/" }, { label: "Пополнение баланса" }]} />
         <div className={styles.pageHeading}>
-          <span>Калькулятор Coins</span>
-          <h1>Рассчитать пополнение Coins</h1>
-          <p>Укажите сумму Coins и проверьте расчёт по курсу Vault. Платёжный провайдер не подключён.</p>
+          <span>Пополнение Coins</span>
+          <h1>Пополнить баланс Coins</h1>
+          <p>Укажите сумму Coins и проверьте финальный расчёт по курсу Vault перед переходом к оплате.</p>
         </div>
         <p className={styles.demoDisclosure}>
-          <strong>Расчёт по курсу Vault</strong>
-          Эта страница не принимает банковские данные и не зачисляет Coins.
+          <strong>Платёжная сессия</strong>
+          Зачисление Coins выполняется только после подтверждения платежа провайдером.
         </p>
 
         {!isHydrated ? (
@@ -141,15 +169,29 @@ export function TopUpScreen({
                     <span className={styles.methodMark}>V</span>
                     <div>
                       <strong>Банковская карта или СБП</strong>
-                      <p>Оплата станет доступна после подключения платёжного провайдера.</p>
+                      <p>Vault создаёт платёжную сессию и ждёт подтверждение провайдера.</p>
                     </div>
-                    <span>Недоступно</span>
+                    <span>Arc Pay</span>
                   </div>
 
-                  <Button className={styles.submitButton} type="submit" disabled>
-                    Платёж не подключён
+                  <div className={styles.consentBox}>
+                    <Checkbox
+                      checked={acceptedTerms}
+                      onChange={(event) => setAcceptedTerms(event.target.checked)}
+                      label={(
+                        <>
+                          Я принимаю условия <Link href="/legal/terms">Пользовательского соглашения</Link> и даю согласие на обработку персональных данных в соответствии с <Link href="/legal/privacy">Политикой конфиденциальности</Link>.
+                        </>
+                      )}
+                    />
+                  </div>
+
+                  {submitError ? <p className={styles.submitError} role="alert">{submitError}</p> : null}
+
+                  <Button className={styles.submitButton} type="submit" disabled={!!amountError || !acceptedTerms || submitStatus === "submitting"}>
+                    {submitStatus === "submitting" ? "Создаём сессию" : "Перейти к оплате"}
                   </Button>
-                  <p className={styles.formFootnote}>Можно проверить курс и итоговую сумму. Зачисление Coins отключено, пока платёжный провайдер не подключён.</p>
+                  <p className={styles.formFootnote}>Банковские данные вводятся только на стороне платёжного провайдера. Возврат в браузер не зачисляет Coins сам по себе.</p>
             </form>
 
             <aside className={styles.summaryCard} aria-labelledby="top-up-summary-title">
@@ -164,7 +206,7 @@ export function TopUpScreen({
                 <div><span>Расчётный курс</span><strong>1 ₽ = {siteConfig.coin.rate.toLocaleString("ru-RU")} Coins</strong></div>
                 <div><span>Расчётная стоимость</span><strong>{formatNumber(quote.rubles)} ₽</strong></div>
               </div>
-              <p>Курс хранится централизованно. Расчёт не создаёт платёж и не изменяет баланс.</p>
+              <p>Курс фиксируется в платёжной сессии. Баланс изменится только после подтверждения провайдера.</p>
             </aside>
           </div>
         )}

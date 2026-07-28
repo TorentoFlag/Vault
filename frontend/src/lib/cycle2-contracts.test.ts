@@ -74,11 +74,12 @@ test("home and cart storefront copy does not promise unavailable external fulfil
   assert.match(copy, /внешн.*не подключ/iu);
 });
 
-test("top-up page consistently describes a calculator without payment confirmation", () => {
+test("top-up page creates backend sessions without local payment confirmation", () => {
   const topUp = source("src/features/top-up/TopUpScreen.tsx");
-  assert.match(topUp, /Калькулятор Coins/);
-  assert.match(topUp, /плат[её]ж.*не подключ/iu);
-  assert.doesNotMatch(topUp, /Шаг 1 из 1|После пополнения|фиксируется до подтверждения платежа|Финальная сумма/iu);
+  assert.match(topUp, /createTopUpSession/);
+  assert.match(topUp, /acceptedTerms/);
+  assert.match(topUp, /provider_configuration_required/);
+  assert.doesNotMatch(topUp, /Баланс пополнен|setBalanceCoins|creditUser|createTopUpTransaction/);
 });
 
 test("privacy policy only claims controls that exist in the editable interface", () => {

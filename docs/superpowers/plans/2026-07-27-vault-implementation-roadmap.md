@@ -151,11 +151,11 @@
 **Tasks:**
 - [x] Implement double-entry Coins wallet journal, active holds, and available balance projection.
 - [ ] Implement wallet reconciliation.
-- [ ] Implement top-up/payment aggregate with immutable displayed terms.
+- [x] Implement top-up/payment aggregate with immutable displayed terms. Current status: `/payments/top-up/sessions` creates idempotent Arc Pay top-up intents and provider attempts; without Arc Pay secret/adapter it returns `provider_configuration_required` and does not credit Coins.
 - [ ] Implement Arc Pay checkout-session creation, method discovery, webhook verification, status/reconciliation, refund and chargeback adapters.
 - [ ] Implement webhook inbox, status polling, idempotent posting, and reconciliation.
-- [ ] Implement top-up UI with active rate, Coins credited, fiat amount, accepted legal checkbox, and disabled payment until consent.
-- [ ] Ensure browser return never credits wallet by itself.
+- [ ] Implement top-up UI with active rate, Coins credited, fiat amount, accepted legal checkbox, and disabled payment until consent. Current status: UI shows active rate/fiat amount, requires legal consent, creates backend top-up sessions, and shows provider-configuration state when no checkout URL exists.
+- [x] Ensure browser return never credits wallet by itself.
 
 **Acceptance:**
 - [ ] Wallet tests prove balanced immutable journal and idempotency.

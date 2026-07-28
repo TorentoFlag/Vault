@@ -247,6 +247,76 @@ export const walletLedgerEntries = pgTable(
   ],
 );
 
+export const topUpPayments = pgTable(
+  "top_up_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    provider: text("provider").notNull(),
+    status: text("status").notNull(),
+    coinAmountMinor: integer("coin_amount_minor").notNull(),
+    fiatAmountMinor: integer("fiat_amount_minor").notNull(),
+    fiatCurrency: text("fiat_currency").notNull(),
+    rateFiatMinor: integer("rate_fiat_minor").notNull(),
+    rateCoinMinor: integer("rate_coin_minor").notNull(),
+    providerSessionId: text("provider_session_id"),
+    providerCheckoutUrl: text("provider_checkout_url"),
+    providerStatus: text("provider_status"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    metadata: jsonb("metadata").default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("top_up_payments_user_idempotency_uidx").on(table.userId, table.idempotencyKey),
+    index("top_up_payments_user_created_idx").on(table.userId, table.createdAt),
+    index("top_up_payments_status_idx").on(table.status),
+    index("top_up_payments_provider_session_idx").on(table.provider, table.providerSessionId),
+  ],
+);
+
+export const paymentProviderAttempts = pgTable(
+  "payment_provider_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    topUpPaymentId: uuid("top_up_payment_id").notNull(),
+    provider: text("provider").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: text("status").notNull(),
+    requestHash: text("request_hash").notNull(),
+    requestSnapshot: jsonb("request_snapshot").default({}).notNull(),
+    responseSnapshot: jsonb("response_snapshot").default({}).notNull(),
+    errorCode: text("error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("payment_provider_attempts_provider_idempotency_uidx").on(table.provider, table.idempotencyKey),
+    index("payment_provider_attempts_payment_idx").on(table.topUpPaymentId),
+    index("payment_provider_attempts_status_idx").on(table.status),
+  ],
+);
+
+export const paymentWebhookEvents = pgTable(
+  "payment_webhook_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    provider: text("provider").notNull(),
+    providerEventId: text("provider_event_id").notNull(),
+    status: text("status").notNull(),
+    signatureStatus: text("signature_status").notNull(),
+    payloadSnapshot: jsonb("payload_snapshot").default({}).notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("payment_webhook_events_provider_event_uidx").on(table.provider, table.providerEventId),
+    index("payment_webhook_events_status_idx").on(table.status),
+  ],
+);
+
 export const carts = pgTable(
   "carts",
   {

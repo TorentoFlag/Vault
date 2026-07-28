@@ -57,6 +57,13 @@
       "when": 1785283120000,
       "tag": "0007_server_cart",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785285200000,
+      "tag": "0008_payments_top_up",
+      "breakpoints": true
     }
   ]
 }

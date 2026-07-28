@@ -1239,6 +1239,129 @@
           "Orders"
         ]
       }
+    },
+    "/payments/top-up/sessions": {
+      "post": {
+        "operationId": "PaymentsController_createTopUpSession",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Unique customer-scoped top-up session key.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "coinAmountMinor"
+                ],
+                "properties": {
+                  "coinAmountMinor": {
+                    "type": "integer",
+                    "minimum": 10000,
+                    "maximum": 10000000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "status",
+                    "provider",
+                    "coinAmountMinor",
+                    "fiatAmountMinor",
+                    "fiatCurrency",
+                    "rate",
+                    "checkoutUrl"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "provider_configuration_required"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "arc_pay"
+                      ]
+                    },
+                    "coinAmountMinor": {
+                      "type": "integer",
+                      "minimum": 10000,
+                      "maximum": 10000000
+                    },
+                    "fiatAmountMinor": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "fiatCurrency": {
+                      "type": "string",
+                      "enum": [
+                        "RUB"
+                      ]
+                    },
+                    "rate": {
+                      "type": "object",
+                      "required": [
+                        "fiatMinor",
+                        "coinMinor"
+                      ],
+                      "properties": {
+                        "fiatMinor": {
+                          "type": "integer",
+                          "enum": [
+                            100
+                          ]
+                        },
+                        "coinMinor": {
+                          "type": "integer",
+                          "enum": [
+                            150
+                          ]
+                        }
+                      }
+                    },
+                    "checkoutUrl": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ]
+      }
     }
   },
   "info": {

@@ -6,10 +6,10 @@ This is the entry point for humans and agents. Documentation describes current i
 
 - Root Git repository: initialized on `main`.
 - `frontend/.git`: removed; `frontend/` is now a normal project folder.
-- Frontend: Next.js 16, React 19, TypeScript, CSS Modules, backend-fed public catalog pages, plus server-backed cart/checkout, Steam Trade URL saving, and purchase history when a real backend cookie session is present.
+- Frontend: Next.js 16, React 19, TypeScript, CSS Modules, backend-fed public catalog pages, plus server-backed cart/checkout, Steam Trade URL saving, purchase history, and top-up session creation when a real backend cookie session is present.
 - Current frontend coverage: backend-fed home/catalog/product surfaces, Coins, local cart, checkout gate, account, purchase history, inventory, Steam Trade URL form, support draft, legal routes, footer payment logos, FAQ, and search.
-- Current backend coverage: Steam session foundation, backend-fed catalog/pricing, authenticated server cart, initial Coins wallet ledger/holds, checkout order creation from wallet balance, and current-user order history.
-- Current frontend limitation: no production Arc Pay payment, no real Steam OpenID browser acceptance, no real SIH purchase/refill, and inventory/trade/payment history still use local concept state. Steam login now starts the backend Steam OpenID flow; Email remains a local fallback until a production email-auth decision exists. For backend-cookie sessions, saved Steam Trade URL is kept backend-side and the frontend only shows configured/not configured status; purchase history is loaded from `/orders/me`.
+- Current backend coverage: Steam session foundation, backend-fed catalog/pricing, authenticated server cart, initial Coins wallet ledger/holds, checkout order creation from wallet balance, current-user order history, and durable Arc Pay top-up intents with immutable Coins/RUB terms.
+- Current frontend limitation: no production Arc Pay redirect/crediting, no real Steam OpenID browser acceptance, no real SIH purchase/refill, and inventory/trade/payment history still use local concept state. Steam login now starts the backend Steam OpenID flow; Email remains a local fallback until a production email-auth decision exists. For backend-cookie sessions, saved Steam Trade URL is kept backend-side and the frontend only shows configured/not configured status; purchase history is loaded from `/orders/me`; top-up form creates `/payments/top-up/sessions` records but Coins are not credited until Arc Pay webhook/reconciliation is implemented.
 - First release scope: skin purchase and Steam account refill only.
 - Deferred scope: GPT refill until provider API and product rules are supplied.
 

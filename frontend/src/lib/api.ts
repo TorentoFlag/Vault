@@ -18,6 +18,7 @@ export const apiPaths = [
   "/checkout",
   "/checkout/cart",
   "/orders/me",
+  "/payments/top-up/sessions",
 ] as const satisfies readonly ServerApiPath[];
 
 type ApiPath = typeof apiPaths[number];
@@ -48,6 +49,16 @@ export type ApiWalletBalance = {
   postedCoins: number;
   heldCoins: number;
   availableCoins: number;
+};
+
+export type ApiTopUpSession = {
+  id: string;
+  status: "provider_configuration_required";
+  provider: "arc_pay";
+  coinAmountMinor: number;
+  fiatAmountMinor: number;
+  fiatCurrency: "RUB";
+  checkoutUrl: string | null;
 };
 
 type ApiOrderRecipientSnapshot =
@@ -209,6 +220,21 @@ function isOrderHistoryResponse(value: unknown): value is { orders: ApiOrder[] }
   return isRecord(value) && Array.isArray(value.orders) && value.orders.every(isApiOrder);
 }
 
+function isTopUpSessionResponse(value: unknown): value is ApiTopUpSession {
+  return isRecord(value) &&
+    typeof value.id === "string" &&
+    value.status === "provider_configuration_required" &&
+    value.provider === "arc_pay" &&
+    typeof value.coinAmountMinor === "number" &&
+    Number.isSafeInteger(value.coinAmountMinor) &&
+    value.coinAmountMinor > 0 &&
+    typeof value.fiatAmountMinor === "number" &&
+    Number.isSafeInteger(value.fiatAmountMinor) &&
+    value.fiatAmountMinor > 0 &&
+    value.fiatCurrency === "RUB" &&
+    (value.checkoutUrl === null || typeof value.checkoutUrl === "string");
+}
+
 function coinMinorToCoins(amountMinor: number) {
   return amountMinor / 100;
 }
@@ -341,6 +367,18 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const body = await requestJson("/orders/me");
       if (!isOrderHistoryResponse(body)) throw new Error("Order history response is malformed.");
       return body.orders.map(mapApiOrder);
+    },
+
+    async createTopUpSession(input: { coinAmountMinor: number; idempotencyKey: string }): Promise<ApiTopUpSession> {
+      const body = await requestJson("/payments/top-up/sessions", {
+        method: "POST",
+        headers: {
+          "idempotency-key": input.idempotencyKey,
+        },
+        body: JSON.stringify({ coinAmountMinor: input.coinAmountMinor }),
+      });
+      if (!isTopUpSessionResponse(body)) throw new Error("Top-up session response is malformed.");
+      return body;
     },
   };
 }

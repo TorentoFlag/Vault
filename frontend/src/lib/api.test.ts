@@ -24,6 +24,7 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/checkout",
     "/checkout/cart",
     "/orders/me",
+    "/payments/top-up/sessions",
   ]);
 });
 
@@ -159,4 +160,48 @@ test("API client maps backend order history without exposing internal request fi
       deliveryStatus: "pending",
     }],
   }]);
+});
+
+test("API client creates top-up sessions with idempotency and maps provider-disabled status", async () => {
+  const calls: RequestInit[] = [];
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    csrfToken: () => "csrf-token",
+    fetch: async (_input, init) => {
+      calls.push(init ?? {});
+      return new Response(JSON.stringify({
+        id: "368b8584-a88d-4798-8df7-2a8568f0711d",
+        userId: "user_76561198000000004",
+        status: "provider_configuration_required",
+        provider: "arc_pay",
+        coinAmountMinor: 150_000,
+        fiatAmountMinor: 100_000,
+        fiatCurrency: "RUB",
+        rate: { fiatMinor: 100, coinMinor: 150 },
+        checkoutUrl: null,
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  await assert.deepEqual(await client.createTopUpSession({
+    coinAmountMinor: 150_000,
+    idempotencyKey: "topup-session-client",
+  }), {
+    id: "368b8584-a88d-4798-8df7-2a8568f0711d",
+    status: "provider_configuration_required",
+    provider: "arc_pay",
+    coinAmountMinor: 150_000,
+    fiatAmountMinor: 100_000,
+    fiatCurrency: "RUB",
+    rate: { fiatMinor: 100, coinMinor: 150 },
+    userId: "user_76561198000000004",
+    checkoutUrl: null,
+  });
+  assert.equal(calls[0]?.method, "POST");
+  assert.equal((calls[0]?.headers as Record<string, string>)["x-csrf-token"], "csrf-token");
+  assert.equal((calls[0]?.headers as Record<string, string>)["idempotency-key"], "topup-session-client");
+  assert.equal(calls[0]?.body, JSON.stringify({ coinAmountMinor: 150_000 }));
 });
