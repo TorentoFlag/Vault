@@ -4,6 +4,7 @@ import { BadRequestException, ConflictException, Inject, Injectable } from "@nes
 
 import { DatabaseService } from "../../common/database/database.service";
 import { normalizeIdempotencyKey } from "../../common/idempotency/idempotency-key";
+import { FulfillmentService, type FulfillmentSkinReconciliationBatchResultDto } from "../fulfillment/fulfillment.service";
 import { PaymentsService, type PaymentReconciliationResultDto } from "../payments/payments.service";
 
 export type AdminOperationsOverviewDto = {
@@ -68,14 +69,27 @@ export type AdminPaymentReconciliationCommandBody = {
   reason?: string;
 };
 
+export type AdminFulfillmentReconciliationCommandBody = AdminPaymentReconciliationCommandBody;
+
 export type AdminPaymentReconciliationResultDto = {
   idempotencyKey: string;
   result: PaymentReconciliationResultDto | null;
   status: "duplicate" | "processed";
 };
 
+export type AdminFulfillmentReconciliationResultDto = {
+  idempotencyKey: string;
+  result: FulfillmentSkinReconciliationBatchResultDto | null;
+  status: "duplicate" | "processed";
+};
+
 type ReconcilePaymentsCommand = {
   body: AdminPaymentReconciliationCommandBody;
+  idempotencyKey: string | undefined;
+};
+
+type ReconcileFulfillmentCommand = {
+  body: AdminFulfillmentReconciliationCommandBody;
   idempotencyKey: string | undefined;
 };
 
@@ -180,6 +194,7 @@ function parseReconciliationBody(body: AdminPaymentReconciliationCommandBody): {
 export class AdminService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(FulfillmentService) private readonly fulfillment: FulfillmentService,
     @Inject(PaymentsService) private readonly payments: PaymentsService,
   ) {}
 
@@ -330,13 +345,15 @@ export class AdminService {
   async reconcilePayments(command: ReconcilePaymentsCommand): Promise<AdminPaymentReconciliationResultDto> {
     const idempotencyKey = requireAdminIdempotencyKey(command.idempotencyKey);
     const parsed = parseReconciliationBody(command.body);
+    const action = "admin.payments.reconcile";
+    const scope = "admin:payments:reconcile";
     const requestHash = sha256({
       limit: parsed.limit,
-      operation: "admin.payments.reconcile",
+      operation: action,
       reason: parsed.reason,
     });
 
-    const shouldProcess = await this.reserveAdminOperation(idempotencyKey, requestHash);
+    const shouldProcess = await this.reserveAdminOperation(scope, idempotencyKey, requestHash);
     if (!shouldProcess) {
       return {
         idempotencyKey,
@@ -348,11 +365,13 @@ export class AdminService {
     try {
       const result = await this.payments.reconcilePendingTopUps({ limit: parsed.limit });
       await this.completeAdminOperation({
+        action,
         idempotencyKey,
         limit: parsed.limit,
         reason: parsed.reason,
         requestHash,
         result,
+        scope,
       });
       return {
         idempotencyKey,
@@ -360,12 +379,54 @@ export class AdminService {
         status: "processed",
       };
     } catch (error) {
-      await this.failAdminOperation(idempotencyKey, requestHash);
+      await this.failAdminOperation(scope, idempotencyKey, requestHash);
       throw error;
     }
   }
 
-  private async reserveAdminOperation(idempotencyKey: string, requestHash: string): Promise<boolean> {
+  async reconcileFulfillment(command: ReconcileFulfillmentCommand): Promise<AdminFulfillmentReconciliationResultDto> {
+    const idempotencyKey = requireAdminIdempotencyKey(command.idempotencyKey);
+    const parsed = parseReconciliationBody(command.body);
+    const action = "admin.fulfillment.reconcile";
+    const scope = "admin:fulfillment:reconcile";
+    const requestHash = sha256({
+      limit: parsed.limit,
+      operation: action,
+      reason: parsed.reason,
+    });
+
+    const shouldProcess = await this.reserveAdminOperation(scope, idempotencyKey, requestHash);
+    if (!shouldProcess) {
+      return {
+        idempotencyKey,
+        result: null,
+        status: "duplicate",
+      };
+    }
+
+    try {
+      const result = await this.fulfillment.reconcileSubmittedSkinCommands({ limit: parsed.limit });
+      await this.completeAdminOperation({
+        action,
+        idempotencyKey,
+        limit: parsed.limit,
+        reason: parsed.reason,
+        requestHash,
+        result,
+        scope,
+      });
+      return {
+        idempotencyKey,
+        result,
+        status: "processed",
+      };
+    } catch (error) {
+      await this.failAdminOperation(scope, idempotencyKey, requestHash);
+      throw error;
+    }
+  }
+
+  private async reserveAdminOperation(scope: string, idempotencyKey: string, requestHash: string): Promise<boolean> {
     return this.database.transaction(async (client) => {
       const inserted = await client.query(
         `
@@ -376,11 +437,11 @@ export class AdminService {
             status,
             locked_at
           )
-          VALUES ('admin:payments:reconcile', $1, $2, 'processing', now())
+          VALUES ($1, $2, $3, 'processing', now())
           ON CONFLICT (scope, id) DO NOTHING
           RETURNING id
         `,
-        [idempotencyKey, requestHash],
+        [scope, idempotencyKey, requestHash],
       );
       if (inserted.rowCount === 1) return true;
 
@@ -388,12 +449,12 @@ export class AdminService {
         `
           SELECT request_hash, status
           FROM idempotency_keys
-          WHERE scope = 'admin:payments:reconcile'
-            AND id = $1
+          WHERE scope = $1
+            AND id = $2
           LIMIT 1
           FOR UPDATE
         `,
-        [idempotencyKey],
+        [scope, idempotencyKey],
       );
       const row = existing.rows[0];
       if (row === undefined) throw new ConflictException("Admin operation idempotency key is not available");
@@ -406,11 +467,13 @@ export class AdminService {
   }
 
   private async completeAdminOperation(command: {
+    action: string;
     idempotencyKey: string;
     limit: number;
     reason: string;
     requestHash: string;
-    result: PaymentReconciliationResultDto;
+    result: PaymentReconciliationResultDto | FulfillmentSkinReconciliationBatchResultDto;
+    scope: string;
   }): Promise<void> {
     await this.database.transaction(async (client) => {
       await client.query(
@@ -418,15 +481,15 @@ export class AdminService {
           UPDATE idempotency_keys
           SET
             status = 'completed',
-            response_hash = $3,
+            response_hash = $4,
             locked_at = NULL,
             completed_at = now(),
             updated_at = now()
-          WHERE scope = 'admin:payments:reconcile'
-            AND id = $1
-            AND request_hash = $2
+          WHERE scope = $1
+            AND id = $2
+            AND request_hash = $3
         `,
-        [command.idempotencyKey, command.requestHash, sha256(command.result)],
+        [command.scope, command.idempotencyKey, command.requestHash, sha256(command.result)],
       );
       await client.query(
         `
@@ -438,9 +501,10 @@ export class AdminService {
             request_id,
             metadata
           )
-          VALUES (NULL, 'admin.payments.reconcile', 'admin_operation', $1, NULL, $2::jsonb)
+          VALUES (NULL, $1, 'admin_operation', $2, NULL, $3::jsonb)
         `,
         [
+          command.action,
           command.idempotencyKey,
           JSON.stringify({
             idempotencyKey: command.idempotencyKey,
@@ -454,7 +518,7 @@ export class AdminService {
     });
   }
 
-  private async failAdminOperation(idempotencyKey: string, requestHash: string): Promise<void> {
+  private async failAdminOperation(scope: string, idempotencyKey: string, requestHash: string): Promise<void> {
     await this.database.query(
       `
         UPDATE idempotency_keys
@@ -462,11 +526,11 @@ export class AdminService {
           status = 'failed',
           locked_at = NULL,
           updated_at = now()
-        WHERE scope = 'admin:payments:reconcile'
-          AND id = $1
-          AND request_hash = $2
+        WHERE scope = $1
+          AND id = $2
+          AND request_hash = $3
       `,
-      [idempotencyKey, requestHash],
+      [scope, idempotencyKey, requestHash],
     );
   }
 }

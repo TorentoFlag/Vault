@@ -99,10 +99,21 @@ export type ReconcileFulfillmentResult =
     status: "none";
   }
   | {
+    commandStatus: "completed" | "failed" | "manual_review" | "submitted";
     commandId: string;
     providerStatus: SihSkinOrderStatus;
     status: "reconciled";
   };
+
+export type FulfillmentSkinReconciliationBatchResultDto = {
+  checked: number;
+  commands: Array<{
+    commandId: string;
+    providerStatus: SihSkinOrderStatus;
+  }>;
+  errors: number;
+  reconciled: number;
+};
 
 function commandTypeForLine(line: FulfillmentOrderLineInput): FulfillmentCommandType {
   if (line.kind === "skins") return "sih_skin_purchase";
@@ -232,12 +243,44 @@ export class FulfillmentService {
       throw error;
     }
 
-    await this.markSkinReconciled(pending, order);
+    const reconciliation = await this.markSkinReconciled(pending, order);
     return {
+      commandStatus: reconciliation.commandStatus,
       commandId: pending.commandId,
       providerStatus: order.status,
       status: "reconciled",
     };
+  }
+
+  async reconcileSubmittedSkinCommands(command: { limit?: number } = {}): Promise<FulfillmentSkinReconciliationBatchResultDto> {
+    const limit = command.limit ?? 20;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error("FULFILLMENT_RECONCILIATION_LIMIT_INVALID");
+    const result: FulfillmentSkinReconciliationBatchResultDto = {
+      checked: 0,
+      commands: [],
+      errors: 0,
+      reconciled: 0,
+    };
+
+    for (let index = 0; index < limit; index += 1) {
+      let reconciliation: ReconcileFulfillmentResult;
+      try {
+        reconciliation = await this.reconcileNextSubmittedSkinCommand();
+      } catch {
+        result.errors += 1;
+        break;
+      }
+      if (reconciliation.status === "none") break;
+      result.checked += 1;
+      result.reconciled += 1;
+      result.commands.push({
+        commandId: reconciliation.commandId,
+        providerStatus: reconciliation.providerStatus,
+      });
+      if (reconciliation.commandStatus === "submitted") break;
+    }
+
+    return result;
   }
 
   private async claimNextSkinCommand(command: ProcessFulfillmentCommand): Promise<PendingSkinCommand | null> {
@@ -725,7 +768,10 @@ export class FulfillmentService {
     });
   }
 
-  private async markSkinReconciled(pending: PendingSkinReconciliation, order: SihSkinOrder): Promise<void> {
+  private async markSkinReconciled(
+    pending: PendingSkinReconciliation,
+    order: SihSkinOrder,
+  ): Promise<{ commandStatus: "completed" | "failed" | "manual_review" | "submitted" }> {
     const transition = this.skinReconciliationTransition(order);
     await this.database.transaction(async (client) => {
       await client.query(
@@ -796,6 +842,7 @@ export class FulfillmentService {
       }
       if (transition.shouldSettle) await this.settleOrderIfTerminal(client, pending);
     });
+    return { commandStatus: transition.commandStatus };
   }
 
   private skinReconciliationTransition(order: SihSkinOrder): {

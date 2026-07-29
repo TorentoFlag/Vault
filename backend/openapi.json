@@ -560,6 +560,375 @@
         ]
       }
     },
+    "/admin/operations/fulfillment/reconcile": {
+      "post": {
+        "operationId": "AdminController_reconcileFulfillment",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Unique admin operation key. Reusing the same key with the same body returns duplicate without rerunning SIH reconciliation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Admin-Token",
+            "in": "header",
+            "description": "Backend-only admin token loaded from ADMIN_API_TOKEN_FILE.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 500
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "idempotencyKey",
+                    "result"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "duplicate"
+                      ]
+                    },
+                    "idempotencyKey": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "checked",
+                            "commands",
+                            "errors",
+                            "reconciled"
+                          ],
+                          "properties": {
+                            "checked": {
+                              "type": "integer"
+                            },
+                            "commands": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "commandId",
+                                  "providerStatus"
+                                ],
+                                "properties": {
+                                  "commandId": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "providerStatus": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "errors": {
+                              "type": "integer"
+                            },
+                            "reconciled": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/fulfillment/me/trades": {
+      "get": {
+        "operationId": "FulfillmentHistoryController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "events"
+                  ],
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "createdAt",
+                          "direction",
+                          "title",
+                          "itemId",
+                          "orderNumber",
+                          "status"
+                        ],
+                        "properties": {
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "purchase",
+                              "withdrawal"
+                            ]
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "itemId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "orderNumber": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "processing",
+                              "completed"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Fulfillment"
+        ]
+      }
+    },
+    "/session/me": {
+      "get": {
+        "operationId": "SessionsController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
+    "/session/csrf": {
+      "get": {
+        "operationId": "SessionsController_csrf",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
+    "/session/logout": {
+      "post": {
+        "operationId": "SessionsController_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
+    "/wallet/me/transactions": {
+      "get": {
+        "operationId": "WalletController_transactions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "transactions"
+                  ],
+                  "properties": {
+                    "transactions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "amountCoinMinor",
+                          "balanceAfterCoinMinor",
+                          "createdAt",
+                          "direction",
+                          "id",
+                          "reason",
+                          "status"
+                        ],
+                        "properties": {
+                          "amountCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "balanceAfterCoinMinor": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "credit",
+                              "debit"
+                            ]
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "orderId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "top_up",
+                              "purchase"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "completed"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Wallet"
+        ]
+      }
+    },
+    "/wallet/me": {
+      "get": {
+        "operationId": "WalletController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "postedCoinMinor",
+                    "heldCoinMinor",
+                    "availableCoinMinor"
+                  ],
+                  "properties": {
+                    "postedCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "heldCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "availableCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Wallet"
+        ]
+      }
+    },
     "/payments/top-up/sessions": {
       "post": {
         "operationId": "PaymentsController_createTopUpSession",
@@ -749,171 +1118,6 @@
         },
         "tags": [
           "Payments"
-        ]
-      }
-    },
-    "/session/me": {
-      "get": {
-        "operationId": "SessionsController_me",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Sessions"
-        ]
-      }
-    },
-    "/session/csrf": {
-      "get": {
-        "operationId": "SessionsController_csrf",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Sessions"
-        ]
-      }
-    },
-    "/session/logout": {
-      "post": {
-        "operationId": "SessionsController_logout",
-        "parameters": [],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Sessions"
-        ]
-      }
-    },
-    "/wallet/me/transactions": {
-      "get": {
-        "operationId": "WalletController_transactions",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "transactions"
-                  ],
-                  "properties": {
-                    "transactions": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": [
-                          "amountCoinMinor",
-                          "balanceAfterCoinMinor",
-                          "createdAt",
-                          "direction",
-                          "id",
-                          "reason",
-                          "status"
-                        ],
-                        "properties": {
-                          "amountCoinMinor": {
-                            "type": "integer",
-                            "minimum": 1
-                          },
-                          "balanceAfterCoinMinor": {
-                            "type": "integer",
-                            "minimum": 0
-                          },
-                          "createdAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "direction": {
-                            "type": "string",
-                            "enum": [
-                              "credit",
-                              "debit"
-                            ]
-                          },
-                          "id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "orderId": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "reason": {
-                            "type": "string",
-                            "enum": [
-                              "top_up",
-                              "purchase"
-                            ]
-                          },
-                          "status": {
-                            "type": "string",
-                            "enum": [
-                              "completed"
-                            ]
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Wallet"
-        ]
-      }
-    },
-    "/wallet/me": {
-      "get": {
-        "operationId": "WalletController_me",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "postedCoinMinor",
-                    "heldCoinMinor",
-                    "availableCoinMinor"
-                  ],
-                  "properties": {
-                    "postedCoinMinor": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "heldCoinMinor": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "availableCoinMinor": {
-                      "type": "integer",
-                      "minimum": 0
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Wallet"
         ]
       }
     },
@@ -1803,82 +2007,6 @@
         },
         "tags": [
           "Checkout"
-        ]
-      }
-    },
-    "/fulfillment/me/trades": {
-      "get": {
-        "operationId": "FulfillmentHistoryController_me",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "events"
-                  ],
-                  "properties": {
-                    "events": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": [
-                          "id",
-                          "createdAt",
-                          "direction",
-                          "title",
-                          "itemId",
-                          "orderNumber",
-                          "status"
-                        ],
-                        "properties": {
-                          "createdAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "direction": {
-                            "type": "string",
-                            "enum": [
-                              "purchase",
-                              "withdrawal"
-                            ]
-                          },
-                          "id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "itemId": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "orderNumber": {
-                            "type": "string"
-                          },
-                          "status": {
-                            "type": "string",
-                            "enum": [
-                              "pending",
-                              "processing",
-                              "completed"
-                            ]
-                          },
-                          "title": {
-                            "type": "string"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Fulfillment"
         ]
       }
     },

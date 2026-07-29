@@ -40,6 +40,7 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
     delete process.env.ARC_PAY_PROVIDER_MODE;
     delete process.env.ARC_PAY_SECRET_KEY_FILE;
     delete process.env.ARC_PAY_PUBLIC_ORIGIN;
+    delete process.env.SIH_API_KEY_FILE;
     globalThis.fetch = originalFetch;
     await app?.close();
     await pool.end();
@@ -54,6 +55,7 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
     delete process.env.ARC_PAY_PROVIDER_MODE;
     delete process.env.ARC_PAY_SECRET_KEY_FILE;
     delete process.env.ARC_PAY_PUBLIC_ORIGIN;
+    delete process.env.SIH_API_KEY_FILE;
     globalThis.fetch = originalFetch;
     tempDir = await mkdtemp(join(tmpdir(), "vault-admin-"));
     const adminTokenFile = join(tempDir, "admin-token");
@@ -479,5 +481,254 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
       },
       status: "processed",
     });
+  });
+
+  it("runs submitted SIH skin reconciliation once behind admin auth, idempotency, reason, and durable audit", async () => {
+    await app?.close();
+    const sihApiKeyFile = join(tempDir ?? tmpdir(), "sih-api-key");
+    await writeFile(sihApiKeyFile, "test-sih-admin-reconcile\n", "utf8");
+    process.env.SIH_API_KEY_FILE = sihApiKeyFile;
+
+    const orderId = "019facdb-b116-7434-b27c-debea8fb1c50";
+    const orderLineId = "019facdb-b116-7434-b27c-debea8fb1c51";
+    const commandId = "019facdb-b116-7434-b27c-debea8fb1c52";
+    const createAttemptId = "019facdb-b116-7434-b27c-debea8fb1c53";
+    let providerGetOrderRequests = 0;
+    globalThis.fetch = (input, init) => {
+      const url = input instanceof URL
+        ? input
+        : new URL(typeof input === "string" ? input : input.url);
+      if (url.href === `https://api.sih.market/api/v1/get-order?customId=${createAttemptId}`) {
+        providerGetOrderRequests += 1;
+        expect(new Headers(init?.headers).get("apikey")).toBe("test-sih-admin-reconcile");
+        return Promise.resolve(new Response(JSON.stringify({
+          order: {
+            amount: 1.011,
+            customId: createAttemptId,
+            expectedAmount: 1.011,
+            id: 42,
+            item: "Desert Eagle | Printstream (Minimal Wear)",
+            sender: {
+              offerId: 123456,
+            },
+            status: "sent",
+            steamId: "76561198000000011",
+          },
+          success: true,
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: "unexpected request" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      }));
+    };
+
+    await pool.query(
+      `
+        INSERT INTO orders (
+          id,
+          user_id,
+          idempotency_key,
+          request_hash,
+          status,
+          total_coin_minor,
+          recipient_snapshots
+        )
+        VALUES (
+          $1,
+          'user_76561198000000011',
+          'checkout-admin-sih-reconcile',
+          'checkout-admin-sih-reconcile-hash',
+          'processing',
+          200000,
+          '[{"kind":"steam-trade","steamId64":"76561198000000011","steamTradePartnerAccountId":"39734273","token":"must-not-leak"}]'::jsonb
+        )
+      `,
+      [orderId],
+    );
+    await pool.query(
+      `
+        INSERT INTO order_lines (
+          id,
+          order_id,
+          line_index,
+          product_id,
+          product_slug,
+          kind,
+          title,
+          unit_price_coin_minor,
+          quantity,
+          recipient_snapshot,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          1,
+          'desert-eagle-printstream',
+          'desert-eagle-printstream',
+          'skins',
+          'Desert Eagle | Printstream',
+          200000,
+          1,
+          '{"kind":"steam-trade","steamId64":"76561198000000011","steamTradePartnerAccountId":"39734273","token":"must-not-leak"}'::jsonb,
+          'supplier_submitted'
+        )
+      `,
+      [orderLineId, orderId],
+    );
+    await pool.query(
+      `
+        INSERT INTO fulfillment_commands (
+          id,
+          order_id,
+          order_line_id,
+          provider,
+          command_type,
+          status,
+          idempotency_key,
+          payload_snapshot
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          'sih',
+          'sih_skin_purchase',
+          'submitted',
+          'fulfillment-admin-sih-reconcile',
+          '{"steamToken":"must-not-leak","marketHashName":"Desert Eagle | Printstream (Minimal Wear)"}'::jsonb
+        )
+      `,
+      [commandId, orderId, orderLineId],
+    );
+    await pool.query(
+      `
+        INSERT INTO fulfillment_provider_attempts (
+          id,
+          command_id,
+          order_id,
+          order_line_id,
+          provider,
+          operation,
+          status,
+          idempotency_key,
+          provider_order_id,
+          request_snapshot,
+          response_snapshot,
+          finished_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          'sih',
+          'create_order',
+          'succeeded',
+          $5,
+          '42',
+          '{"token":"must-not-leak"}'::jsonb,
+          '{"projection":"create_acknowledgement","providerOrderId":"42"}'::jsonb,
+          now()
+        )
+      `,
+      [createAttemptId, commandId, orderId, orderLineId, createAttemptId],
+    );
+    app = await createApp();
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/admin/operations/fulfillment/reconcile")
+      .set("x-admin-token", adminToken)
+      .send({ reason: "recover submitted SIH skin command", limit: 10 })
+      .expect(400);
+
+    const first = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/admin/operations/fulfillment/reconcile")
+      .set("x-admin-token", adminToken)
+      .set("idempotency-key", "admin-reconcile-sih-skins-1")
+      .send({ reason: "recover submitted SIH skin command", limit: 10 })
+      .expect(200);
+
+    expect(first.body).toEqual({
+      status: "processed",
+      idempotencyKey: "admin-reconcile-sih-skins-1",
+      result: {
+        checked: 1,
+        commands: [{
+          commandId,
+          providerStatus: "sent",
+        }],
+        errors: 0,
+        reconciled: 1,
+      },
+    });
+
+    const second = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/admin/operations/fulfillment/reconcile")
+      .set("x-admin-token", adminToken)
+      .set("idempotency-key", "admin-reconcile-sih-skins-1")
+      .send({ reason: "recover submitted SIH skin command", limit: 10 })
+      .expect(200);
+
+    expect(second.body).toEqual({
+      status: "duplicate",
+      idempotencyKey: "admin-reconcile-sih-skins-1",
+      result: null,
+    });
+    expect(providerGetOrderRequests).toBe(1);
+
+    const persisted = await pool.query<{
+      audit_metadata: Record<string, unknown>;
+      audit_rows: string;
+      command_status: string;
+      get_order_attempts: string;
+      idempotency_rows: string;
+      line_status: string;
+      response_snapshot: Record<string, unknown>;
+    }>(
+      `
+        SELECT
+          (SELECT status FROM fulfillment_commands WHERE id = $1) AS command_status,
+          (SELECT status FROM order_lines WHERE id = $2) AS line_status,
+          (SELECT count(*) FROM fulfillment_provider_attempts WHERE command_id = $1 AND operation = 'get_order') AS get_order_attempts,
+          (SELECT response_snapshot FROM fulfillment_provider_attempts WHERE command_id = $1 AND operation = 'get_order' LIMIT 1) AS response_snapshot,
+          (SELECT count(*) FROM idempotency_keys WHERE scope = 'admin:fulfillment:reconcile' AND id = 'admin-reconcile-sih-skins-1' AND status = 'completed') AS idempotency_rows,
+          (SELECT count(*) FROM audit_events WHERE action = 'admin.fulfillment.reconcile' AND target_id = 'admin-reconcile-sih-skins-1') AS audit_rows,
+          (SELECT metadata FROM audit_events WHERE action = 'admin.fulfillment.reconcile' AND target_id = 'admin-reconcile-sih-skins-1' LIMIT 1) AS audit_metadata
+      `,
+      [commandId, orderLineId],
+    );
+    expect(persisted.rows[0]).toMatchObject({
+      command_status: "submitted",
+      get_order_attempts: "1",
+      idempotency_rows: "1",
+      line_status: "supplier_sent",
+      audit_rows: "1",
+    });
+    expect(persisted.rows[0]?.response_snapshot).toMatchObject({
+      offerId: "123456",
+      providerOrderId: "42",
+      status: "sent",
+    });
+    expect(persisted.rows[0]?.audit_metadata).toEqual({
+      idempotencyKey: "admin-reconcile-sih-skins-1",
+      limit: 10,
+      reason: "recover submitted SIH skin command",
+      result: {
+        checked: 1,
+        commands: [{
+          commandId,
+          providerStatus: "sent",
+        }],
+        errors: 0,
+        reconciled: 1,
+      },
+      status: "processed",
+    });
+    expect(JSON.stringify(persisted.rows)).not.toContain("must-not-leak");
   });
 });
