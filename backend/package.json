@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
     "test:integration": "VAULT_TEST_DATABASE_URL=${VAULT_TEST_DATABASE_URL:-postgres://vault_test:vault_test_password@localhost:55433/vault_test} vitest run --config vitest.integration.config.ts",
+    "smoke:commerce": "VAULT_TEST_DATABASE_URL=${VAULT_TEST_DATABASE_URL:-postgres://vault_test:vault_test_password@localhost:55433/vault_test} vitest run --config vitest.integration.config.ts src/smoke/commerce-flow.integration.spec.ts",
     "payments:reconcile": "tsx src/payments-reconcile.ts",
     "openapi:generate": "tsx src/openapi.ts",
     "openapi:check": "tsx src/openapi.ts --check",

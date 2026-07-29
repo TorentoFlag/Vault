@@ -35,6 +35,7 @@ Run from `/Users/anton/Finext/Vault`.
 | Generate DB migration | `npm --prefix backend run db:generate -- --name=<name>` |
 | Apply DB migration | `npm --prefix backend run db:migrate` |
 | Backend integration tests | `npm --prefix backend run test:integration` |
+| Commerce smoke | `npm --prefix backend run smoke:commerce` |
 | Reconcile pending Arc Pay top-ups | `npm --prefix backend run payments:reconcile -- --limit=20` |
 | SIH sandbox catalog acceptance | `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run test:integration -- src/modules/providers/sih/sih.sandbox.integration.spec.ts` |
 | Full backend gate | `npm --prefix backend run verify` |

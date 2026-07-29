@@ -229,7 +229,7 @@
 - [ ] Ensure footer/document details match exactly.
 - [ ] Implement support ticket or mail handoff with clear operational behavior.
 - [ ] Implement minimal admin read models and reasoned recovery commands. Current status: `GET /admin/operations/overview` exposes token-gated, read-only, redacted queues for manual-review payments, problem orders, fulfillment commands, and unprocessed/rejected webhook events; `POST /admin/operations/payments/reconcile` runs Arc Pay pending top-up reconciliation as a reasoned, idempotent, audited command without direct balance/order overwrites; `POST /admin/operations/fulfillment/reconcile` runs submitted SIH skin status polling as a reasoned, idempotent, audited command without direct order/status overwrites. Other recovery commands remain unimplemented until their command/audit policies are written.
-- [ ] Add backup/restore, deployment, rollback, incident, reconciliation, and secret-rotation runbooks.
+- [ ] Add backup/restore, deployment, rollback, incident, reconciliation, and secret-rotation runbooks. Current status: deterministic commerce smoke runbook exists for Coins top-up, mixed checkout, SIH skin delivery, Steam refill delivery, and customer projections; it remains separate from live provider acceptance.
 
 **Acceptance:**
 - [ ] Footer contains payment logos, legal identity, support email, work hours, Valve disclaimer, and legal links.
