@@ -24,6 +24,11 @@ TLS is issued by Caddy. If `api.vaultapp24.com` does not resolve to the server, 
 
 Source is deployed to `/opt/vault/app`.
 
+The frontend container uses two API origins:
+
+- `VAULT_API_BASE_URL=http://backend:3000` for server-side rendering inside Docker.
+- `NEXT_PUBLIC_API_BASE_URL=https://api.vaultapp24.com` for browser requests.
+
 Runtime config lives outside git:
 
 - `/opt/vault/env/backend.env`
@@ -35,6 +40,12 @@ Runtime config lives outside git:
 - `/opt/vault/secrets/sih-api-key`
 
 Never commit, echo, screenshot, or paste secret file contents.
+
+When deriving `/opt/vault/secrets/database-url` from `/opt/vault/secrets/postgres-password`, URL-encode the password. Raw generated passwords may contain characters that are invalid inside a PostgreSQL connection URL.
+
+```sh
+node -e 'const fs=require("node:fs"); const password=fs.readFileSync("/opt/vault/secrets/postgres-password","utf8").trim(); fs.writeFileSync("/opt/vault/secrets/database-url", `postgres://vault:${encodeURIComponent(password)}@postgres:5432/vault\n`, { mode: 0o600 });'
+```
 
 ## Commands
 
