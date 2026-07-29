@@ -7,6 +7,7 @@ import type { CheckoutRecipientSnapshot } from "../checkout/checkout.service";
 import { SihClient, SihProviderError } from "../providers/sih/sih.client";
 import type { SihCatalogGame, SihCreateSkinOrderResult, SihSkinOrder, SihSkinOrderStatus } from "../providers/sih/sih.types";
 import { UsersService } from "../users/users.service";
+import { WalletService } from "../wallet/wallet.service";
 
 type Queryable = {
   query: <Row extends QueryResultRow = QueryResultRow>(text: string, values?: readonly unknown[]) => Promise<QueryResult<Row>>;
@@ -39,7 +40,9 @@ type PendingSkinReconciliation = {
   attemptId: string;
   commandId: string;
   customId: string;
+  orderId: string;
   orderLineId: string;
+  userId: string;
 };
 
 export type ProcessFulfillmentCommand = {
@@ -77,6 +80,7 @@ export class FulfillmentService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(SihClient) private readonly sih: SihClient,
     @Inject(UsersService) private readonly users: UsersService,
+    @Inject(WalletService) private readonly wallet: WalletService,
   ) {}
 
   async enqueueOrderLineCommands(
@@ -318,14 +322,17 @@ export class FulfillmentService {
         custom_id: string;
         order_id: string;
         order_line_id: string;
+        user_id: string;
       }>(
         `
           SELECT
             fulfillment_commands.id AS command_id,
             fulfillment_commands.order_id,
             fulfillment_commands.order_line_id,
-            create_attempt.id AS custom_id
+            create_attempt.id AS custom_id,
+            orders.user_id
           FROM fulfillment_commands
+          JOIN orders ON orders.id = fulfillment_commands.order_id
           JOIN fulfillment_provider_attempts AS create_attempt
             ON create_attempt.command_id = fulfillment_commands.id
             AND create_attempt.operation = 'create_order'
@@ -381,7 +388,9 @@ export class FulfillmentService {
         attemptId,
         commandId: row.command_id,
         customId: row.custom_id,
+        orderId: row.order_id,
         orderLineId: row.order_line_id,
+        userId: row.user_id,
       };
     });
   }
@@ -421,6 +430,7 @@ export class FulfillmentService {
           UPDATE order_lines
           SET status = CASE
             WHEN status = 'supplier_sent' AND $2 IN ('created', 'processing') THEN status
+            WHEN status = 'supplier_finished' THEN status
             WHEN $2 = 'sent' THEN 'supplier_sent'
             WHEN $2 = 'finished' THEN 'supplier_finished'
             WHEN $2 IN ('failed', 'penalized') THEN 'supplier_failed'
@@ -433,13 +443,69 @@ export class FulfillmentService {
       await client.query(
         `
           UPDATE fulfillment_commands
-          SET locked_at = NULL,
+          SET status = CASE
+                WHEN $2 = 'finished' THEN 'completed'
+                WHEN $2 IN ('failed', 'penalized') THEN 'failed'
+                ELSE status
+              END,
+              finished_at = CASE
+                WHEN $2 IN ('finished', 'failed', 'penalized') THEN clock_timestamp()
+                ELSE finished_at
+              END,
+              locked_at = NULL,
               updated_at = clock_timestamp()
           WHERE id = $1
         `,
-        [pending.commandId],
+        [pending.commandId, order.status],
       );
+      await this.settleOrderIfTerminal(client, pending);
     });
+  }
+
+  private async settleOrderIfTerminal(client: Queryable, pending: PendingSkinReconciliation): Promise<void> {
+    const aggregate = await client.query<{
+      capture_coin_minor: string;
+      open_lines: string;
+      terminal_lines: string;
+      total_lines: string;
+    }>(
+      `
+        SELECT
+          COALESCE(sum(unit_price_coin_minor * quantity) FILTER (WHERE status = 'supplier_finished'), 0)::text AS capture_coin_minor,
+          count(*) FILTER (WHERE status NOT IN ('supplier_finished', 'supplier_failed'))::text AS open_lines,
+          count(*) FILTER (WHERE status IN ('supplier_finished', 'supplier_failed'))::text AS terminal_lines,
+          count(*)::text AS total_lines
+        FROM order_lines
+        WHERE order_id = $1
+      `,
+      [pending.orderId],
+    );
+    const row = aggregate.rows[0];
+    if (row === undefined || row.open_lines !== "0" || row.terminal_lines === "0") return;
+    const captureCoinMinor = Number(row.capture_coin_minor);
+    if (!Number.isSafeInteger(captureCoinMinor) || captureCoinMinor < 0) throw new Error("FULFILLMENT_CAPTURE_AMOUNT_INVALID");
+
+    await this.wallet.settleOrderHoldWithClient(client, {
+      userId: pending.userId,
+      orderId: pending.orderId,
+      captureCoinMinor,
+      idempotencyKey: `fulfillment-settle:${pending.orderId}`,
+      reason: "fulfillment_terminal",
+    });
+
+    await client.query(
+      `
+        UPDATE orders
+        SET status = CASE
+              WHEN $2 = 0 THEN 'failed'
+              WHEN $2 = total_coin_minor THEN 'fulfilled'
+              ELSE 'partially_fulfilled'
+            END,
+            updated_at = clock_timestamp()
+        WHERE id = $1
+      `,
+      [pending.orderId, captureCoinMinor],
+    );
   }
 
   private async markReconciliationFailed(pending: PendingSkinReconciliation, errorCode: string): Promise<void> {

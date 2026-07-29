@@ -341,4 +341,203 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
       status: "sent",
     });
   });
+
+  it("captures the Coins hold and completes the order when SIH marks every skin line finished", async () => {
+    await users.saveSteamTradeCredential(userId, { partner: "39734273", token: "tradeToken" });
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 500_000,
+      idempotencyKey: "topup-credit-fulfillment-finished",
+      reason: "test-credit",
+    });
+    const order = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-fulfillment-finished",
+      items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
+    });
+
+    globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify({ success: true, id: 42, balance: 99.123456 }), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    }));
+    await fulfillment.processNextPendingCommand({ skinTestMode: true });
+
+    const createAttempt = await pool.query<{ id: string }>(
+      "SELECT id FROM fulfillment_provider_attempts WHERE order_id = $1 AND operation = 'create_order'",
+      [order.id],
+    );
+    const customId = createAttempt.rows[0]?.id;
+    if (customId === undefined) throw new Error("Expected create-order attempt");
+
+    globalThis.fetch = (input) => {
+      const url = input instanceof URL
+        ? input
+        : new URL(typeof input === "string" ? input : input.url);
+      expect(url.pathname).toBe("/api/v1/get-order");
+      expect(url.searchParams.get("customId")).toBe(customId);
+      return Promise.resolve(new Response(JSON.stringify({
+        order: {
+          amount: 1.011,
+          customId,
+          expectedAmount: 1.011,
+          id: 42,
+          item: "Desert Eagle | Printstream (Minimal Wear)",
+          sender: {
+            offerId: 123456,
+          },
+          status: "finished",
+          steamId: steamId64,
+        },
+        success: true,
+      }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      }));
+    };
+
+    const reconciliation = await fulfillment.reconcileNextSubmittedSkinCommand();
+    expect(reconciliation.status).toBe("reconciled");
+    if (reconciliation.status !== "reconciled") throw new Error("Expected reconciled result");
+    expect(reconciliation.providerStatus).toBe("finished");
+
+    await expect(wallet.getBalance(userId)).resolves.toEqual({
+      postedCoinMinor: 500_000 - order.totalCoinMinor,
+      heldCoinMinor: 0,
+      availableCoinMinor: 500_000 - order.totalCoinMinor,
+    });
+    const persisted = await pool.query<{
+      command_status: string;
+      hold_status: string;
+      line_status: string;
+      order_status: string;
+      settlement_entries_total: string;
+    }>(
+      `
+        SELECT
+          fulfillment_commands.status AS command_status,
+          wallet_holds.status AS hold_status,
+          order_lines.status AS line_status,
+          orders.status AS order_status,
+          (SELECT COALESCE(sum(amount_coin_minor), 0)::text
+           FROM wallet_ledger_entries
+           WHERE transaction_id IN (
+             SELECT id
+             FROM wallet_transactions
+             WHERE user_id = $2
+               AND idempotency_key = 'fulfillment-settle:' || $1::text
+           )) AS settlement_entries_total
+        FROM orders
+        JOIN order_lines ON order_lines.order_id = orders.id
+        JOIN fulfillment_commands ON fulfillment_commands.order_line_id = order_lines.id
+        JOIN wallet_holds ON wallet_holds.order_id = orders.id
+        WHERE orders.id = $1::uuid
+      `,
+      [order.id, userId],
+    );
+    expect(persisted.rows[0]).toEqual({
+      command_status: "completed",
+      hold_status: "captured",
+      line_status: "supplier_finished",
+      order_status: "fulfilled",
+      settlement_entries_total: "0",
+    });
+  });
+
+  it("releases the Coins hold without debiting the wallet when SIH marks every skin line failed", async () => {
+    await users.saveSteamTradeCredential(userId, { partner: "39734273", token: "tradeToken" });
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 500_000,
+      idempotencyKey: "topup-credit-fulfillment-failed",
+      reason: "test-credit",
+    });
+    const order = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-fulfillment-failed",
+      items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
+    });
+
+    globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify({ success: true, id: 42, balance: 99.123456 }), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    }));
+    await fulfillment.processNextPendingCommand({ skinTestMode: true });
+
+    const createAttempt = await pool.query<{ id: string }>(
+      "SELECT id FROM fulfillment_provider_attempts WHERE order_id = $1 AND operation = 'create_order'",
+      [order.id],
+    );
+    const customId = createAttempt.rows[0]?.id;
+    if (customId === undefined) throw new Error("Expected create-order attempt");
+
+    globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify({
+      order: {
+        amount: 1.011,
+        customId,
+        expectedAmount: 1.011,
+        id: 42,
+        item: "Desert Eagle | Printstream (Minimal Wear)",
+        sender: null,
+        status: "failed",
+        steamId: steamId64,
+      },
+      success: true,
+    }), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    }));
+
+    const reconciliation = await fulfillment.reconcileNextSubmittedSkinCommand();
+    expect(reconciliation.status).toBe("reconciled");
+    if (reconciliation.status !== "reconciled") throw new Error("Expected reconciled result");
+    expect(reconciliation.providerStatus).toBe("failed");
+
+    await expect(wallet.getBalance(userId)).resolves.toEqual({
+      postedCoinMinor: 500_000,
+      heldCoinMinor: 0,
+      availableCoinMinor: 500_000,
+    });
+    const persisted = await pool.query<{
+      command_status: string;
+      hold_status: string;
+      line_status: string;
+      order_status: string;
+      settlement_entries: string;
+      settlement_transactions: string;
+    }>(
+      `
+        SELECT
+          fulfillment_commands.status AS command_status,
+          wallet_holds.status AS hold_status,
+          order_lines.status AS line_status,
+          orders.status AS order_status,
+          (SELECT count(*)::text
+           FROM wallet_ledger_entries
+           WHERE transaction_id IN (
+             SELECT id
+             FROM wallet_transactions
+             WHERE user_id = $2
+               AND idempotency_key = 'fulfillment-settle:' || $1::text
+           )) AS settlement_entries,
+          (SELECT count(*)::text
+           FROM wallet_transactions
+           WHERE user_id = $2
+             AND idempotency_key = 'fulfillment-settle:' || $1::text) AS settlement_transactions
+        FROM orders
+        JOIN order_lines ON order_lines.order_id = orders.id
+        JOIN fulfillment_commands ON fulfillment_commands.order_line_id = order_lines.id
+        JOIN wallet_holds ON wallet_holds.order_id = orders.id
+        WHERE orders.id = $1::uuid
+      `,
+      [order.id, userId],
+    );
+    expect(persisted.rows[0]).toEqual({
+      command_status: "failed",
+      hold_status: "released",
+      line_status: "supplier_failed",
+      order_status: "failed",
+      settlement_entries: "0",
+      settlement_transactions: "1",
+    });
+  });
 });

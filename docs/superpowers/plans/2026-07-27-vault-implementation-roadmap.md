@@ -149,7 +149,7 @@
 - Modify: `frontend/src/features/account/*`
 
 **Tasks:**
-- [x] Implement double-entry Coins wallet journal, active holds, and available balance projection.
+- [x] Implement double-entry Coins wallet journal, active holds, active-hold settlement, and available balance projection.
 - [ ] Implement wallet reconciliation.
 - [x] Implement top-up/payment aggregate with immutable displayed terms. Current status: `/payments/top-up/sessions` creates idempotent Arc Pay top-up intents and provider attempts; disabled mode returns `provider_configuration_required`, while deterministic fake mode returns `checkout_pending` plus a fake checkout URL.
 - [ ] Implement Arc Pay checkout-session creation, method discovery, real webhook verification, status/reconciliation, refund and chargeback adapters. Current status: real Hosted Checkout creation exists for sandbox keys and sends SBP-only `payment_methods`; real webhook signature verification exists for `Webhook-Id`, `Webhook-Timestamp`, and `Webhook-Signature`; method discovery, status/reconciliation, refunds, and chargebacks remain.
@@ -158,7 +158,7 @@
 - [x] Ensure browser return never credits wallet by itself.
 
 **Acceptance:**
-- [ ] Wallet tests prove balanced immutable journal and idempotency.
+- [x] Wallet tests prove balanced immutable journal and idempotency for top-up credit and order hold settlement. Broader reconciliation remains open.
 - [ ] Arc Pay adapter contract tests cover idempotency, method discovery, checkout creation, webhook verification, status mapping, unknown events, refunds/chargebacks, and retries.
 - [ ] Real Arc Pay sandbox/test transaction evidence is recorded before enabling Coins top-up. Current status: Vault has sandbox Hookdeck endpoints for local Hosted Checkout return URLs and webhook delivery; signed Hookdeck delivery into local backend was accepted and posted Coins in test DB. A real paid Arc Pay sandbox transaction still needs provider-side payment completion evidence before release.
 
@@ -199,14 +199,14 @@
 - [ ] Implement SIH create-order/get-order/get-orders flow with `customId` idempotency. Current status: `create-order` and `get-order` client methods are implemented with deterministic contract coverage; batch `get-orders` remains.
 - [ ] Persist supplier attempt before provider call. Current status: checkout persists provider-agnostic fulfillment commands first, and skin submission processing creates a `started` provider attempt before the SIH `create-order` call; Steam refill attempts remain.
 - [x] Treat 200 create as acknowledgement, not delivery. Current status: skin `create-order` 200 marks the attempt/command as submitted and leaves delivery/reconciliation to later status processing.
-- [ ] Reconcile statuses `created`, `processing`, `sent`, `finished`, `failed`, `penalized`. Current status: deterministic reconciliation creates durable `get-order` attempts and persists `sent`/`processing` snapshots; `finished`, `failed`, and `penalized` terminal effects remain.
+- [x] Reconcile statuses `created`, `processing`, `sent`, `finished`, `failed`, `penalized`. Current status: deterministic reconciliation creates durable `get-order` attempts, persists provider snapshots, prevents `sent -> processing` customer-facing regression, closes `finished` commands as completed, closes `failed`/`penalized` commands as failed, and settles the order wallet hold once every order line is terminal.
 - [ ] Handle protection `processing`, `finished`, `failed`, `rollback user`, `rollback supplier`.
-- [ ] Keep provider status regressions from corrupting local monotonic customer-facing state. Current status: `sent -> processing` does not regress an already `supplier_sent` order line.
+- [x] Keep provider status regressions from corrupting local monotonic customer-facing state. Current status: `sent -> processing` does not regress an already `supplier_sent` order line, and `supplier_finished` does not regress to a non-terminal state.
 - [ ] Implement inventory projection and only enable actions backed by real transitions.
 - [ ] Implement Steam refill fulfillment through SIH Steam Refill API.
 
 **Acceptance:**
-- [ ] Deterministic tests cover retries, duplicate `customId`, unknown lookup, sent-to-processing regression, rollback, partial fulfillment, and Redis-loss recovery.
+- [ ] Deterministic tests cover retries, duplicate `customId`, unknown lookup, sent-to-processing regression, rollback, partial fulfillment, and Redis-loss recovery. Current status: durable attempts, duplicate `customId`, `sent -> processing`, terminal success capture, and terminal failure release are covered.
 - [ ] Real SIH test-order acceptance is recorded before enabling skin purchase.
 - [ ] Real Steam refill provider acceptance is recorded before enabling Steam refill.
 

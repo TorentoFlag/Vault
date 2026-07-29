@@ -5,10 +5,11 @@ import { APP_CONFIG } from "../../config/app-config.module";
 import type { AppConfig } from "../../config/app-config";
 import { SihClient } from "../providers/sih/sih.client";
 import { UsersModule } from "../users/users.module";
+import { WalletModule } from "../wallet/wallet.module";
 import { FulfillmentService } from "./fulfillment.service";
 
 @Module({
-  imports: [DatabaseModule, UsersModule],
+  imports: [DatabaseModule, UsersModule, WalletModule],
   providers: [
     {
       provide: SihClient,

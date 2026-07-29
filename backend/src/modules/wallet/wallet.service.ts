@@ -28,6 +28,14 @@ export type CreateHoldCommand = {
   reason: string;
 };
 
+export type SettleOrderHoldCommand = {
+  userId: string;
+  orderId: string;
+  captureCoinMinor: number;
+  idempotencyKey: string;
+  reason: string;
+};
+
 export class WalletInsufficientFundsError extends Error {
   readonly code = "WALLET_INSUFFICIENT_FUNDS";
 
@@ -46,6 +54,12 @@ export class WalletIdempotencyConflictError extends Error {
 
 function assertPositiveCoinMinor(amountCoinMinor: number): void {
   if (!Number.isSafeInteger(amountCoinMinor) || amountCoinMinor <= 0) {
+    throw new Error("WALLET_AMOUNT_INVALID");
+  }
+}
+
+function assertNonNegativeCoinMinor(amountCoinMinor: number): void {
+  if (!Number.isSafeInteger(amountCoinMinor) || amountCoinMinor < 0) {
     throw new Error("WALLET_AMOUNT_INVALID");
   }
 }
@@ -130,6 +144,136 @@ export class WalletService {
         VALUES ($1, $2, $3, $4)
       `,
       [command.userId, command.orderId, command.amountCoinMinor, command.reason],
+    );
+  }
+
+  async settleOrderHold(command: SettleOrderHoldCommand): Promise<void> {
+    await this.database.transaction(async (client) => {
+      await this.lockUserBalance(client, command.userId);
+      await this.settleOrderHoldWithClient(client, command);
+    });
+  }
+
+  async settleOrderHoldWithClient(client: WalletQueryable, command: SettleOrderHoldCommand): Promise<void> {
+    assertNonNegativeCoinMinor(command.captureCoinMinor);
+    const idempotencyKey = requireIdempotencyKey(command.idempotencyKey);
+    const hold = await client.query<{ amount_coin_minor: number; status: string }>(
+      `
+        SELECT amount_coin_minor, status
+        FROM wallet_holds
+        WHERE user_id = $1
+          AND order_id = $2
+        FOR UPDATE
+        LIMIT 1
+      `,
+      [command.userId, command.orderId],
+    );
+    const holdRow = hold.rows[0];
+    if (holdRow === undefined) throw new Error("WALLET_HOLD_NOT_FOUND");
+    if (command.captureCoinMinor > holdRow.amount_coin_minor) throw new Error("WALLET_CAPTURE_EXCEEDS_HOLD");
+
+    const existing = await client.query<{
+      capture_coin_minor: number | null;
+      order_id: string | null;
+    }>(
+      `
+        SELECT
+          metadata ->> 'orderId' AS order_id,
+          (metadata ->> 'captureCoinMinor')::int AS capture_coin_minor
+        FROM wallet_transactions
+        WHERE user_id = $1
+          AND idempotency_key = $2
+          AND type = 'order_hold_settlement'
+        LIMIT 1
+      `,
+      [command.userId, idempotencyKey],
+    );
+    const existingRow = existing.rows[0];
+    if (existingRow !== undefined) {
+      if (existingRow.order_id !== command.orderId || existingRow.capture_coin_minor !== command.captureCoinMinor) {
+        throw new WalletIdempotencyConflictError();
+      }
+      return;
+    }
+    if (holdRow.status !== "active") throw new Error("WALLET_HOLD_ALREADY_SETTLED");
+
+    const transaction = await client.query<{ id: string }>(
+      `
+        INSERT INTO wallet_transactions (user_id, idempotency_key, type, metadata)
+        VALUES (
+          $1,
+          $2,
+          'order_hold_settlement',
+          jsonb_build_object(
+            'orderId', $3::text,
+            'reason', $4::text,
+            'holdCoinMinor', $5::int,
+            'captureCoinMinor', $6::int
+          )
+        )
+        ON CONFLICT (user_id, idempotency_key) DO NOTHING
+        RETURNING id
+      `,
+      [command.userId, idempotencyKey, command.orderId, command.reason, holdRow.amount_coin_minor, command.captureCoinMinor],
+    );
+    const transactionId = transaction.rows[0]?.id;
+    if (transactionId === undefined) {
+      const racedExisting = await client.query<{
+        capture_coin_minor: number | null;
+        order_id: string | null;
+      }>(
+        `
+          SELECT
+            metadata ->> 'orderId' AS order_id,
+            (metadata ->> 'captureCoinMinor')::int AS capture_coin_minor
+          FROM wallet_transactions
+          WHERE user_id = $1
+            AND idempotency_key = $2
+            AND type = 'order_hold_settlement'
+          LIMIT 1
+        `,
+        [command.userId, idempotencyKey],
+      );
+      const racedRow = racedExisting.rows[0];
+      if (racedRow?.order_id !== command.orderId || racedRow.capture_coin_minor !== command.captureCoinMinor) {
+        throw new WalletIdempotencyConflictError();
+      }
+      return;
+    }
+
+    if (command.captureCoinMinor > 0) {
+      await client.query(
+        `
+          INSERT INTO wallet_ledger_entries (transaction_id, user_id, account_key, amount_coin_minor)
+          VALUES
+            ($1, $2, $3, $4),
+            ($1, NULL, 'vault:order-revenue', $5)
+        `,
+        [
+          transactionId,
+          command.userId,
+          customerAccount(command.userId),
+          -command.captureCoinMinor,
+          command.captureCoinMinor,
+        ],
+      );
+    }
+
+    await client.query(
+      `
+        UPDATE wallet_holds
+        SET status = CASE
+              WHEN $3 = 0 THEN 'released'
+              WHEN $3 = amount_coin_minor THEN 'captured'
+              ELSE 'partially_captured'
+            END,
+            captured_at = CASE WHEN $3 > 0 THEN clock_timestamp() ELSE captured_at END,
+            released_at = CASE WHEN $3 < amount_coin_minor THEN clock_timestamp() ELSE released_at END
+        WHERE user_id = $1
+          AND order_id = $2
+          AND status = 'active'
+      `,
+      [command.userId, command.orderId, command.captureCoinMinor],
     );
   }
 
