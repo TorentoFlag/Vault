@@ -540,4 +540,226 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
       settlement_transactions: "1",
     });
   });
+
+  it("checks and pays a Steam refill command before capturing the Coins hold", async () => {
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 500_000,
+      idempotencyKey: "topup-credit-steam-refill",
+      reason: "test-credit",
+    });
+    const order = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-steam-refill",
+      items: [{ productSlug: "steam-top-up-500-rub", quantity: 1, recipient: { steamLogin: "vault_sandbox_user" } }],
+    });
+
+    const providerRequests: Array<{ body: unknown; path: string }> = [];
+    globalThis.fetch = async (input, init) => {
+      if (typeof init?.body !== "string") throw new Error("Expected SIH JSON body");
+      const url = input instanceof URL
+        ? input
+        : new URL(typeof input === "string" ? input : input.url);
+      const body = JSON.parse(init.body) as unknown;
+      providerRequests.push({ body, path: url.pathname });
+      if (url.pathname.endsWith("/steam/check")) {
+        const attemptsBeforeProviderResponse = await pool.query<{ operation: string; status: string }>(
+          "SELECT operation, status FROM fulfillment_provider_attempts WHERE order_id = $1 ORDER BY created_at ASC",
+          [order.id],
+        );
+        expect(attemptsBeforeProviderResponse.rows).toEqual([{ operation: "steam_check", status: "started" }]);
+        return new Response(JSON.stringify({
+          message: "Steam account found successfully",
+          success: true,
+          transactionId: "d34cb700-fcf9-4cab-89b1-7a6b552a0df5",
+        }), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        });
+      }
+      const attemptsBeforeProviderResponse = await pool.query<{ operation: string; status: string }>(
+        "SELECT operation, status FROM fulfillment_provider_attempts WHERE order_id = $1 ORDER BY created_at ASC",
+        [order.id],
+      );
+      expect(attemptsBeforeProviderResponse.rows).toEqual([
+        { operation: "steam_check", status: "succeeded" },
+        { operation: "steam_pay", status: "started" },
+      ]);
+      return new Response(JSON.stringify({
+        cashback: 0,
+        message: "Payment completed successfully",
+        paymentAmount: 500,
+        status: "success",
+      }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
+    };
+
+    const result = await fulfillment.processNextPendingCommand({ skinTestMode: true });
+
+    expect(result.status).toBe("completed");
+    expect(providerRequests).toEqual([
+      { path: "/p/api/v1.0/steam/check", body: { steamUsername: "vault_sandbox_user" } },
+      {
+        path: "/p/api/v1.0/steam/pay",
+        body: {
+          amount: 500,
+          currency: "RUB",
+          steamUsername: "vault_sandbox_user",
+          transactionId: "d34cb700-fcf9-4cab-89b1-7a6b552a0df5",
+        },
+      },
+    ]);
+    await expect(wallet.getBalance(userId)).resolves.toEqual({
+      postedCoinMinor: 500_000 - order.totalCoinMinor,
+      heldCoinMinor: 0,
+      availableCoinMinor: 500_000 - order.totalCoinMinor,
+    });
+    const persisted = await pool.query<{
+      command_status: string;
+      hold_status: string;
+      line_status: string;
+      operations: string[];
+      order_status: string;
+      provider_order_ids: string[];
+    }>(
+      `
+        SELECT
+          fulfillment_commands.status AS command_status,
+          wallet_holds.status AS hold_status,
+          order_lines.status AS line_status,
+          orders.status AS order_status,
+          array_agg(fulfillment_provider_attempts.operation ORDER BY fulfillment_provider_attempts.created_at) AS operations,
+          array_agg(fulfillment_provider_attempts.provider_order_id ORDER BY fulfillment_provider_attempts.created_at) AS provider_order_ids
+        FROM orders
+        JOIN order_lines ON order_lines.order_id = orders.id
+        JOIN fulfillment_commands ON fulfillment_commands.order_line_id = order_lines.id
+        JOIN fulfillment_provider_attempts ON fulfillment_provider_attempts.command_id = fulfillment_commands.id
+        JOIN wallet_holds ON wallet_holds.order_id = orders.id
+        WHERE orders.id = $1
+        GROUP BY fulfillment_commands.status, wallet_holds.status, order_lines.status, orders.status
+      `,
+      [order.id],
+    );
+    expect(persisted.rows[0]).toEqual({
+      command_status: "completed",
+      hold_status: "captured",
+      line_status: "supplier_finished",
+      operations: ["steam_check", "steam_pay"],
+      order_status: "fulfilled",
+      provider_order_ids: ["d34cb700-fcf9-4cab-89b1-7a6b552a0df5", "d34cb700-fcf9-4cab-89b1-7a6b552a0df5"],
+    });
+    expect(JSON.stringify(persisted.rows)).not.toContain("test-sih-secret-key");
+  });
+
+  it("retries Steam refill pay with the existing SIH transaction after a pay failure", async () => {
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 500_000,
+      idempotencyKey: "topup-credit-steam-refill-retry",
+      reason: "test-credit",
+    });
+    const order = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-steam-refill-retry",
+      items: [{ productSlug: "steam-top-up-500-rub", quantity: 1, recipient: { steamLogin: "vault_sandbox_user" } }],
+    });
+
+    const providerRequests: Array<{ body: unknown; path: string }> = [];
+    globalThis.fetch = (input, init) => {
+      if (typeof init?.body !== "string") throw new Error("Expected SIH JSON body");
+      const url = input instanceof URL
+        ? input
+        : new URL(typeof input === "string" ? input : input.url);
+      const body = JSON.parse(init.body) as unknown;
+      providerRequests.push({ body, path: url.pathname });
+      if (url.pathname.endsWith("/steam/check")) {
+        return Promise.resolve(new Response(JSON.stringify({
+          message: "Steam account found successfully",
+          success: true,
+          transactionId: "d34cb700-fcf9-4cab-89b1-7a6b552a0df5",
+        }), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        }));
+      }
+      if (providerRequests.filter((requestRecord) => requestRecord.path.endsWith("/steam/pay")).length === 1) {
+        return Promise.resolve(new Response(JSON.stringify({ error: "temporary" }), {
+          headers: { "content-type": "application/json" },
+          status: 503,
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        cashback: 0,
+        message: "Payment already completed",
+        paymentAmount: 500,
+        status: "success",
+      }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      }));
+    };
+
+    await expect(fulfillment.processNextPendingCommand({ skinTestMode: true })).rejects.toMatchObject({
+      code: "SIH_PROVIDER_UNAVAILABLE",
+    });
+    const afterFailure = await pool.query<{ command_status: string; operations: string[]; statuses: string[] }>(
+      `
+        SELECT
+          fulfillment_commands.status AS command_status,
+          array_agg(fulfillment_provider_attempts.operation ORDER BY fulfillment_provider_attempts.created_at) AS operations,
+          array_agg(fulfillment_provider_attempts.status ORDER BY fulfillment_provider_attempts.created_at) AS statuses
+        FROM fulfillment_commands
+        JOIN fulfillment_provider_attempts ON fulfillment_provider_attempts.command_id = fulfillment_commands.id
+        WHERE fulfillment_commands.order_id = $1
+        GROUP BY fulfillment_commands.status
+      `,
+      [order.id],
+    );
+    expect(afterFailure.rows[0]).toEqual({
+      command_status: "pending",
+      operations: ["steam_check", "steam_pay"],
+      statuses: ["succeeded", "failed"],
+    });
+
+    const result = await fulfillment.processNextPendingCommand({ skinTestMode: true });
+
+    expect(result.status).toBe("completed");
+    expect(providerRequests).toEqual([
+      { path: "/p/api/v1.0/steam/check", body: { steamUsername: "vault_sandbox_user" } },
+      {
+        path: "/p/api/v1.0/steam/pay",
+        body: {
+          amount: 500,
+          currency: "RUB",
+          steamUsername: "vault_sandbox_user",
+          transactionId: "d34cb700-fcf9-4cab-89b1-7a6b552a0df5",
+        },
+      },
+      {
+        path: "/p/api/v1.0/steam/pay",
+        body: {
+          amount: 500,
+          currency: "RUB",
+          steamUsername: "vault_sandbox_user",
+          transactionId: "d34cb700-fcf9-4cab-89b1-7a6b552a0df5",
+        },
+      },
+    ]);
+    const persisted = await pool.query<{ operations: string[]; statuses: string[] }>(
+      `
+        SELECT
+          array_agg(operation ORDER BY created_at) AS operations,
+          array_agg(status ORDER BY created_at) AS statuses
+        FROM fulfillment_provider_attempts
+        WHERE order_id = $1
+      `,
+      [order.id],
+    );
+    expect(persisted.rows[0]).toEqual({
+      operations: ["steam_check", "steam_pay", "steam_pay"],
+      statuses: ["succeeded", "failed", "succeeded"],
+    });
+  });
 });

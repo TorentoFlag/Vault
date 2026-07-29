@@ -5,7 +5,7 @@ import { DatabaseService } from "../../common/database/database.service";
 import type { CatalogProductDto } from "../catalog/catalog.types";
 import type { CheckoutRecipientSnapshot } from "../checkout/checkout.service";
 import { SihClient, SihProviderError } from "../providers/sih/sih.client";
-import type { SihCatalogGame, SihCreateSkinOrderResult, SihSkinOrder, SihSkinOrderStatus } from "../providers/sih/sih.types";
+import type { SihCatalogGame, SihCreateSkinOrderResult, SihSkinOrder, SihSkinOrderStatus, SihSteamCheckResult, SihSteamPayResult } from "../providers/sih/sih.types";
 import { UsersService } from "../users/users.service";
 import { WalletService } from "../wallet/wallet.service";
 
@@ -45,6 +45,36 @@ type PendingSkinReconciliation = {
   userId: string;
 };
 
+type PendingSteamRefillCheck = {
+  amountRub: number;
+  attemptId: string;
+  commandId: string;
+  kind: "check";
+  orderId: string;
+  orderLineId: string;
+  steamUsername: string;
+  userId: string;
+};
+
+type PendingSteamRefillPay = {
+  amountRub: number;
+  attemptId: string;
+  commandId: string;
+  kind: "pay";
+  orderId: string;
+  orderLineId: string;
+  steamUsername: string;
+  transactionId: string;
+  userId: string;
+};
+
+type PendingSteamRefill = PendingSteamRefillCheck | PendingSteamRefillPay;
+
+type OrderSettlementSubject = {
+  orderId: string;
+  userId: string;
+};
+
 export type ProcessFulfillmentCommand = {
   skinTestMode: boolean;
 };
@@ -52,6 +82,11 @@ export type ProcessFulfillmentCommand = {
 export type ProcessFulfillmentResult =
   | {
     status: "none";
+  }
+  | {
+    commandId: string;
+    providerOrderId: string;
+    status: "completed";
   }
   | {
     commandId: string;
@@ -72,6 +107,31 @@ export type ReconcileFulfillmentResult =
 function commandTypeForLine(line: FulfillmentOrderLineInput): FulfillmentCommandType {
   if (line.kind === "skins") return "sih_skin_purchase";
   return "sih_steam_refill";
+}
+
+function steamRefillAmountRub(productSlug: string): number {
+  const match = /^steam-top-up-([1-9][0-9]*)-rub$/.exec(productSlug);
+  if (match === null || match[1] === undefined) throw new Error("FULFILLMENT_STEAM_REFILL_AMOUNT_MISSING");
+  const amountRub = Number(match[1]);
+  if (!Number.isSafeInteger(amountRub) || amountRub < 50 || amountRub > 9_433) {
+    throw new Error("FULFILLMENT_STEAM_REFILL_AMOUNT_INVALID");
+  }
+  return amountRub;
+}
+
+function steamUsernameFromSnapshot(value: unknown): string {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    (value as { kind?: unknown }).kind !== "steam-refill" ||
+    typeof (value as { steamLogin?: unknown }).steamLogin !== "string"
+  ) {
+    throw new Error("FULFILLMENT_STEAM_REFILL_RECIPIENT_INVALID");
+  }
+  const steamUsername = (value as { steamLogin: string }).steamLogin.trim();
+  if (steamUsername.length === 0 || steamUsername.length > 64) throw new Error("FULFILLMENT_STEAM_REFILL_RECIPIENT_INVALID");
+  return steamUsername;
 }
 
 @Injectable()
@@ -128,7 +188,11 @@ export class FulfillmentService {
 
   async processNextPendingCommand(command: ProcessFulfillmentCommand): Promise<ProcessFulfillmentResult> {
     const pending = await this.claimNextSkinCommand(command);
-    if (pending === null) return { status: "none" };
+    if (pending === null) {
+      const refill = await this.claimNextSteamRefillCommand();
+      if (refill === null) return { status: "none" };
+      return this.processSteamRefill(refill);
+    }
 
     const credential = await this.users.requireSteamTradeCredential(pending.userId);
     let response: SihCreateSkinOrderResult;
@@ -315,6 +379,272 @@ export class FulfillmentService {
     });
   }
 
+  private async claimNextSteamRefillCommand(): Promise<PendingSteamRefill | null> {
+    return this.database.transaction(async (client) => {
+      const claimed = await client.query<{
+        command_id: string;
+        order_id: string;
+        order_line_id: string;
+        product_slug: string;
+        recipient_snapshot: unknown;
+        steam_check_transaction_id: string | null;
+        user_id: string;
+      }>(
+        `
+          SELECT
+            fulfillment_commands.id AS command_id,
+            fulfillment_commands.order_id,
+            fulfillment_commands.order_line_id,
+            order_lines.product_slug,
+            order_lines.recipient_snapshot,
+            orders.user_id,
+            steam_check.response_snapshot ->> 'transactionId' AS steam_check_transaction_id
+          FROM fulfillment_commands
+          JOIN orders ON orders.id = fulfillment_commands.order_id
+          JOIN order_lines ON order_lines.id = fulfillment_commands.order_line_id
+          LEFT JOIN LATERAL (
+            SELECT response_snapshot
+            FROM fulfillment_provider_attempts
+            WHERE command_id = fulfillment_commands.id
+              AND operation = 'steam_check'
+              AND status = 'succeeded'
+            ORDER BY created_at DESC
+            LIMIT 1
+          ) AS steam_check ON true
+          WHERE fulfillment_commands.provider = 'sih'
+            AND fulfillment_commands.command_type = 'sih_steam_refill'
+            AND fulfillment_commands.status = 'pending'
+            AND fulfillment_commands.available_at <= clock_timestamp()
+          ORDER BY fulfillment_commands.created_at ASC, fulfillment_commands.id ASC
+          FOR UPDATE OF fulfillment_commands SKIP LOCKED
+          LIMIT 1
+        `,
+      );
+      const row = claimed.rows[0];
+      if (row === undefined) return null;
+      const amountRub = steamRefillAmountRub(row.product_slug);
+      const steamUsername = steamUsernameFromSnapshot(row.recipient_snapshot);
+      await client.query(
+        `
+          UPDATE fulfillment_commands
+          SET status = 'processing',
+              locked_at = clock_timestamp(),
+              updated_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [row.command_id],
+      );
+      if (row.steam_check_transaction_id !== null) {
+        const attemptId = await this.createSteamProviderAttempt(client, {
+          amountRub,
+          commandId: row.command_id,
+          operation: "steam_pay",
+          orderId: row.order_id,
+          orderLineId: row.order_line_id,
+          providerOrderId: row.steam_check_transaction_id,
+          requestSnapshot: {
+            amountRub,
+            currency: "RUB",
+            steamUsername,
+            transactionId: row.steam_check_transaction_id,
+          },
+        });
+        return {
+          amountRub,
+          attemptId,
+          commandId: row.command_id,
+          kind: "pay",
+          orderId: row.order_id,
+          orderLineId: row.order_line_id,
+          steamUsername,
+          transactionId: row.steam_check_transaction_id,
+          userId: row.user_id,
+        };
+      }
+      const attemptId = await this.createSteamProviderAttempt(client, {
+        commandId: row.command_id,
+        operation: "steam_check",
+        orderId: row.order_id,
+        orderLineId: row.order_line_id,
+        requestSnapshot: { steamUsername },
+      });
+      return {
+        amountRub,
+        attemptId,
+        commandId: row.command_id,
+        kind: "check",
+        orderId: row.order_id,
+        orderLineId: row.order_line_id,
+        steamUsername,
+        userId: row.user_id,
+      };
+    });
+  }
+
+  private async processSteamRefill(pending: PendingSteamRefill): Promise<ProcessFulfillmentResult> {
+    let pay: PendingSteamRefillPay;
+    if (pending.kind === "check") {
+      let check: SihSteamCheckResult;
+      try {
+        check = await this.sih.checkSteamAccount({ steamUsername: pending.steamUsername });
+      } catch (error) {
+        await this.markAttemptFailed(pending, this.errorCode(error));
+        throw error;
+      }
+      pay = await this.markSteamCheckSucceededAndCreatePayAttempt(pending, check);
+    } else {
+      pay = pending;
+    }
+
+    let payment: SihSteamPayResult;
+    try {
+      payment = await this.sih.paySteamRefill({
+        amountRub: pay.amountRub,
+        steamUsername: pay.steamUsername,
+        transactionId: pay.transactionId,
+      });
+    } catch (error) {
+      await this.markAttemptFailed(pay, this.errorCode(error));
+      throw error;
+    }
+
+    await this.markSteamRefillCompleted(pay, payment);
+    return {
+      commandId: pay.commandId,
+      providerOrderId: pay.transactionId,
+      status: "completed",
+    };
+  }
+
+  private async createSteamProviderAttempt(
+    client: Queryable,
+    command: {
+      amountRub?: number;
+      commandId: string;
+      operation: "steam_check" | "steam_pay";
+      orderId: string;
+      orderLineId: string;
+      providerOrderId?: string;
+      requestSnapshot: Record<string, unknown>;
+    },
+  ): Promise<string> {
+    const attempt = await client.query<{ id: string }>(
+      `
+        INSERT INTO fulfillment_provider_attempts (
+          command_id,
+          order_id,
+          order_line_id,
+          provider,
+          operation,
+          status,
+          idempotency_key,
+          provider_order_id,
+          request_snapshot
+        )
+        VALUES ($1, $2, $3, 'sih', $4, 'started', gen_random_uuid()::text, $5, $6::jsonb)
+        RETURNING id
+      `,
+      [
+        command.commandId,
+        command.orderId,
+        command.orderLineId,
+        command.operation,
+        command.providerOrderId ?? null,
+        JSON.stringify(command.requestSnapshot),
+      ],
+    );
+    const attemptId = attempt.rows[0]?.id;
+    if (attemptId === undefined) throw new Error("FULFILLMENT_STEAM_ATTEMPT_NOT_CREATED");
+    await client.query(
+      "UPDATE fulfillment_provider_attempts SET idempotency_key = $1 WHERE id = $1",
+      [attemptId],
+    );
+    return attemptId;
+  }
+
+  private async markSteamCheckSucceededAndCreatePayAttempt(
+    pending: PendingSteamRefillCheck,
+    check: SihSteamCheckResult,
+  ): Promise<PendingSteamRefillPay> {
+    return this.database.transaction(async (client) => {
+      await client.query(
+        `
+          UPDATE fulfillment_provider_attempts
+          SET status = 'succeeded',
+              provider_order_id = $2,
+              response_snapshot = $3::jsonb,
+              finished_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [
+          pending.attemptId,
+          check.transactionId,
+          JSON.stringify({ transactionId: check.transactionId }),
+        ],
+      );
+      const attemptId = await this.createSteamProviderAttempt(client, {
+        amountRub: pending.amountRub,
+        commandId: pending.commandId,
+        operation: "steam_pay",
+        orderId: pending.orderId,
+        orderLineId: pending.orderLineId,
+        providerOrderId: check.transactionId,
+        requestSnapshot: {
+          amountRub: pending.amountRub,
+          currency: "RUB",
+          steamUsername: pending.steamUsername,
+          transactionId: check.transactionId,
+        },
+      });
+      return {
+        ...pending,
+        attemptId,
+        kind: "pay",
+        transactionId: check.transactionId,
+      };
+    });
+  }
+
+  private async markSteamRefillCompleted(pending: PendingSteamRefillPay, payment: SihSteamPayResult): Promise<void> {
+    await this.database.transaction(async (client) => {
+      await client.query(
+        `
+          UPDATE fulfillment_provider_attempts
+          SET status = 'succeeded',
+              provider_order_id = $2,
+              response_snapshot = $3::jsonb,
+              finished_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [
+          pending.attemptId,
+          pending.transactionId,
+          JSON.stringify({
+            cashbackUsd: payment.cashbackUsd.toString(),
+            paymentAmountRub: payment.paymentAmountRub.toString(),
+            status: payment.status,
+          }),
+        ],
+      );
+      await client.query(
+        `
+          UPDATE fulfillment_commands
+          SET status = 'completed',
+              finished_at = clock_timestamp(),
+              locked_at = NULL,
+              updated_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [pending.commandId],
+      );
+      await client.query(
+        "UPDATE order_lines SET status = 'supplier_finished' WHERE id = $1",
+        [pending.orderLineId],
+      );
+      await this.settleOrderIfTerminal(client, pending);
+    });
+  }
+
   private async claimNextSubmittedSkinCommand(): Promise<PendingSkinReconciliation | null> {
     return this.database.transaction(async (client) => {
       const claimed = await client.query<{
@@ -462,7 +792,7 @@ export class FulfillmentService {
     });
   }
 
-  private async settleOrderIfTerminal(client: Queryable, pending: PendingSkinReconciliation): Promise<void> {
+  private async settleOrderIfTerminal(client: Queryable, pending: OrderSettlementSubject): Promise<void> {
     const aggregate = await client.query<{
       capture_coin_minor: string;
       open_lines: string;
@@ -533,7 +863,7 @@ export class FulfillmentService {
     });
   }
 
-  private async markAttemptFailed(pending: PendingSkinCommand, errorCode: string): Promise<void> {
+  private async markAttemptFailed(pending: { attemptId: string; commandId: string }, errorCode: string): Promise<void> {
     await this.database.transaction(async (client) => {
       await client.query(
         `
