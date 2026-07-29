@@ -38,6 +38,7 @@ Run from `/Users/anton/Finext/Vault`.
 | Commerce smoke | `npm --prefix backend run smoke:commerce` |
 | Provider acceptance readiness | `npm --prefix backend run acceptance:readiness` |
 | Reconcile pending Arc Pay top-ups | `npm --prefix backend run payments:reconcile -- --limit=20` |
+| Check wallet invariants | `npm --prefix backend run wallet:reconcile -- --limit=100` |
 | SIH sandbox catalog acceptance | `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run acceptance:sih-catalog` |
 | Full backend gate | `npm --prefix backend run verify` |
 

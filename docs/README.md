@@ -24,6 +24,7 @@ This is the entry point for humans and agents. Documentation describes current i
 | Admin operations read models | [`operations/admin-operations-read-models.md`](operations/admin-operations-read-models.md) |
 | Commerce smoke | [`operations/commerce-smoke.md`](operations/commerce-smoke.md) |
 | Provider acceptance | [`operations/provider-acceptance.md`](operations/provider-acceptance.md) |
+| Wallet reconciliation | [`operations/wallet-reconciliation.md`](operations/wallet-reconciliation.md) |
 | Implementation roadmap | [`superpowers/plans/2026-07-27-vault-implementation-roadmap.md`](superpowers/plans/2026-07-27-vault-implementation-roadmap.md) |
 
 ## Product boundaries

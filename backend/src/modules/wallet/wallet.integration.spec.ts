@@ -315,4 +315,136 @@ describe.skipIf(!databaseUrl)("wallet PostgreSQL persistence", () => {
       availableCoinMinor: 65_000,
     });
   });
+
+  it("reports wallet invariant violations without mutating money state", async () => {
+    await pool.query(
+      `
+        INSERT INTO wallet_transactions (id, user_id, idempotency_key, type, status, metadata, created_at)
+        VALUES (
+          '11111111-1111-4111-8111-111111111111',
+          $1,
+          'wallet-reconcile-unbalanced',
+          'top_up_credit',
+          'posted',
+          '{}'::jsonb,
+          '2026-07-29T10:00:00.000Z'::timestamptz
+        )
+      `,
+      [userId],
+    );
+    await pool.query(
+      `
+        INSERT INTO orders (id, user_id, idempotency_key, request_hash, status, total_coin_minor, recipient_snapshots, created_at)
+        VALUES (
+          '22222222-2222-4222-8222-222222222222',
+          $1,
+          'wallet-reconcile-terminal-hold',
+          'hash-wallet-reconcile-terminal-hold',
+          'fulfilled',
+          5000,
+          '[]'::jsonb,
+          '2026-07-29T10:01:00.000Z'::timestamptz
+        )
+      `,
+      [userId],
+    );
+    await pool.query(
+      `
+        INSERT INTO wallet_holds (id, user_id, order_id, amount_coin_minor, status, reason, created_at)
+        VALUES
+          (
+            '33333333-3333-4333-8333-333333333333',
+            $1,
+            '22222222-2222-4222-8222-222222222222',
+            5000,
+            'active',
+            'checkout',
+            '2026-07-29T10:02:00.000Z'::timestamptz
+          ),
+          (
+            '44444444-4444-4444-8444-444444444444',
+            $1,
+            '55555555-5555-4555-8555-555555555555',
+            1000,
+            'active',
+            'checkout',
+            '2026-07-29T10:03:00.000Z'::timestamptz
+          ),
+          (
+            '66666666-6666-4666-8666-666666666666',
+            $1,
+            '77777777-7777-4777-8777-777777777777',
+            0,
+            'active',
+            'corrupt_fixture',
+            '2026-07-29T10:04:00.000Z'::timestamptz
+          )
+      `,
+      [userId],
+    );
+
+    const before = await pool.query<{ holds: string; transactions: string }>(
+      `
+        SELECT
+          (SELECT count(*)::text FROM wallet_holds) AS holds,
+          (SELECT count(*)::text FROM wallet_transactions) AS transactions
+      `,
+    );
+
+    await expect(wallet.reconcileWallet({ limit: 10 })).resolves.toMatchObject({
+      status: "issues_found",
+      summary: {
+        invalidAmountRows: 1,
+        orphanHolds: 2,
+        terminalOrderActiveHolds: 1,
+        unbalancedTransactions: 1,
+      },
+      issues: [
+        {
+          entryCount: 0,
+          id: "11111111-1111-4111-8111-111111111111",
+          kind: "unbalanced_transaction",
+          transactionTotalCoinMinor: 0,
+          userId,
+        },
+        {
+          amountCoinMinor: 5000,
+          id: "33333333-3333-4333-8333-333333333333",
+          kind: "terminal_order_active_hold",
+          orderId: "22222222-2222-4222-8222-222222222222",
+          orderStatus: "fulfilled",
+          userId,
+        },
+        {
+          amountCoinMinor: 1000,
+          id: "44444444-4444-4444-8444-444444444444",
+          kind: "orphan_hold",
+          orderId: "55555555-5555-4555-8555-555555555555",
+          userId,
+        },
+        {
+          amountCoinMinor: 0,
+          id: "66666666-6666-4666-8666-666666666666",
+          kind: "orphan_hold",
+          orderId: "77777777-7777-4777-8777-777777777777",
+          userId,
+        },
+        {
+          amountCoinMinor: 0,
+          id: "66666666-6666-4666-8666-666666666666",
+          kind: "invalid_amount",
+          table: "wallet_holds",
+          userId,
+        },
+      ],
+    });
+
+    await expect(wallet.reconcileWallet({ limit: 0 })).rejects.toThrow("WALLET_RECONCILIATION_LIMIT_INVALID");
+    await expect(pool.query("SELECT count(*)::text AS holds FROM wallet_holds")).resolves.toMatchObject({
+      rows: [{ holds: before.rows[0]?.holds }],
+    });
+    await expect(pool.query("SELECT count(*)::text AS transactions FROM wallet_transactions")).resolves.toMatchObject({
+      rows: [{ transactions: before.rows[0]?.transactions }],
+    });
+  });
 });

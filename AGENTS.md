@@ -87,6 +87,7 @@ Run from the repository root:
 - Integration tests: `npm --prefix backend run test:integration`
 - Commerce smoke: `npm --prefix backend run smoke:commerce`
 - Reconcile pending Arc Pay top-ups: `npm --prefix backend run payments:reconcile -- --limit=20`
+- Check wallet invariants: `npm --prefix backend run wallet:reconcile -- --limit=100`
 - Provider acceptance readiness: `npm --prefix backend run acceptance:readiness`
 - SIH sandbox catalog acceptance: `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run acceptance:sih-catalog`
 - Full gate: `npm --prefix backend run verify`

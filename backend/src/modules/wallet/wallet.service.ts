@@ -31,6 +31,50 @@ export type WalletTransactionHistoryDto = {
   transactions: WalletTransactionHistoryItemDto[];
 };
 
+export type WalletReconciliationIssueDto =
+  | {
+      entryCount: number;
+      id: string;
+      kind: "unbalanced_transaction";
+      transactionTotalCoinMinor: number;
+      type: string;
+      userId: string;
+    }
+  | {
+      amountCoinMinor: number;
+      id: string;
+      kind: "terminal_order_active_hold";
+      orderId: string;
+      orderStatus: string;
+      userId: string;
+    }
+  | {
+      amountCoinMinor: number;
+      id: string;
+      kind: "orphan_hold";
+      orderId: string;
+      userId: string;
+    }
+  | {
+      amountCoinMinor: number;
+      id: string;
+      kind: "invalid_amount";
+      table: "wallet_holds" | "wallet_ledger_entries";
+      userId: string | null;
+    };
+
+export type WalletReconciliationReportDto = {
+  checkedAt: string;
+  issues: WalletReconciliationIssueDto[];
+  status: "issues_found" | "ok";
+  summary: {
+    invalidAmountRows: number;
+    orphanHolds: number;
+    terminalOrderActiveHolds: number;
+    unbalancedTransactions: number;
+  };
+};
+
 export type CreditUserCommand = {
   userId: string;
   amountCoinMinor: number;
@@ -78,6 +122,36 @@ type WalletTransactionHistoryRow = {
   type: "order_hold_settlement" | "top_up_credit";
 };
 
+type WalletReconciliationUnbalancedTransactionRow = {
+  entry_count: number;
+  id: string;
+  transaction_total_coin_minor: string;
+  type: string;
+  user_id: string;
+};
+
+type WalletReconciliationTerminalHoldRow = {
+  amount_coin_minor: number;
+  id: string;
+  order_id: string;
+  order_status: string;
+  user_id: string;
+};
+
+type WalletReconciliationOrphanHoldRow = {
+  amount_coin_minor: number;
+  id: string;
+  order_id: string;
+  user_id: string;
+};
+
+type WalletReconciliationInvalidAmountRow = {
+  amount_coin_minor: number;
+  id: string;
+  table_name: "wallet_holds" | "wallet_ledger_entries";
+  user_id: string | null;
+};
+
 function assertPositiveCoinMinor(amountCoinMinor: number): void {
   if (!Number.isSafeInteger(amountCoinMinor) || amountCoinMinor <= 0) {
     throw new Error("WALLET_AMOUNT_INVALID");
@@ -98,6 +172,14 @@ function requireIdempotencyKey(value: string): string {
 
 function customerAccount(userId: string): string {
   return `customer:${userId}`;
+}
+
+function parseReconciliationLimit(limit: number | undefined): number {
+  if (limit === undefined) return 100;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+    throw new Error("WALLET_RECONCILIATION_LIMIT_INVALID");
+  }
+  return limit;
 }
 
 @Injectable()
@@ -195,6 +277,133 @@ export class WalletService {
         reason: row.type === "top_up_credit" ? "top_up" : "purchase",
         status: "completed",
       })),
+    };
+  }
+
+  async reconcileWallet(command: { limit?: number } = {}): Promise<WalletReconciliationReportDto> {
+    const limit = parseReconciliationLimit(command.limit);
+    const unbalanced = await this.database.query<WalletReconciliationUnbalancedTransactionRow>(
+      `
+        SELECT
+          wallet_transactions.id,
+          wallet_transactions.user_id,
+          wallet_transactions.type,
+          COALESCE(sum(wallet_ledger_entries.amount_coin_minor), 0)::text AS transaction_total_coin_minor,
+          count(wallet_ledger_entries.id)::int AS entry_count
+        FROM wallet_transactions
+        LEFT JOIN wallet_ledger_entries
+          ON wallet_ledger_entries.transaction_id = wallet_transactions.id
+        WHERE wallet_transactions.status = 'posted'
+        GROUP BY wallet_transactions.id, wallet_transactions.user_id, wallet_transactions.type, wallet_transactions.created_at
+        HAVING COALESCE(sum(wallet_ledger_entries.amount_coin_minor), 0) <> 0
+          OR count(wallet_ledger_entries.id) = 0
+        ORDER BY wallet_transactions.created_at ASC, wallet_transactions.id ASC
+        LIMIT $1
+      `,
+      [limit],
+    );
+    const terminalHolds = await this.database.query<WalletReconciliationTerminalHoldRow>(
+      `
+        SELECT
+          wallet_holds.id,
+          wallet_holds.user_id,
+          wallet_holds.order_id::text AS order_id,
+          wallet_holds.amount_coin_minor,
+          orders.status AS order_status
+        FROM wallet_holds
+        JOIN orders
+          ON orders.id = wallet_holds.order_id
+        WHERE wallet_holds.status = 'active'
+          AND orders.status IN ('fulfilled', 'partially_fulfilled', 'failed')
+        ORDER BY wallet_holds.created_at ASC, wallet_holds.id ASC
+        LIMIT $1
+      `,
+      [limit],
+    );
+    const orphanHolds = await this.database.query<WalletReconciliationOrphanHoldRow>(
+      `
+        SELECT
+          wallet_holds.id,
+          wallet_holds.user_id,
+          wallet_holds.order_id::text AS order_id,
+          wallet_holds.amount_coin_minor
+        FROM wallet_holds
+        LEFT JOIN orders
+          ON orders.id = wallet_holds.order_id
+        WHERE orders.id IS NULL
+        ORDER BY wallet_holds.created_at ASC, wallet_holds.id ASC
+        LIMIT $1
+      `,
+      [limit],
+    );
+    const invalidAmounts = await this.database.query<WalletReconciliationInvalidAmountRow>(
+      `
+        SELECT
+          id,
+          user_id,
+          amount_coin_minor,
+          'wallet_holds'::text AS table_name,
+          created_at
+        FROM wallet_holds
+        WHERE amount_coin_minor <= 0
+        UNION ALL
+        SELECT
+          id,
+          user_id,
+          amount_coin_minor,
+          'wallet_ledger_entries'::text AS table_name,
+          created_at
+        FROM wallet_ledger_entries
+        WHERE amount_coin_minor = 0
+        ORDER BY created_at ASC, id ASC
+        LIMIT $1
+      `,
+      [limit],
+    );
+
+    const issues: WalletReconciliationIssueDto[] = [
+      ...unbalanced.rows.map((row) => ({
+        entryCount: row.entry_count,
+        id: row.id,
+        kind: "unbalanced_transaction" as const,
+        transactionTotalCoinMinor: Number(row.transaction_total_coin_minor),
+        type: row.type,
+        userId: row.user_id,
+      })),
+      ...terminalHolds.rows.map((row) => ({
+        amountCoinMinor: row.amount_coin_minor,
+        id: row.id,
+        kind: "terminal_order_active_hold" as const,
+        orderId: row.order_id,
+        orderStatus: row.order_status,
+        userId: row.user_id,
+      })),
+      ...orphanHolds.rows.map((row) => ({
+        amountCoinMinor: row.amount_coin_minor,
+        id: row.id,
+        kind: "orphan_hold" as const,
+        orderId: row.order_id,
+        userId: row.user_id,
+      })),
+      ...invalidAmounts.rows.map((row) => ({
+        amountCoinMinor: row.amount_coin_minor,
+        id: row.id,
+        kind: "invalid_amount" as const,
+        table: row.table_name,
+        userId: row.user_id,
+      })),
+    ];
+
+    return {
+      checkedAt: new Date().toISOString(),
+      issues,
+      status: issues.length === 0 ? "ok" : "issues_found",
+      summary: {
+        invalidAmountRows: invalidAmounts.rows.length,
+        orphanHolds: orphanHolds.rows.length,
+        terminalOrderActiveHolds: terminalHolds.rows.length,
+        unbalancedTransactions: unbalanced.rows.length,
+      },
     };
   }
 

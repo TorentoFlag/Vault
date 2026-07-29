@@ -150,7 +150,7 @@
 
 **Tasks:**
 - [x] Implement double-entry Coins wallet journal, active holds, active-hold settlement, available balance projection, and current-user posted transaction history.
-- [ ] Implement wallet reconciliation.
+- [x] Implement wallet reconciliation. Current status: `WalletService.reconcileWallet` and `npm --prefix backend run wallet:reconcile -- --limit=100` provide a read-only invariant report for unbalanced posted transactions, missing ledger entries, orphan holds, terminal orders with active holds, and invalid wallet amounts.
 - [x] Implement top-up/payment aggregate with immutable displayed terms. Current status: `/payments/top-up/sessions` creates idempotent Arc Pay top-up intents and provider attempts; disabled mode returns `provider_configuration_required`, while deterministic fake mode returns `checkout_pending` plus a fake checkout URL.
 - [ ] Implement Arc Pay checkout-session creation, method discovery, real webhook verification, status/reconciliation, refund and chargeback adapters. Current status: real Hosted Checkout creation exists for sandbox keys and sends SBP-only `payment_methods`; real webhook signature verification exists for `Webhook-Id`, `Webhook-Timestamp`, and `Webhook-Signature`; refund/chargeback webhooks move paid top-ups to `manual_review` without automatic wallet reversal; method discovery, merchant-initiated refunds, and dispute polling remain.
 - [ ] Implement webhook inbox, status polling, idempotent posting, and reconciliation. Current status: signed webhook inbox and idempotent wallet posting exist for fake and real Arc Pay signature formats; real Hosted Checkout webhooks are correlated by signed `data.payment_id` plus `GET /payments/{id}` lookup to recover `external_id`/`metadata.vault_top_up_id`; missing-webhook polling uses `GET /payments?search=<top_up_id>` and idempotently credits or fails pending top-ups; refund/chargeback webhooks move already credited top-ups to `manual_review`; broader refund/chargeback reconciliation remains.
@@ -158,7 +158,7 @@
 - [x] Ensure browser return never credits wallet by itself.
 
 **Acceptance:**
-- [x] Wallet tests prove balanced immutable journal and idempotency for top-up credit and order hold settlement. Broader reconciliation remains open.
+- [x] Wallet tests prove balanced immutable journal, idempotency for top-up credit/order hold settlement, and read-only reconciliation reporting for broken wallet invariants.
 - [ ] Arc Pay adapter contract tests cover idempotency, method discovery, checkout creation, webhook verification, status mapping, unknown events, refunds/chargebacks, and retries.
 - [ ] Real Arc Pay sandbox/test transaction evidence is recorded before enabling Coins top-up. Current status: Vault has sandbox Hookdeck endpoints for local Hosted Checkout return URLs and webhook delivery; signed Hookdeck delivery into local backend was accepted and posted Coins in test DB. A real paid Arc Pay sandbox transaction still needs provider-side payment completion evidence before release.
 
