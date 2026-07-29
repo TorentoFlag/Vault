@@ -40,6 +40,8 @@ services:
         condition: service_healthy
     env_file:
       - /opt/vault/env/backend.env
+    environment:
+      DATABASE_URL_FILE: /run/secrets/vault/database-url
     volumes:
       - /opt/vault/secrets:/run/secrets/vault:ro
     expose:

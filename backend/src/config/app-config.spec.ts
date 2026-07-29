@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { loadAppConfig } from "./app-config";
@@ -64,5 +67,15 @@ describe("loadAppConfig", () => {
     expect(() => loadAppConfig({ ARC_PAY_PUBLIC_ORIGIN: "https://vault.example/path?query=1" })).toThrow("ARC_PAY_PUBLIC_ORIGIN must be a valid HTTPS base URL.");
     expect(() => loadAppConfig({ SIH_REQUEST_TIMEOUT_MS: "499" })).toThrow("SIH_REQUEST_TIMEOUT_MS must be between 500 and 120000.");
     expect(() => loadAppConfig({ SIH_RESPONSE_MAX_BYTES: "1023" })).toThrow("SIH_RESPONSE_MAX_BYTES must be between 1024 and 16777216.");
+  });
+
+  it("loads DATABASE_URL from a secret file without requiring the value in env", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vault-config-"));
+    const databaseUrlFile = join(directory, "database-url");
+    writeFileSync(databaseUrlFile, "postgres://vault:secret@postgres:5432/vault\n", "utf8");
+
+    expect(loadAppConfig({
+      DATABASE_URL_FILE: databaseUrlFile,
+    }).databaseUrl).toBe("postgres://vault:secret@postgres:5432/vault");
   });
 });

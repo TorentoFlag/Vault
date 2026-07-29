@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 export type AppNodeEnv = "development" | "test" | "production";
 export type ArcPayEnvironment = "sandbox" | "live";
 export type ArcPayProviderMode = "disabled" | "fake" | "real";
@@ -34,6 +36,12 @@ export type AppConfig = {
 function optionalString(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized ? normalized : undefined;
+}
+
+function optionalStringFromFile(path: string | undefined): string | undefined {
+  const normalizedPath = optionalString(path);
+  if (normalizedPath === undefined) return undefined;
+  return optionalString(readFileSync(normalizedPath, "utf8"));
 }
 
 function parseNodeEnv(value: string | undefined): AppNodeEnv {
@@ -138,7 +146,7 @@ function parseCorsOrigins(value: string | undefined): string[] {
 
 export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const nodeEnv = parseNodeEnv(env.NODE_ENV);
-  const databaseUrl = optionalString(env.DATABASE_URL);
+  const databaseUrl = optionalString(env.DATABASE_URL) ?? optionalStringFromFile(env.DATABASE_URL_FILE);
   const redisUrl = optionalString(env.REDIS_URL);
   const arcPaySecretKeyFile = optionalString(env.ARC_PAY_SECRET_KEY_FILE);
   const arcPayProviderMode = parseArcPayProviderMode(nodeEnv, env.ARC_PAY_PROVIDER_MODE);

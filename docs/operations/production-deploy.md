@@ -27,6 +27,7 @@ Source is deployed to `/opt/vault/app`.
 Runtime config lives outside git:
 
 - `/opt/vault/env/backend.env`
+- `/opt/vault/secrets/database-url`
 - `/opt/vault/secrets/postgres-password`
 - `/opt/vault/secrets/admin-api-token`
 - `/opt/vault/secrets/arc-pay-secret-key`
@@ -46,6 +47,8 @@ docker compose -f compose.prod.yaml run --rm backend npm run db:migrate
 docker compose -f compose.prod.yaml up -d
 docker compose -f compose.prod.yaml ps
 ```
+
+Before building, `docker compose -f compose.prod.yaml config` must show `DATABASE_URL_FILE`, not a literal `DATABASE_URL` containing credentials.
 
 Health checks:
 
