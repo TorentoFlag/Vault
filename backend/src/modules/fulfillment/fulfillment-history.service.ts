@@ -11,7 +11,7 @@ export type FulfillmentTradeEventStatus = "completed" | "pending" | "processing"
 
 export type FulfillmentTradeEventDto = {
   createdAt: string;
-  direction: "purchase";
+  direction: "purchase" | "withdrawal";
   id: string;
   itemId: string;
   orderNumber: string;
@@ -26,6 +26,7 @@ export type FulfillmentTradeHistoryDto = {
 type FulfillmentTradeEventRow = {
   command_id: string;
   command_status: string;
+  direction: "purchase" | "withdrawal";
   event_created_at: Date;
   last_attempt_id: string | null;
   line_id: string;
@@ -44,6 +45,12 @@ function eventStatus(lineStatus: string, commandStatus: string): FulfillmentTrad
   return "processing";
 }
 
+function withdrawalStatus(commandStatus: string): FulfillmentTradeEventStatus {
+  if (commandStatus === "completed") return "completed";
+  if (commandStatus === "pending") return "pending";
+  return "processing";
+}
+
 @Injectable()
 export class FulfillmentHistoryService {
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
@@ -58,6 +65,7 @@ export class FulfillmentHistoryService {
         SELECT
           fulfillment_commands.id AS command_id,
           fulfillment_commands.status AS command_status,
+          'purchase' AS direction,
           COALESCE(last_attempt.created_at, fulfillment_commands.updated_at, fulfillment_commands.created_at) AS event_created_at,
           last_attempt.id AS last_attempt_id,
           order_lines.id AS line_id,
@@ -77,7 +85,24 @@ export class FulfillmentHistoryService {
         WHERE orders.user_id = $1
           AND fulfillment_commands.command_type = 'sih_skin_purchase'
           AND order_lines.kind = 'skins'
-        ORDER BY event_created_at DESC, fulfillment_commands.id DESC
+        UNION ALL
+        SELECT
+          fulfillment_commands.id AS command_id,
+          fulfillment_commands.status AS command_status,
+          'withdrawal' AS direction,
+          fulfillment_commands.created_at AS event_created_at,
+          NULL AS last_attempt_id,
+          order_lines.id AS line_id,
+          order_lines.status AS line_status,
+          orders.id AS order_id,
+          order_lines.title
+        FROM fulfillment_commands
+        JOIN orders ON orders.id = fulfillment_commands.order_id
+        JOIN order_lines ON order_lines.id = fulfillment_commands.order_line_id
+        WHERE orders.user_id = $1
+          AND fulfillment_commands.command_type = 'steam_inventory_withdrawal'
+          AND order_lines.kind = 'skins'
+        ORDER BY event_created_at DESC, command_id DESC
         LIMIT 100
       `,
       [userId],
@@ -86,11 +111,13 @@ export class FulfillmentHistoryService {
     return {
       events: result.rows.map((row) => ({
         createdAt: row.event_created_at.toISOString(),
-        direction: "purchase",
+        direction: row.direction,
         id: row.last_attempt_id ?? row.command_id,
         itemId: row.line_id,
         orderNumber: orderNumberFromId(row.order_id),
-        status: eventStatus(row.line_status, row.command_status),
+        status: row.direction === "withdrawal"
+          ? withdrawalStatus(row.command_status)
+          : eventStatus(row.line_status, row.command_status),
         title: row.title,
       })),
     };

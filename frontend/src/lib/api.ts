@@ -20,6 +20,7 @@ export const apiPaths = [
   "/checkout/cart",
   "/orders/me",
   "/inventory/me",
+  "/inventory/me/items/{itemId}/withdrawals",
   "/fulfillment/me/trades",
   "/payments/top-up/sessions",
 ] as const satisfies readonly ServerApiPath[];
@@ -108,10 +109,15 @@ type ApiOrder = {
   lines: ApiOrderLine[];
 };
 
-type ApiInventoryAction = {
-  enabled: false;
-  reason: "not_supported";
-};
+type ApiInventoryAction =
+  | {
+    enabled: true;
+    reason: "available";
+  }
+  | {
+    enabled: false;
+    reason: "not_supported" | "steam_trade_url_required";
+  };
 
 type ApiInventoryItem = {
   actions: {
@@ -129,11 +135,21 @@ type ApiInventoryItem = {
 
 type ApiFulfillmentTradeEvent = {
   createdAt: string;
-  direction: "purchase";
+  direction: "purchase" | "withdrawal";
   id: string;
   itemId: string;
   orderNumber: string;
   status: "completed" | "pending" | "processing";
+  title: string;
+};
+
+export type ApiInventoryWithdrawal = {
+  createdAt: string;
+  id: string;
+  itemId: string;
+  orderId: string;
+  orderNumber: string;
+  status: "pending";
   title: string;
 };
 
@@ -174,9 +190,17 @@ function defaultBaseOrigin(): string {
   return typeof window === "undefined" ? "http://localhost" : window.location.origin;
 }
 
-export function buildApiUrl(path: ApiPath, baseUrl?: string): URL {
+function buildApiUrlFromPath(path: string, baseUrl?: string): URL {
   const base = new URL(baseUrl ?? defaultBaseOrigin());
   return new URL(path, base.origin);
+}
+
+export function buildApiUrl(path: ApiPath, baseUrl?: string): URL {
+  return buildApiUrlFromPath(path, baseUrl);
+}
+
+function encodePathSegment(value: string): string {
+  return encodeURIComponent(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -314,7 +338,9 @@ function isOrderHistoryResponse(value: unknown): value is { orders: ApiOrder[] }
 }
 
 function isApiInventoryAction(value: unknown): value is ApiInventoryAction {
-  return isRecord(value) && value.enabled === false && value.reason === "not_supported";
+  if (!isRecord(value)) return false;
+  if (value.enabled === true) return value.reason === "available";
+  return value.enabled === false && (value.reason === "not_supported" || value.reason === "steam_trade_url_required");
 }
 
 function isApiInventoryItem(value: unknown): value is ApiInventoryItem {
@@ -342,7 +368,7 @@ function isApiFulfillmentTradeEvent(value: unknown): value is ApiFulfillmentTrad
   if (!isRecord(value)) return false;
   return (
     typeof value.createdAt === "string" &&
-    value.direction === "purchase" &&
+    (value.direction === "purchase" || value.direction === "withdrawal") &&
     typeof value.id === "string" &&
     typeof value.itemId === "string" &&
     typeof value.orderNumber === "string" &&
@@ -357,6 +383,23 @@ function isApiFulfillmentTradeEvent(value: unknown): value is ApiFulfillmentTrad
 
 function isFulfillmentTradeHistoryResponse(value: unknown): value is { events: ApiFulfillmentTradeEvent[] } {
   return isRecord(value) && Array.isArray(value.events) && value.events.every(isApiFulfillmentTradeEvent);
+}
+
+function isInventoryWithdrawalResponse(value: unknown): value is ApiInventoryWithdrawal {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.createdAt === "string" &&
+    typeof value.id === "string" &&
+    typeof value.itemId === "string" &&
+    typeof value.orderId === "string" &&
+    typeof value.orderNumber === "string" &&
+    value.status === "pending" &&
+    typeof value.title === "string" &&
+    !("provider" in value) &&
+    !("providerOrderId" in value) &&
+    !("requestSnapshot" in value) &&
+    !("responseSnapshot" in value)
+  );
 }
 
 function isTopUpSessionResponse(value: unknown): value is ApiTopUpSession {
@@ -471,7 +514,7 @@ async function parseJson(response: Response): Promise<unknown> {
 export function createApiClient(options: ApiClientOptions = {}) {
   const fetchImpl = options.fetch ?? fetch;
 
-  async function requestJson(path: ApiPath, init: RequestInit = {}): Promise<unknown> {
+  async function requestJson(path: string, init: RequestInit = {}): Promise<unknown> {
     const method = init.method?.toUpperCase() ?? "GET";
     const headers: Record<string, string> = {
       ...(init.body ? { "content-type": "application/json" } : {}),
@@ -482,7 +525,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       if (token) headers["x-csrf-token"] = token;
     }
 
-    const response = await fetchImpl(buildApiUrl(path, options.baseUrl), {
+    const response = await fetchImpl(buildApiUrlFromPath(path, options.baseUrl), {
       ...init,
       method,
       headers,
@@ -568,6 +611,18 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const body = await requestJson("/fulfillment/me/trades");
       if (!isFulfillmentTradeHistoryResponse(body)) throw new Error("Fulfillment trade history response is malformed.");
       return body.events.map((event) => ({ ...event }));
+    },
+
+    async createInventoryWithdrawal(input: { idempotencyKey: string; itemId: string }): Promise<ApiInventoryWithdrawal> {
+      const body = await requestJson(`/inventory/me/items/${encodePathSegment(input.itemId)}/withdrawals`, {
+        method: "POST",
+        headers: {
+          "idempotency-key": input.idempotencyKey,
+        },
+        body: JSON.stringify({}),
+      });
+      if (!isInventoryWithdrawalResponse(body)) throw new Error("Inventory withdrawal response is malformed.");
+      return body;
     },
 
     async createTopUpSession(input: { coinAmountMinor: number; idempotencyKey: string }): Promise<ApiTopUpSession> {

@@ -26,6 +26,7 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/checkout/cart",
     "/orders/me",
     "/inventory/me",
+    "/inventory/me/items/{itemId}/withdrawals",
     "/fulfillment/me/trades",
     "/payments/top-up/sessions",
   ]);
@@ -313,7 +314,7 @@ test("API client maps backend inventory projection with disabled provider-backed
         {
           actions: {
             sellToSite: { enabled: false, reason: "not_supported" },
-            withdrawToSteam: { enabled: false, reason: "not_supported" },
+            withdrawToSteam: { enabled: true, reason: "available" },
           },
           acquiredAt: "2026-07-29T09:10:00.000Z",
           id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
@@ -334,7 +335,7 @@ test("API client maps backend inventory projection with disabled provider-backed
     {
       actions: {
         sellToSite: { enabled: false, reason: "not_supported" },
-        withdrawToSteam: { enabled: false, reason: "not_supported" },
+        withdrawToSteam: { enabled: true, reason: "available" },
       },
       acquiredAt: "2026-07-29T09:10:00.000Z",
       id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
@@ -365,6 +366,15 @@ test("API client maps backend fulfillment trade history without provider snapsho
             status: "processing",
             title: "AK-47 | Redline",
           },
+          {
+            createdAt: "2026-07-29T09:23:00.000Z",
+            direction: "withdrawal",
+            id: "4ff3ccbb-4cc4-4d12-8d3a-39d9da9f8f02",
+            itemId: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+            orderNumber: "VLT-11111111",
+            status: "pending",
+            title: "AK-47 | Redline",
+          },
         ],
       }), {
         status: 200,
@@ -383,8 +393,57 @@ test("API client maps backend fulfillment trade history without provider snapsho
       status: "processing",
       title: "AK-47 | Redline",
     },
+    {
+      createdAt: "2026-07-29T09:23:00.000Z",
+      direction: "withdrawal",
+      id: "4ff3ccbb-4cc4-4d12-8d3a-39d9da9f8f02",
+      itemId: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+      orderNumber: "VLT-11111111",
+      status: "pending",
+      title: "AK-47 | Redline",
+    },
   ]);
   assert.deepEqual(requestedUrls, ["https://api.vault.example/fulfillment/me/trades"]);
+});
+
+test("API client creates backend inventory withdrawal requests with idempotency", async () => {
+  const calls: Array<{ init?: RequestInit; url: string }> = [];
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    csrfToken: () => "csrf-token",
+    fetch: async (input, init) => {
+      calls.push({ url: input.toString(), init });
+      return new Response(JSON.stringify({
+        createdAt: "2026-07-29T09:23:00.000Z",
+        id: "4ff3ccbb-4cc4-4d12-8d3a-39d9da9f8f02",
+        itemId: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+        orderId: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+        orderNumber: "VLT-11111111",
+        status: "pending",
+        title: "AK-47 | Redline",
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  assert.deepEqual(await client.createInventoryWithdrawal({
+    idempotencyKey: "withdraw-client-test",
+    itemId: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+  }), {
+    createdAt: "2026-07-29T09:23:00.000Z",
+    id: "4ff3ccbb-4cc4-4d12-8d3a-39d9da9f8f02",
+    itemId: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+    orderId: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+    orderNumber: "VLT-11111111",
+    status: "pending",
+    title: "AK-47 | Redline",
+  });
+  assert.equal(calls[0]?.url, "https://api.vault.example/inventory/me/items/81e734db-4db8-4862-b160-d2e4b74f2d55/withdrawals");
+  assert.equal(calls[0]?.init?.method, "POST");
+  assert.equal((calls[0]?.init?.headers as Record<string, string>)["x-csrf-token"], "csrf-token");
+  assert.equal((calls[0]?.init?.headers as Record<string, string>)["idempotency-key"], "withdraw-client-test");
 });
 
 test("API client creates top-up sessions with idempotency and maps provider-disabled status", async () => {

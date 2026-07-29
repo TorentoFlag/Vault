@@ -17,7 +17,7 @@ const fulfillmentTradeHistorySchema = {
         required: ["id", "createdAt", "direction", "title", "itemId", "orderNumber", "status"],
         properties: {
           createdAt: { type: "string", format: "date-time" },
-          direction: { type: "string", enum: ["purchase"] },
+          direction: { type: "string", enum: ["purchase", "withdrawal"] },
           id: { type: "string", format: "uuid" },
           itemId: { type: "string", format: "uuid" },
           orderNumber: { type: "string" },

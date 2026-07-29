@@ -1242,7 +1242,8 @@
                           "direction": {
                             "type": "string",
                             "enum": [
-                              "purchase"
+                              "purchase",
+                              "withdrawal"
                             ]
                           },
                           "id": {
@@ -1354,15 +1355,14 @@
                                 ],
                                 "properties": {
                                   "enabled": {
-                                    "type": "boolean",
-                                    "enum": [
-                                      false
-                                    ]
+                                    "type": "boolean"
                                   },
                                   "reason": {
                                     "type": "string",
                                     "enum": [
-                                      "not_supported"
+                                      "available",
+                                      "not_supported",
+                                      "steam_trade_url_required"
                                     ]
                                   }
                                 }
@@ -1375,15 +1375,14 @@
                                 ],
                                 "properties": {
                                   "enabled": {
-                                    "type": "boolean",
-                                    "enum": [
-                                      false
-                                    ]
+                                    "type": "boolean"
                                   },
                                   "reason": {
                                     "type": "string",
                                     "enum": [
-                                      "not_supported"
+                                      "available",
+                                      "not_supported",
+                                      "steam_trade_url_required"
                                     ]
                                   }
                                 }
@@ -1392,6 +1391,76 @@
                           }
                         }
                       }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Inventory"
+        ]
+      }
+    },
+    "/inventory/me/items/{itemId}/withdrawals": {
+      "post": {
+        "operationId": "InventoryController_withdrawToSteam",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Unique customer-scoped inventory withdrawal command key.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "createdAt",
+                    "id",
+                    "itemId",
+                    "orderId",
+                    "orderNumber",
+                    "status",
+                    "title"
+                  ],
+                  "properties": {
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "itemId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "orderId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "orderNumber": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
                     }
                   }
                 }

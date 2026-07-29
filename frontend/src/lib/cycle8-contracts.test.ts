@@ -68,6 +68,13 @@ test("backend sessions hydrate Steam trade history from backend fulfillment proj
   assert.doesNotMatch(account, /Локальные записи заказов и действий с игровыми предметами/);
 });
 
+test("backend sessions create inventory withdrawals through backend action endpoint", () => {
+  const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
+  assert.match(provider, /client\.createInventoryWithdrawal\(/);
+  assert.match(provider, /setInventoryItems\(inventory\)/);
+  assert.match(provider, /setTradeEvents\(tradeHistory\)/);
+});
+
 test("storage events compare against the live persisted ref", () => {
   const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
   assert.match(provider, /parseMarketplaceStorageEvent\(STORAGE_KEY, event, persistedStateRef\.current\.revision\)/);

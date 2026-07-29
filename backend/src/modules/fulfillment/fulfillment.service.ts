@@ -165,7 +165,7 @@ export class FulfillmentService {
             payload_snapshot
           )
           VALUES ($1, $2, 'sih', $3, 'pending', $4, $5::jsonb)
-          ON CONFLICT (order_line_id) DO NOTHING
+          ON CONFLICT (order_line_id, command_type) DO NOTHING
         `,
         [
           command.orderId,

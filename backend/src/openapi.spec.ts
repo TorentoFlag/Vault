@@ -145,7 +145,16 @@ describe("OpenAPI contract", () => {
                           items?: {
                             required?: string[];
                             properties?: {
-                              actions?: unknown;
+                              actions?: {
+                                properties?: {
+                                  withdrawToSteam?: {
+                                    properties?: {
+                                      enabled?: { type?: string };
+                                      reason?: { enum?: string[] };
+                                    };
+                                  };
+                                };
+                              };
                               status?: { enum?: string[] };
                               unitPriceCoinMinor?: { type?: string };
                             };
@@ -167,6 +176,37 @@ describe("OpenAPI contract", () => {
     expect(item?.properties?.status?.enum).toEqual(["owned"]);
     expect(item?.properties?.unitPriceCoinMinor?.type).toBe("integer");
     expect(item?.properties?.actions).toBeDefined();
+    expect(item?.properties?.actions?.properties?.withdrawToSteam?.properties?.enabled?.type).toBe("boolean");
+    expect(item?.properties?.actions?.properties?.withdrawToSteam?.properties?.reason?.enum).toEqual(["available", "not_supported", "steam_trade_url_required"]);
+  });
+
+  it("documents backend-owned inventory withdrawal requests", async () => {
+    const document = JSON.parse(await createOpenApiJson()) as {
+      paths: {
+        "/inventory/me/items/{itemId}/withdrawals"?: {
+          post?: {
+            responses?: {
+              "200"?: {
+                content?: {
+                  "application/json"?: {
+                    schema?: {
+                      required?: string[];
+                      properties?: {
+                        status?: { enum?: string[] };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+
+    const schema = document.paths["/inventory/me/items/{itemId}/withdrawals"]?.post?.responses?.["200"]?.content?.["application/json"]?.schema;
+    expect(schema?.required).toEqual(["createdAt", "id", "itemId", "orderId", "orderNumber", "status", "title"]);
+    expect(schema?.properties?.status?.enum).toEqual(["pending"]);
   });
 
   it("documents backend-owned wallet transaction history", async () => {
@@ -245,7 +285,7 @@ describe("OpenAPI contract", () => {
 
     const item = document.paths["/fulfillment/me/trades"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.events?.items;
     expect(item?.required).toEqual(["id", "createdAt", "direction", "title", "itemId", "orderNumber", "status"]);
-    expect(item?.properties?.direction?.enum).toEqual(["purchase"]);
+    expect(item?.properties?.direction?.enum).toEqual(["purchase", "withdrawal"]);
     expect(item?.properties?.status?.enum).toEqual(["pending", "processing", "completed"]);
   });
 });

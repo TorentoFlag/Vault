@@ -148,6 +148,11 @@ function orderNumberFromId(id: string) {
 
 function mapProviderInventoryItem(item: ApiMappedInventoryItem): MarketplaceInventoryItem {
   const product = catalogProducts.find((entry) => entry.slug === item.slug);
+  const withdrawalReason = item.actions.withdrawToSteam.enabled
+    ? "Создать серверную заявку на вывод предмета в Steam."
+    : item.actions.withdrawToSteam.reason === "steam_trade_url_required"
+      ? "Вывод недоступен: сохраните Steam Trade URL."
+      : "Вывод в Steam пока не подключён для этого предмета.";
   return {
     id: item.id,
     orderId: item.orderId,
@@ -169,7 +174,7 @@ function mapProviderInventoryItem(item: ApiMappedInventoryItem): MarketplaceInve
       },
       withdrawToSteam: {
         enabled: item.actions.withdrawToSteam.enabled,
-        reason: "Вывод в Steam появится после подключения обработки Steam Trade.",
+        reason: withdrawalReason,
       },
     },
   };
@@ -686,6 +691,29 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         return true;
       },
       async withdrawInventoryItem(itemId) {
+        if (isServerBacked) {
+          if (!exposedHydrated) { setNotice("Данные аккаунта ещё загружаются. Повторите действие через секунду."); return false; }
+          try {
+            await ensureCsrfToken();
+            const uniqueId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            const client = createApiClient({ csrfToken: () => csrfTokenRef.current });
+            await client.createInventoryWithdrawal({
+              idempotencyKey: `withdraw-${uniqueId}`,
+              itemId,
+            });
+            const [inventory, tradeHistory] = await Promise.all([
+              client.getInventory(),
+              client.getFulfillmentTradeHistory(),
+            ]);
+            setInventoryItems(inventory);
+            setTradeEvents(tradeHistory);
+            setNotice("Заявка на вывод создана. Статус доступен в логе Steam Trade.");
+            return true;
+          } catch {
+            setNotice("Не удалось создать заявку на вывод. Проверьте Steam Trade URL и повторите действие.");
+            return false;
+          }
+        }
         const current = getSessionAccountKey(persistedStateRef.current.session);
         if (!current) { setNotice("Войдите в аккаунт, чтобы управлять инвентарём."); return false; }
         if (!persistedStateRef.current.session?.steamAccount) { setNotice("Подключите Steam-профиль перед выводом предмета."); return false; }

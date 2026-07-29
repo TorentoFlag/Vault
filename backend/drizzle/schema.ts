@@ -412,7 +412,7 @@ export const fulfillmentCommands = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("fulfillment_commands_order_line_uidx").on(table.orderLineId),
+    uniqueIndex("fulfillment_commands_order_line_type_uidx").on(table.orderLineId, table.commandType),
     uniqueIndex("fulfillment_commands_provider_idempotency_uidx").on(table.provider, table.idempotencyKey),
     index("fulfillment_commands_order_idx").on(table.orderId),
     index("fulfillment_commands_status_available_idx").on(table.status, table.availableAt),

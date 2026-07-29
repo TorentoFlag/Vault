@@ -169,7 +169,7 @@ describe.skipIf(!databaseUrl)("inventory projection", () => {
             {
               actions: {
                 sellToSite: { enabled: false, reason: "not_supported" },
-                withdrawToSteam: { enabled: false, reason: "not_supported" },
+                withdrawToSteam: { enabled: false, reason: "steam_trade_url_required" },
               },
               acquiredAt: "2026-07-29T09:10:00.000Z",
               id: item.id,
@@ -185,6 +185,127 @@ describe.skipIf(!databaseUrl)("inventory projection", () => {
         expect(JSON.stringify(body)).not.toContain("steamTradePartnerAccountId");
         expect(JSON.stringify(body)).not.toContain("Other User Skin");
         expect(JSON.stringify(body)).not.toContain("Пополнение Steam");
+      });
+  });
+
+  it("creates an idempotent backend withdrawal request for an owned skin item", async () => {
+    await users.saveSteamTradeCredential(userId, { partner: "39734273", token: "secretToken" });
+    const order = await pool.query<{ id: string }>(
+      `
+        INSERT INTO orders (user_id, idempotency_key, request_hash, status, total_coin_minor, recipient_snapshots, updated_at)
+        VALUES ($1, 'checkout-withdraw-owner', 'hash-withdraw-owner', 'fulfilled', 318000, '[]'::jsonb, '2026-07-29T09:15:00.000Z')
+        RETURNING id
+      `,
+      [userId],
+    );
+    const orderId = order.rows[0]?.id;
+    if (orderId === undefined) throw new Error("Expected owner order id");
+    const line = await pool.query<{ id: string }>(
+      `
+        INSERT INTO order_lines (
+          order_id,
+          line_index,
+          product_id,
+          product_slug,
+          kind,
+          title,
+          unit_price_coin_minor,
+          quantity,
+          recipient_snapshot,
+          status,
+          created_at
+        )
+        VALUES ($1, 0, 'desert-eagle-printstream', 'desert-eagle-printstream', 'skins', 'Desert Eagle | Printstream', 318000, 1, '{"kind":"steam-trade","steamId64":"76561198000000002","steamTradePartnerAccountId":"39734273","token":"secret"}'::jsonb, 'supplier_finished', '2026-07-29T09:10:00.000Z')
+        RETURNING id
+      `,
+      [orderId],
+    );
+    const itemId = line.rows[0]?.id;
+    if (itemId === undefined) throw new Error("Expected item id");
+    await pool.query(
+      `
+        INSERT INTO fulfillment_commands (order_id, order_line_id, provider, command_type, status, idempotency_key, payload_snapshot, finished_at)
+        VALUES ($1, $2, 'sih', 'sih_skin_purchase', 'completed', 'purchase-command', '{"token":"secret"}'::jsonb, '2026-07-29T09:12:00.000Z')
+      `,
+      [orderId, itemId],
+    );
+    const session = await sessions.createSession(userId, null);
+    const sessionCookie = `${CUSTOMER_SESSION_COOKIE}=${session.token}`;
+    const csrfToken = sessions.createCsrfToken(session.token);
+
+    const created = await request(app?.getHttpServer() as Parameters<typeof request>[0])
+      .post(`/inventory/me/items/${itemId}/withdrawals`)
+      .set("Cookie", sessionCookie)
+      .set("x-csrf-token", csrfToken)
+      .set("idempotency-key", "withdraw-owned-skin")
+      .send({})
+      .expect(200);
+
+    await request(app?.getHttpServer() as Parameters<typeof request>[0])
+      .post(`/inventory/me/items/${itemId}/withdrawals`)
+      .set("Cookie", sessionCookie)
+      .set("x-csrf-token", csrfToken)
+      .set("idempotency-key", "withdraw-owned-skin")
+      .send({})
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual(created.body);
+      });
+
+    const commands = await pool.query<{ command_type: string; provider: string; status: string }>(
+      `
+        SELECT command_type, provider, status
+        FROM fulfillment_commands
+        WHERE order_line_id = $1
+        ORDER BY command_type ASC
+      `,
+      [itemId],
+    );
+    expect(commands.rows).toEqual([
+      { command_type: "sih_skin_purchase", provider: "sih", status: "completed" },
+      { command_type: "steam_inventory_withdrawal", provider: "steam_trade", status: "pending" },
+    ]);
+    expect(JSON.stringify(created.body)).not.toContain("secret");
+    expect(created.body).toMatchObject({
+      itemId,
+      orderId,
+      orderNumber: `VLT-${orderId.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
+      status: "pending",
+      title: "Desert Eagle | Printstream",
+    });
+
+    await request(app?.getHttpServer() as Parameters<typeof request>[0])
+      .get("/inventory/me")
+      .set("Cookie", sessionCookie)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual({ items: [] });
+      });
+
+    await request(app?.getHttpServer() as Parameters<typeof request>[0])
+      .get("/fulfillment/me/trades")
+      .set("Cookie", sessionCookie)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          events: [
+            {
+              direction: "withdrawal",
+              itemId,
+              orderNumber: `VLT-${orderId.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
+              status: "pending",
+              title: "Desert Eagle | Printstream",
+            },
+            {
+              direction: "purchase",
+              itemId,
+              orderNumber: `VLT-${orderId.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
+              status: "completed",
+              title: "Desert Eagle | Printstream",
+            },
+          ],
+        });
+        expect(JSON.stringify(body)).not.toContain("secret");
       });
   });
 });
