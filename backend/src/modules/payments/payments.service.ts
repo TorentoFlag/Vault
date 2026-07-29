@@ -31,7 +31,7 @@ export type CreateTopUpSessionCommand = {
 export type TopUpSessionDto = {
   id: string;
   userId: string;
-  status: "provider_configuration_required" | "provider_creation_pending" | "checkout_pending" | "paid" | "failed";
+  status: "provider_configuration_required" | "provider_creation_pending" | "checkout_pending" | "paid" | "failed" | "manual_review";
   provider: "arc_pay";
   coinAmountMinor: number;
   fiatAmountMinor: number;
@@ -61,6 +61,7 @@ export type PaymentReconciliationResultDto = {
   errors: number;
   failed: number;
   ignored: number;
+  manualReview: number;
   unmatched: number;
 };
 
@@ -258,12 +259,26 @@ function isFailedWebhook(event: NormalizedArcPayWebhook): boolean {
     || isFailedProviderStatus(event.providerStatus);
 }
 
+function isManualReviewWebhook(event: NormalizedArcPayWebhook): boolean {
+  return ["payment.refunded", "payment.chargeback"].includes(event.eventType)
+    || isManualReviewProviderStatus(event.providerStatus);
+}
+
 function isCapturedProviderStatus(status: string): boolean {
   return status === "captured" || status === "settled";
 }
 
 function isFailedProviderStatus(status: string): boolean {
   return ["failed", "declined", "expired", "voided", "timeout"].includes(status);
+}
+
+function isManualReviewProviderStatus(status: string): boolean {
+  return ["refunded", "chargeback"].includes(status);
+}
+
+function manualReviewReason(providerStatus: string): string {
+  if (providerStatus === "chargeback") return "arc_pay_chargeback_after_credit";
+  return "arc_pay_refunded_after_credit";
 }
 
 @Injectable()
@@ -679,6 +694,7 @@ export class PaymentsService {
       errors: 0,
       failed: 0,
       ignored: 0,
+      manualReview: 0,
       unmatched: 0,
     };
 
@@ -731,6 +747,7 @@ export class PaymentsService {
       if (applied === "credited") result.credited += 1;
       if (applied === "failed") result.failed += 1;
       if (applied === "ignored") result.ignored += 1;
+      if (applied === "manual_review") result.manualReview += 1;
       if (applied === "rejected") result.errors += 1;
     }
 
@@ -817,6 +834,12 @@ export class PaymentsService {
         return { status: "processed" };
       }
 
+      if (isManualReviewWebhook(event)) {
+        await this.applyArcPayProviderPaymentStatusWithClient(client, topUpPayment, event.providerStatus);
+        await this.markWebhookEvent(client, event.providerEventId, "processed");
+        return { status: "processed" };
+      }
+
       await this.markWebhookEvent(client, event.providerEventId, "ignored");
       return { status: "ignored" };
     });
@@ -828,7 +851,7 @@ export class PaymentsService {
     providerPaymentId: string;
     providerStatus: string;
     topUpPaymentId: string;
-  }): Promise<"credited" | "failed" | "ignored" | "rejected"> {
+  }): Promise<"credited" | "failed" | "ignored" | "manual_review" | "rejected"> {
     return this.database.transaction(async (client) => {
       const payment = await client.query<TopUpPaymentWebhookRow>(
         `
@@ -878,7 +901,7 @@ export class PaymentsService {
     client: Queryable,
     topUpPayment: TopUpPaymentWebhookRow,
     providerStatus: string,
-  ): Promise<"credited" | "failed" | "ignored"> {
+  ): Promise<"credited" | "failed" | "ignored" | "manual_review"> {
     if (isCapturedProviderStatus(providerStatus)) {
       if (topUpPayment.status !== "paid") {
         await this.wallet.creditUserWithClient(client, {
@@ -928,6 +951,39 @@ export class PaymentsService {
         `,
         [topUpPayment.id, providerStatus],
       );
+    }
+
+    if (isManualReviewProviderStatus(providerStatus)) {
+      if (topUpPayment.status === "paid" || topUpPayment.status === "manual_review") {
+        await client.query(
+          `
+            UPDATE top_up_payments
+            SET
+              status = 'manual_review',
+              provider_status = $2,
+              metadata = metadata || $3::jsonb,
+              updated_at = now()
+            WHERE id = $1
+          `,
+          [
+            topUpPayment.id,
+            providerStatus,
+            JSON.stringify({
+              manualReviewReason: manualReviewReason(providerStatus),
+            }),
+          ],
+        );
+        return "manual_review";
+      }
+      await client.query(
+        `
+          UPDATE top_up_payments
+          SET status = 'failed', provider_status = $2, updated_at = now()
+          WHERE id = $1
+        `,
+        [topUpPayment.id, providerStatus],
+      );
+      return "failed";
     }
     return "ignored";
   }

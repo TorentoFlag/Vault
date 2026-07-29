@@ -721,6 +721,154 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     });
   });
 
+  it("moves a paid top-up to manual review on a verified Arc Pay refund without reversing wallet history", async () => {
+    await app?.close();
+    app = null;
+    tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-refund-"));
+    const secretFile = join(tempDir, "secret-key");
+    const webhookSecretFile = join(tempDir, "webhook-secret");
+    const webhookSecret = "vault-real-webhook-secret";
+    await writeFile(secretFile, "sk_test_vault_real_checkout\n", "utf8");
+    await writeFile(webhookSecretFile, webhookSecret, "utf8");
+    process.env.ARC_PAY_PROVIDER_MODE = "real";
+    process.env.ARC_PAY_SECRET_KEY_FILE = secretFile;
+    process.env.ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE = webhookSecretFile;
+    process.env.ARC_PAY_PUBLIC_ORIGIN = "https://hkdk.events/source-id";
+    const providerCheckoutSessionId = "019f7841-4b12-7a2f-a42b-5c3a72e3b277";
+    const providerPaymentId = "019facd9-9e3f-730f-9180-8a43c1499df7";
+    let createdTopUpId = "";
+    globalThis.fetch = (input) => {
+      const url = fetchInputUrl(input);
+      if (url.endsWith(`/payments/${providerPaymentId}`)) {
+        return Promise.resolve(new Response(JSON.stringify({
+          id: providerPaymentId,
+          status: "captured",
+          amount: 100_000,
+          currency: "RUB",
+          external_id: createdTopUpId,
+          metadata: {
+            vault_top_up_id: createdTopUpId,
+          },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        id: providerCheckoutSessionId,
+        url: "https://checkout.arcpay.space/sessions/019f7841",
+      }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }));
+    };
+
+    const currentApp = await createApp();
+    app = currentApp;
+    sessions = currentApp.get(SessionsService);
+    users = currentApp.get(UsersService);
+    wallet = currentApp.get(WalletService);
+    await users.upsertSteamUser({
+      claimedIdentifier: `https://steamcommunity.com/openid/id/${steamId64}`,
+      providerEndpoint: "https://steamcommunity.com/openid/login",
+      responseNonce: "2026-07-28T11:30:00Znonce",
+      steamId64,
+    });
+    const session = await sessions.createSession(userId, null);
+    const csrfToken = sessions.createCsrfToken(session.token);
+
+    const created = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/top-up/sessions")
+      .set("Cookie", `${CUSTOMER_SESSION_COOKIE}=${session.token}`)
+      .set("x-csrf-token", csrfToken)
+      .set("idempotency-key", "topup-session-real-refund")
+      .send({ coinAmountMinor: 150_000 })
+      .expect(200);
+    const createdBody = requireCreatedTopUpResponse(created.body);
+    createdTopUpId = createdBody.id;
+
+    const capturedEventId = "019facdb-b116-7434-b27c-debea8fb1c28";
+    const capturedTimestamp = String(Math.floor(Date.now() / 1000));
+    const capturedBody = JSON.stringify({
+      event_id: capturedEventId,
+      event_type: "payment.captured",
+      created_at: "2026-07-28T11:30:00.000Z",
+      tenant_id: "019f7841-ef75-77f1-b4bb-36f556684c5a",
+      environment: "sandbox",
+      livemode: false,
+      data: {
+        payment_id: providerPaymentId,
+        amount: 100_000,
+        captured_amount: 100_000,
+        currency: "RUB",
+        payment_method: "sbp",
+      },
+    });
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/webhooks/arc-pay")
+      .set("content-type", "application/json")
+      .set("webhook-id", capturedEventId)
+      .set("webhook-timestamp", capturedTimestamp)
+      .set("webhook-signature", arcPayWebhookSignature(capturedBody, capturedEventId, capturedTimestamp, webhookSecret))
+      .send(capturedBody)
+      .expect(200, { status: "processed" });
+
+    const refundEventId = "019facdb-b116-7434-b27c-debea8fb1c29";
+    const refundTimestamp = String(Math.floor(Date.now() / 1000));
+    const refundBody = JSON.stringify({
+      event_id: refundEventId,
+      event_type: "payment.refunded",
+      created_at: "2026-07-28T11:35:00.000Z",
+      tenant_id: "019f7841-ef75-77f1-b4bb-36f556684c5a",
+      environment: "sandbox",
+      livemode: false,
+      data: {
+        payment_id: providerPaymentId,
+        amount: 100_000,
+        currency: "RUB",
+        operation_ref_id: "refund_001",
+      },
+    });
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/webhooks/arc-pay")
+      .set("content-type", "application/json")
+      .set("webhook-id", refundEventId)
+      .set("webhook-timestamp", refundTimestamp)
+      .set("webhook-signature", arcPayWebhookSignature(refundBody, refundEventId, refundTimestamp, webhookSecret))
+      .send(refundBody)
+      .expect(200, { status: "processed" });
+
+    await expect(wallet.getBalance(userId)).resolves.toEqual({
+      postedCoinMinor: 150_000,
+      heldCoinMinor: 0,
+      availableCoinMinor: 150_000,
+    });
+    const persisted = await pool.query<{
+      payment_status: string;
+      provider_status: string;
+      review_reason: string;
+      wallet_transactions: string;
+      refund_webhook_status: string;
+    }>(
+      `
+        SELECT
+          (SELECT status FROM top_up_payments WHERE id = $1) AS payment_status,
+          (SELECT provider_status FROM top_up_payments WHERE id = $1) AS provider_status,
+          (SELECT metadata->>'manualReviewReason' FROM top_up_payments WHERE id = $1) AS review_reason,
+          (SELECT count(*) FROM wallet_transactions WHERE user_id = $2 AND type = 'top_up_credit') AS wallet_transactions,
+          (SELECT status FROM payment_webhook_events WHERE provider_event_id = $3) AS refund_webhook_status
+      `,
+      [createdBody.id, userId, refundEventId],
+    );
+    expect(persisted.rows[0]).toEqual({
+      payment_status: "manual_review",
+      provider_status: "refunded",
+      review_reason: "arc_pay_refunded_after_credit",
+      wallet_transactions: "1",
+      refund_webhook_status: "processed",
+    });
+  });
+
   it("reconciles a missing Arc Pay webhook by polling payment status without double-crediting Coins", async () => {
     await app?.close();
     app = null;
@@ -795,6 +943,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
       credited: 1,
       failed: 0,
       ignored: 0,
+      manualReview: 0,
       unmatched: 0,
       errors: 0,
     });
@@ -803,6 +952,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
       credited: 0,
       failed: 0,
       ignored: 0,
+      manualReview: 0,
       unmatched: 0,
       errors: 0,
     });
@@ -836,4 +986,5 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
       reconcile_attempts: "1",
     });
   });
+
 });

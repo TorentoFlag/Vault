@@ -72,6 +72,10 @@ export function TopUpScreen({
         setSubmitError("Платёжная страница Arc Pay ещё не настроена. Расчёт сохранён на сервере, Coins не зачислены.");
         return;
       }
+      if (session.status === "manual_review") {
+        setSubmitError("Платёж требует проверки поддержки. Coins не меняются автоматически до завершения разбора.");
+        return;
+      }
       setSubmitError("Платёжная страница недоступна. Coins не зачислены.");
     } catch {
       setSubmitError("Не удалось создать платёжную сессию. Проверьте вход в аккаунт и повторите действие.");

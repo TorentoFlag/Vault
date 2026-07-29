@@ -1661,7 +1661,8 @@
                         "provider_creation_pending",
                         "checkout_pending",
                         "paid",
-                        "failed"
+                        "failed",
+                        "manual_review"
                       ]
                     },
                     "provider": {

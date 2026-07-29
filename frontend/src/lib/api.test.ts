@@ -523,3 +523,37 @@ test("API client accepts checkout-pending top-up sessions with backend checkout 
     checkoutUrl: "https://pay.example/checkout/session_1",
   });
 });
+
+test("API client accepts manual-review top-up sessions without exposing provider dispute details", async () => {
+  const client = createApiClient({
+    fetch: async () => new Response(JSON.stringify({
+      id: "368b8584-a88d-4798-8df7-2a8568f0711d",
+      userId: "user_76561198000000004",
+      status: "manual_review",
+      provider: "arc_pay",
+      coinAmountMinor: 150_000,
+      fiatAmountMinor: 100_000,
+      fiatCurrency: "RUB",
+      rate: { fiatMinor: 100, coinMinor: 150 },
+      checkoutUrl: null,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  });
+
+  await assert.deepEqual(await client.createTopUpSession({
+    coinAmountMinor: 150_000,
+    idempotencyKey: "topup-session-manual-review",
+  }), {
+    id: "368b8584-a88d-4798-8df7-2a8568f0711d",
+    status: "manual_review",
+    provider: "arc_pay",
+    coinAmountMinor: 150_000,
+    fiatAmountMinor: 100_000,
+    fiatCurrency: "RUB",
+    rate: { fiatMinor: 100, coinMinor: 150 },
+    userId: "user_76561198000000004",
+    checkoutUrl: null,
+  });
+});

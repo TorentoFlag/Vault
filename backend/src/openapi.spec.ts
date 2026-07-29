@@ -130,6 +130,35 @@ describe("OpenAPI contract", () => {
     expect(status?.enum).toEqual(["held", "fulfilled", "partially_fulfilled", "failed", "manual_review"]);
   });
 
+  it("documents manual-review top-up sessions for refunded or disputed Arc Pay payments", async () => {
+    const document = JSON.parse(await createOpenApiJson()) as {
+      paths: {
+        "/payments/top-up/sessions"?: {
+          post?: {
+            responses?: {
+              "200"?: {
+                content?: {
+                  "application/json"?: {
+                    schema?: {
+                      properties?: {
+                        status?: {
+                          enum?: string[];
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+
+    const status = document.paths["/payments/top-up/sessions"]?.post?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.status;
+    expect(status?.enum).toEqual(["provider_configuration_required", "provider_creation_pending", "checkout_pending", "paid", "failed", "manual_review"]);
+  });
+
   it("documents backend-owned inventory projection", async () => {
     const document = JSON.parse(await createOpenApiJson()) as {
       paths: {

@@ -68,7 +68,7 @@ type ApiWalletTransaction = {
 
 export type ApiTopUpSession = {
   id: string;
-  status: "provider_configuration_required" | "provider_creation_pending" | "checkout_pending" | "paid" | "failed";
+  status: "provider_configuration_required" | "provider_creation_pending" | "checkout_pending" | "paid" | "failed" | "manual_review";
   provider: "arc_pay";
   coinAmountMinor: number;
   fiatAmountMinor: number;
@@ -408,7 +408,8 @@ function isTopUpSessionResponse(value: unknown): value is ApiTopUpSession {
     value.status === "provider_creation_pending" ||
     value.status === "checkout_pending" ||
     value.status === "paid" ||
-    value.status === "failed"
+    value.status === "failed" ||
+    value.status === "manual_review"
   );
   return isRecord(value) &&
     typeof value.id === "string" &&
