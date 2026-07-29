@@ -7,6 +7,9 @@ export type AppConfig = {
   port: number;
   databaseUrl?: string;
   redisUrl?: string;
+  admin: {
+    apiTokenFile?: string;
+  };
   steam: {
     webApiKeyFile?: string;
   };
@@ -144,12 +147,16 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const arcPayWebhookSigningSecretFile = optionalString(env.ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE);
   const steamWebApiKeyFile = optionalString(env.STEAM_WEB_API_KEY_FILE);
   const sihApiKeyFile = optionalString(env.SIH_API_KEY_FILE);
+  const adminApiTokenFile = optionalString(env.ADMIN_API_TOKEN_FILE);
 
   return {
     nodeEnv,
     port: parsePort(env.PORT),
     ...(databaseUrl ? { databaseUrl } : {}),
     ...(redisUrl ? { redisUrl } : {}),
+    admin: {
+      ...(adminApiTokenFile ? { apiTokenFile: adminApiTokenFile } : {}),
+    },
     steam: {
       ...(steamWebApiKeyFile ? { webApiKeyFile: steamWebApiKeyFile } : {}),
     },

@@ -6,6 +6,7 @@ import { buildDatabaseConnectionOptions } from "./database.config";
 const baseConfig: AppConfig = {
   nodeEnv: "test",
   port: 3000,
+  admin: {},
   steam: {},
   arcPay: { environment: "sandbox", providerMode: "disabled" },
   sih: {

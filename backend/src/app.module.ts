@@ -4,6 +4,7 @@ import { DatabaseModule } from "./common/database/database.module";
 import { RequestIdMiddleware } from "./common/http/request-id.middleware";
 import { QueueModule } from "./common/queue/queue.module";
 import { AppConfigModule } from "./config/app-config.module";
+import { AdminModule } from "./modules/admin/admin.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CartModule } from "./modules/cart/cart.module";
@@ -17,7 +18,7 @@ import { PaymentsModule } from "./modules/payments/payments.module";
 import { WalletModule } from "./modules/wallet/wallet.module";
 
 @Module({
-  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AuthModule, CatalogModule, WalletModule, CartModule, CheckoutModule, FulfillmentModule, InventoryModule, OrdersModule, PaymentsModule],
+  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AdminModule, AuthModule, CatalogModule, WalletModule, CartModule, CheckoutModule, FulfillmentModule, InventoryModule, OrdersModule, PaymentsModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

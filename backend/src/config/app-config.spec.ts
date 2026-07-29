@@ -21,12 +21,16 @@ describe("loadAppConfig", () => {
       SIH_STEAM_REFILL_BASE_URL: "https://core.steaminventoryhelper.com",
       SIH_REQUEST_TIMEOUT_MS: "2500",
       SIH_RESPONSE_MAX_BYTES: "4096",
+      ADMIN_API_TOKEN_FILE: "/run/secrets/admin-api-token",
       CORS_ORIGINS: "https://vault.example, https://admin.vault.example",
     })).toEqual({
       nodeEnv: "test",
       port: 4100,
       databaseUrl: "postgres://vault:test@localhost:5432/vault",
       redisUrl: "redis://localhost:6379/0",
+      admin: {
+        apiTokenFile: "/run/secrets/admin-api-token",
+      },
       steam: {
         webApiKeyFile: "/run/secrets/steam-web-api-key",
       },

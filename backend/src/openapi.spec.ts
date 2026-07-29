@@ -159,6 +159,55 @@ describe("OpenAPI contract", () => {
     expect(status?.enum).toEqual(["provider_configuration_required", "provider_creation_pending", "checkout_pending", "paid", "failed", "manual_review"]);
   });
 
+  it("documents read-only admin operations overview without mutation endpoints", async () => {
+    const document = JSON.parse(await createOpenApiJson()) as {
+      paths: {
+        "/admin/operations/overview"?: {
+          get?: {
+            parameters?: Array<{ name: string; in: string; required?: boolean }>;
+            responses?: {
+              "200"?: {
+                content?: {
+                  "application/json"?: {
+                    schema?: {
+                      required?: string[];
+                      properties?: {
+                        payments?: unknown;
+                        orders?: unknown;
+                        fulfillment?: unknown;
+                        webhooks?: unknown;
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+          post?: unknown;
+          put?: unknown;
+          patch?: unknown;
+          delete?: unknown;
+        };
+      };
+    };
+
+    const admin = document.paths["/admin/operations/overview"];
+    expect(admin?.get?.parameters).toContainEqual(expect.objectContaining({
+      name: "X-Admin-Token",
+      in: "header",
+      required: true,
+    }));
+    expect(admin?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.required).toEqual(["generatedAt", "payments", "orders", "fulfillment", "webhooks"]);
+    expect(admin?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.payments).toBeDefined();
+    expect(admin?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.orders).toBeDefined();
+    expect(admin?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.fulfillment).toBeDefined();
+    expect(admin?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.webhooks).toBeDefined();
+    expect(admin?.post).toBeUndefined();
+    expect(admin?.put).toBeUndefined();
+    expect(admin?.patch).toBeUndefined();
+    expect(admin?.delete).toBeUndefined();
+  });
+
   it("documents backend-owned inventory projection", async () => {
     const document = JSON.parse(await createOpenApiJson()) as {
       paths: {
