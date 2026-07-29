@@ -1123,6 +1123,129 @@
         ]
       }
     },
+    "/inventory/me": {
+      "get": {
+        "operationId": "InventoryController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "orderId",
+                          "productSlug",
+                          "title",
+                          "unitPriceCoinMinor",
+                          "acquiredAt",
+                          "status",
+                          "actions"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "orderId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "productSlug": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "unitPriceCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "acquiredAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "owned"
+                            ]
+                          },
+                          "actions": {
+                            "type": "object",
+                            "required": [
+                              "sellToSite",
+                              "withdrawToSteam"
+                            ],
+                            "properties": {
+                              "sellToSite": {
+                                "type": "object",
+                                "required": [
+                                  "enabled",
+                                  "reason"
+                                ],
+                                "properties": {
+                                  "enabled": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      false
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "not_supported"
+                                    ]
+                                  }
+                                }
+                              },
+                              "withdrawToSteam": {
+                                "type": "object",
+                                "required": [
+                                  "enabled",
+                                  "reason"
+                                ],
+                                "properties": {
+                                  "enabled": {
+                                    "type": "boolean",
+                                    "enum": [
+                                      false
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "not_supported"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Inventory"
+        ]
+      }
+    },
     "/orders/me": {
       "get": {
         "operationId": "OrdersController_me",

@@ -11,7 +11,6 @@ import { publicAssetPath } from "@/config/site";
 import { SupportCenter } from "@/features/support/SupportCenter";
 import {
   getOverviewTransactions,
-  getInventoryItems,
   getOrderItemDeliveryStatusLabel,
   getRelevantOrderRecipient,
   getTradeStatusLabel,
@@ -176,9 +175,9 @@ function TradeLog({ events }: { events: TradeEvent[] }) {
 }
 
 function Overview() {
-  const { balanceCoins, orders, transactions, tradeEvents, session, hasSteam, hasSteamTradeUrl } = useMarketplace();
+  const { balanceCoins, orders, inventoryItems, transactions, tradeEvents, session, hasSteam, hasSteamTradeUrl } = useMarketplace();
   const recentOrders = useMemo(() => sortOrdersNewestFirst(orders).slice(0, 3), [orders]);
-  const inventory = useMemo(() => getInventoryItems(orders, tradeEvents), [orders, tradeEvents]);
+  const inventory = inventoryItems;
   const activeOrders = orders.filter((order) => order.status === "processing").length;
   const recentTransactions = useMemo(() => getOverviewTransactions(transactions), [transactions]);
 
@@ -206,7 +205,7 @@ function Overview() {
         </section>
         <section className={styles.panel}>
           <SectionHeading label="Предметы" title="Инвентарь" description="Игровые предметы из выполненных заказов." action={<Link href="/account/inventory">Открыть</Link>} />
-          {inventory.length ? <div className={styles.inventoryMini}>{inventory.slice(0, 2).map((item) => <div key={item.id}>{item.image ? <span><Image src={publicAssetPath(item.image)} alt={item.imageAlt ?? ""} fill sizes="72px" /></span> : null}<p><strong>{item.title}</strong><small>{formatCoins(item.priceCoins)} Coins · Сохранено в локальном инвентаре</small></p></div>)}</div> : <p className={styles.mutedCopy}>Выполненных заказов с игровыми предметами пока нет.</p>}
+          {inventory.length ? <div className={styles.inventoryMini}>{inventory.slice(0, 2).map((item) => <div key={item.id}>{item.image ? <span><Image src={publicAssetPath(item.image)} alt={item.imageAlt ?? ""} fill sizes="72px" /></span> : null}<p><strong>{item.title}</strong><small>{formatCoins(item.priceCoins)} Coins · Сохранено в инвентаре</small></p></div>)}</div> : <p className={styles.mutedCopy}>Выполненных заказов с игровыми предметами пока нет.</p>}
         </section>
       </div>
       <TradeLog events={tradeEvents} />
@@ -226,16 +225,9 @@ function Payments() {
 }
 
 function Inventory() {
-  const { orders, tradeEvents, hasSteam, hasSteamTradeUrl, sellInventoryItem, withdrawInventoryItem } = useMarketplace();
-  const items = useMemo(() => getInventoryItems(orders, tradeEvents), [orders, tradeEvents]);
+  const { inventoryItems, hasSteam, hasSteamTradeUrl, sellInventoryItem, withdrawInventoryItem } = useMarketplace();
+  const items = inventoryItems;
   const isSteamDataConfigured = hasSteam && hasSteamTradeUrl;
-  const withdrawalReason = !hasSteam
-    ? "Вывод недоступен: подключите Steam-профиль."
-    : !hasSteamTradeUrl
-      ? "Вывод недоступен: сохраните Steam Trade URL."
-    : "Данные готовы, но отправка станет доступна после подключения обработки Steam Trade.";
-  const saleReason = "Coins зачисляются сразу после локального подтверждения продажи.";
-
   return (
     <div className={styles.sectionStack}>
       <section className={styles.readinessPanel}>
@@ -270,10 +262,10 @@ function Inventory() {
                       <div><dt>Получен</dt><dd><time dateTime={item.acquiredAt}>{formatDate(item.acquiredAt)}</time></dd></div>
                     </dl>
                     <div className={styles.inventoryActions}>
-                      <Button type="button" aria-describedby={saleReasonId} onClick={() => void sellInventoryItem(item.id)}>Продать сайту за Coins</Button>
-                      <p id={saleReasonId}>{saleReason}</p>
-                      <Button tone="secondary" type="button" aria-describedby={withdrawalReasonId} onClick={() => void withdrawInventoryItem(item.id)}>Вывести в Steam</Button>
-                      <p id={withdrawalReasonId}>{withdrawalReason}</p>
+                      <Button type="button" disabled={!item.actions.sellToSite.enabled} aria-describedby={saleReasonId} onClick={() => { if (item.actions.sellToSite.enabled) void sellInventoryItem(item.id); }}>Продать сайту за Coins</Button>
+                      <p id={saleReasonId}>{item.actions.sellToSite.reason}</p>
+                      <Button tone="secondary" type="button" disabled={!item.actions.withdrawToSteam.enabled} aria-describedby={withdrawalReasonId} onClick={() => { if (item.actions.withdrawToSteam.enabled) void withdrawInventoryItem(item.id); }}>Вывести в Steam</Button>
+                      <p id={withdrawalReasonId}>{item.actions.withdrawToSteam.reason}</p>
                     </div>
                   </div>
                 </article>

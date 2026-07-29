@@ -24,6 +24,7 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/checkout",
     "/checkout/cart",
     "/orders/me",
+    "/inventory/me",
     "/payments/top-up/sessions",
   ]);
 });
@@ -236,6 +237,49 @@ test("API client maps backend fulfillment order statuses into account history st
     { deliveryStatus: "delivered", status: "completed" },
     { deliveryStatus: "failed", status: "failed" },
     { deliveryStatus: "needs-review", status: "needs_review" },
+  ]);
+});
+
+test("API client maps backend inventory projection with disabled provider-backed actions", async () => {
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    fetch: async () => new Response(JSON.stringify({
+      items: [
+        {
+          actions: {
+            sellToSite: { enabled: false, reason: "not_supported" },
+            withdrawToSteam: { enabled: false, reason: "not_supported" },
+          },
+          acquiredAt: "2026-07-29T09:10:00.000Z",
+          id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+          orderId: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+          productSlug: "desert-eagle-printstream",
+          status: "owned",
+          title: "Desert Eagle | Printstream",
+          unitPriceCoinMinor: 318_000,
+        },
+      ],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  });
+
+  await assert.deepEqual(await client.getInventory(), [
+    {
+      actions: {
+        sellToSite: { enabled: false, reason: "not_supported" },
+        withdrawToSteam: { enabled: false, reason: "not_supported" },
+      },
+      acquiredAt: "2026-07-29T09:10:00.000Z",
+      id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+      orderId: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+      priceCoins: 3180,
+      productId: "desert-eagle-printstream",
+      slug: "desert-eagle-printstream",
+      status: "owned",
+      title: "Desert Eagle | Printstream",
+    },
   ]);
 });
 

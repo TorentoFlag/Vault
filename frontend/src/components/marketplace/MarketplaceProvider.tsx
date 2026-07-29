@@ -13,10 +13,12 @@ import {
 
 import { catalogProducts } from "@/data/products";
 import {
+  getInventoryItems,
   normalizeSteamTradeUrl,
 } from "@/lib/account";
 import {
   createApiClient,
+  type ApiMappedInventoryItem,
   type ApiUser,
 } from "@/lib/api";
 import {
@@ -61,7 +63,7 @@ import type { FulfillmentInput } from "@/lib/fulfillment";
 import { prepareCheckoutTransaction } from "@/lib/marketplace-transaction";
 import { sellInventoryItem, withdrawInventoryItem } from "@/lib/inventory-actions";
 import type { Product } from "@/types/commerce";
-import type { CoinTransaction, MarketplaceOrder, TradeEvent } from "@/types/account";
+import type { CoinTransaction, InventoryItem, MarketplaceOrder, TradeEvent } from "@/types/account";
 
 export type CartItemInput = { id: string; slug?: string; title?: string };
 export type CheckoutResult =
@@ -101,6 +103,7 @@ type MarketplaceContextValue = {
   requiresSteam: boolean;
   canPurchase: boolean;
   orders: MarketplaceOrder[];
+  inventoryItems: MarketplaceInventoryItem[];
   transactions: CoinTransaction[];
   tradeEvents: TradeEvent[];
   steamTradeUrl: string;
@@ -127,6 +130,71 @@ type MarketplaceContextValue = {
 
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null);
 
+type MarketplaceInventoryAction = {
+  enabled: boolean;
+  reason: string;
+};
+
+export type MarketplaceInventoryItem = InventoryItem & {
+  actions: {
+    sellToSite: MarketplaceInventoryAction;
+    withdrawToSteam: MarketplaceInventoryAction;
+  };
+};
+
+function orderNumberFromId(id: string) {
+  return `VLT-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
+function mapProviderInventoryItem(item: ApiMappedInventoryItem): MarketplaceInventoryItem {
+  const product = catalogProducts.find((entry) => entry.slug === item.slug);
+  return {
+    id: item.id,
+    orderId: item.orderId,
+    orderNumber: orderNumberFromId(item.orderId),
+    productId: item.productId,
+    slug: item.slug,
+    title: item.title,
+    kind: "skins",
+    priceCoins: item.priceCoins,
+    fulfillmentMode: "steam-trade",
+    deliveryStatus: "inventory-ready",
+    acquiredAt: item.acquiredAt,
+    image: product?.image,
+    imageAlt: product?.imageAlt,
+    actions: {
+      sellToSite: {
+        enabled: item.actions.sellToSite.enabled,
+        reason: "Выкуп предметов сайтом пока не подключён.",
+      },
+      withdrawToSteam: {
+        enabled: item.actions.withdrawToSteam.enabled,
+        reason: "Вывод в Steam появится после подключения обработки Steam Trade.",
+      },
+    },
+  };
+}
+
+function mapLocalInventoryItem(item: InventoryItem, hasSteam: boolean, hasSteamTradeUrl: boolean): MarketplaceInventoryItem {
+  return {
+    ...item,
+    actions: {
+      sellToSite: {
+        enabled: true,
+        reason: "Coins зачисляются после подтверждения операции в инвентаре.",
+      },
+      withdrawToSteam: {
+        enabled: hasSteam && hasSteamTradeUrl,
+        reason: !hasSteam
+          ? "Вывод недоступен: подключите Steam-профиль."
+          : !hasSteamTradeUrl
+            ? "Вывод недоступен: сохраните Steam Trade URL."
+            : "Отправка Steam Trade будет доступна после подключения обработки.",
+      },
+    },
+  };
+}
+
 function sessionFromApiUser(user: ApiUser): MarketplaceSession {
   return {
     emailAccount: null,
@@ -147,6 +215,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [balanceCoins, setBalanceCoins] = useState(0);
   const [session, setSession] = useState<MarketplaceSession | null>(null);
   const [orders, setOrders] = useState<MarketplaceOrder[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<ApiMappedInventoryItem[]>([]);
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [tradeEvents, setTradeEvents] = useState<TradeEvent[]>([]);
   const [steamTradeUrl, setSteamTradeUrl] = useState("");
@@ -246,6 +315,13 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setServerCart(cartResponse);
   }, []);
 
+  const accountInventoryItems = useMemo<MarketplaceInventoryItem[]>(
+    () => isServerBacked
+      ? inventoryItems.map(mapProviderInventoryItem)
+      : getInventoryItems(orders, tradeEvents).map((item) => mapLocalInventoryItem(item, hasSteam, hasSteamTradeUrl)),
+    [hasSteam, hasSteamTradeUrl, inventoryItems, isServerBacked, orders, tradeEvents],
+  );
+
   const ensureCsrfToken = useCallback(async () => {
     if (csrfTokenRef.current) return csrfTokenRef.current;
     const token = await createApiClient().getCsrfToken();
@@ -261,17 +337,19 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const client = createApiClient();
       try {
         const user = await client.getCurrentUser();
-        const [wallet, tradeUrlStatus, cartResponse, orderHistory] = await Promise.all([
+        const [wallet, tradeUrlStatus, cartResponse, orderHistory, inventory] = await Promise.all([
           client.getWalletBalance(),
           client.getSteamTradeUrlStatus(),
           fetchHydratedCart(),
           client.getOrderHistory(),
+          client.getInventory(),
         ]);
         if (cancelled) return;
         setServerSyncStatus("authenticated");
         setSession(sessionFromApiUser(user));
         setBalanceCoins(wallet.availableCoins);
         setOrders(orderHistory);
+        setInventoryItems(inventory);
         setTransactions([]);
         setTradeEvents([]);
         setSteamTradeUrl("");
@@ -282,6 +360,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setServerSyncStatus("fallback");
         setServerCart(null);
+        setInventoryItems([]);
         setServerSteamTradeUrlConfigured(false);
       }
     }
@@ -419,6 +498,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       requiresSteam,
       canPurchase,
       orders,
+      inventoryItems: accountInventoryItems,
       transactions,
       tradeEvents,
       steamTradeUrl,
@@ -492,12 +572,14 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
               idempotencyKey: `checkout-${uniqueId}`,
             }, { csrfToken: () => csrfTokenRef.current });
             const client = createApiClient();
-            const [wallet, orderHistory] = await Promise.all([
+            const [wallet, orderHistory, inventory] = await Promise.all([
               client.getWalletBalance(),
               client.getOrderHistory(),
+              client.getInventory(),
             ]);
             setBalanceCoins(wallet.availableCoins);
             setOrders(orderHistory);
+            setInventoryItems(inventory);
             applyServerCart({ items: [], totalCoins: 0, products: [] });
             return {
               status: "success",
@@ -617,6 +699,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
             csrfTokenRef.current = null;
             setServerSyncStatus("fallback");
             setServerCart(null);
+            setInventoryItems([]);
             setServerSteamTradeUrlConfigured(false);
           } catch {
             setNotice("Не удалось завершить серверную сессию. Повторите действие.");
@@ -635,6 +718,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     }),
     [
       accounts,
+      accountInventoryItems,
       balanceCoins,
       accountKey,
       activateSession,

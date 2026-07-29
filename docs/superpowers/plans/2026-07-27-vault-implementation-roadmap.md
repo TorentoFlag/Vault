@@ -107,7 +107,7 @@
 - [x] Add encrypted write-only Steam Trade URL storage.
 - [x] Persist Steam auth attempts, users, sessions, and Trade URL credential envelopes in PostgreSQL with integration coverage.
 - [x] Generate frontend contract snapshot and implement shared API transport.
-- [ ] Migrate account header/profile/Steam settings from local mock session to backend session. Current status: the auth screen starts backend Steam OpenID; `MarketplaceProvider` hydrates backend session/cart/wallet, purchase history, and Steam Trade URL configured status when the cookie exists; Steam Trade URL saves through `/me/steam-trade-url` for backend sessions without exposing the saved token back into the form; inventory/trade/payment history and Email auth still use local concept state.
+- [ ] Migrate account header/profile/Steam settings from local mock session to backend session. Current status: the auth screen starts backend Steam OpenID; `MarketplaceProvider` hydrates backend session/cart/wallet, purchase history, inventory projection, and Steam Trade URL configured status when the cookie exists; Steam Trade URL saves through `/me/steam-trade-url` for backend sessions without exposing the saved token back into the form; trade/payment history and Email auth still use local concept state.
 
 **Acceptance:**
 - [x] Backend auth/session tests pass.
@@ -202,7 +202,7 @@
 - [x] Reconcile statuses `created`, `processing`, `sent`, `finished`, `failed`, `penalized`. Current status: deterministic reconciliation creates durable `get-order` attempts, persists provider snapshots, prevents `sent -> processing` customer-facing regression, closes `finished` commands as completed, closes `failed`/`penalized` commands as failed, and settles the order wallet hold once every order line is terminal.
 - [x] Handle protection `processing`, `finished`, `failed`, `rollback user`, `rollback supplier`. Current status: `protection.processing` keeps the skin command submitted and the Coins hold active; `protection.finished` allows normal capture; `protection.failed` moves the command/order to manual review with rollback evidence and no automatic wallet settlement.
 - [x] Keep provider status regressions from corrupting local monotonic customer-facing state. Current status: `sent -> processing` does not regress an already `supplier_sent` order line, and `supplier_finished` does not regress to a non-terminal state.
-- [ ] Implement inventory projection and only enable actions backed by real transitions.
+- [x] Implement inventory projection and only enable actions backed by real transitions. Current status: `/inventory/me` returns only the current user's fulfilled skin order lines; frontend backend-cookie sessions load that projection into the account inventory; sell-to-site and withdraw-to-Steam actions are visible but disabled with explicit copy until backend-owned transitions exist.
 - [x] Implement Steam refill fulfillment through SIH Steam Refill API. Current status: deterministic worker calls `steam/check`, persists SIH `transactionId`, calls `steam/pay`, retries pay with the existing `transactionId` after retryable pay failure, and settles the Coins hold on success.
 
 **Acceptance:**

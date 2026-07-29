@@ -43,6 +43,17 @@ test("backend sessions hydrate account purchases from backend order history", ()
   assert.match(provider, /setOrders\(orderHistory\)/);
 });
 
+test("backend sessions hydrate account inventory from backend projection", () => {
+  const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
+  const account = source("src/features/account/AccountScreen.tsx");
+  assert.match(provider, /client\.getInventory\(\)/);
+  assert.match(provider, /setInventoryItems\(inventory\)/);
+  assert.match(account, /inventoryItems/);
+  assert.match(account, /item\.actions\.sellToSite\.enabled/);
+  assert.match(account, /disabled=\{!item\.actions\.sellToSite\.enabled\}/);
+  assert.doesNotMatch(account, /Coins зачисляются сразу после локального подтверждения продажи/);
+});
+
 test("storage events compare against the live persisted ref", () => {
   const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
   assert.match(provider, /parseMarketplaceStorageEvent\(STORAGE_KEY, event, persistedStateRef\.current\.revision\)/);

@@ -129,4 +129,43 @@ describe("OpenAPI contract", () => {
     const status = document.paths["/orders/me"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.orders?.items?.properties?.status;
     expect(status?.enum).toEqual(["held", "fulfilled", "partially_fulfilled", "failed", "manual_review"]);
   });
+
+  it("documents backend-owned inventory projection", async () => {
+    const document = JSON.parse(await createOpenApiJson()) as {
+      paths: {
+        "/inventory/me"?: {
+          get?: {
+            responses?: {
+              "200"?: {
+                content?: {
+                  "application/json"?: {
+                    schema?: {
+                      properties?: {
+                        items?: {
+                          items?: {
+                            required?: string[];
+                            properties?: {
+                              actions?: unknown;
+                              status?: { enum?: string[] };
+                              unitPriceCoinMinor?: { type?: string };
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+
+    const item = document.paths["/inventory/me"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.items?.items;
+    expect(item?.required).toEqual(["id", "orderId", "productSlug", "title", "unitPriceCoinMinor", "acquiredAt", "status", "actions"]);
+    expect(item?.properties?.status?.enum).toEqual(["owned"]);
+    expect(item?.properties?.unitPriceCoinMinor?.type).toBe("integer");
+    expect(item?.properties?.actions).toBeDefined();
+  });
 });

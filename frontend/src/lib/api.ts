@@ -18,6 +18,7 @@ export const apiPaths = [
   "/checkout",
   "/checkout/cart",
   "/orders/me",
+  "/inventory/me",
   "/payments/top-up/sessions",
 ] as const satisfies readonly ServerApiPath[];
 
@@ -92,6 +93,37 @@ type ApiOrder = {
   recipientSnapshots: ApiOrderRecipientSnapshot[];
   createdAt: string;
   lines: ApiOrderLine[];
+};
+
+type ApiInventoryAction = {
+  enabled: false;
+  reason: "not_supported";
+};
+
+type ApiInventoryItem = {
+  actions: {
+    sellToSite: ApiInventoryAction;
+    withdrawToSteam: ApiInventoryAction;
+  };
+  acquiredAt: string;
+  id: string;
+  orderId: string;
+  productSlug: string;
+  status: "owned";
+  title: string;
+  unitPriceCoinMinor: number;
+};
+
+export type ApiMappedInventoryItem = {
+  actions: ApiInventoryItem["actions"];
+  acquiredAt: string;
+  id: string;
+  orderId: string;
+  priceCoins: number;
+  productId: string;
+  slug: string;
+  status: "owned";
+  title: string;
 };
 
 export class ApiProblemError extends Error {
@@ -233,6 +265,31 @@ function isOrderHistoryResponse(value: unknown): value is { orders: ApiOrder[] }
   return isRecord(value) && Array.isArray(value.orders) && value.orders.every(isApiOrder);
 }
 
+function isApiInventoryAction(value: unknown): value is ApiInventoryAction {
+  return isRecord(value) && value.enabled === false && value.reason === "not_supported";
+}
+
+function isApiInventoryItem(value: unknown): value is ApiInventoryItem {
+  if (!isRecord(value) || !isRecord(value.actions)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.orderId === "string" &&
+    typeof value.productSlug === "string" &&
+    typeof value.title === "string" &&
+    typeof value.unitPriceCoinMinor === "number" &&
+    Number.isSafeInteger(value.unitPriceCoinMinor) &&
+    value.unitPriceCoinMinor > 0 &&
+    typeof value.acquiredAt === "string" &&
+    value.status === "owned" &&
+    isApiInventoryAction(value.actions.sellToSite) &&
+    isApiInventoryAction(value.actions.withdrawToSteam)
+  );
+}
+
+function isInventoryResponse(value: unknown): value is { items: ApiInventoryItem[] } {
+  return isRecord(value) && Array.isArray(value.items) && value.items.every(isApiInventoryItem);
+}
+
 function isTopUpSessionResponse(value: unknown): value is ApiTopUpSession {
   const validStatus = isRecord(value) && (
     value.status === "provider_configuration_required" ||
@@ -301,6 +358,20 @@ function mapApiOrder(order: ApiOrder): MarketplaceOrder {
       fulfillmentMode: fulfillmentModeForKind(line.kind),
       deliveryStatus: deliveryStatusForStatus(order.status),
     })),
+  };
+}
+
+function mapApiInventoryItem(item: ApiInventoryItem): ApiMappedInventoryItem {
+  return {
+    actions: item.actions,
+    acquiredAt: item.acquiredAt,
+    id: item.id,
+    orderId: item.orderId,
+    priceCoins: coinMinorToCoins(item.unitPriceCoinMinor),
+    productId: item.productSlug,
+    slug: item.productSlug,
+    status: item.status,
+    title: item.title,
   };
 }
 
@@ -393,6 +464,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const body = await requestJson("/orders/me");
       if (!isOrderHistoryResponse(body)) throw new Error("Order history response is malformed.");
       return body.orders.map(mapApiOrder);
+    },
+
+    async getInventory(): Promise<ApiMappedInventoryItem[]> {
+      const body = await requestJson("/inventory/me");
+      if (!isInventoryResponse(body)) throw new Error("Inventory response is malformed.");
+      return body.items.map(mapApiInventoryItem);
     },
 
     async createTopUpSession(input: { coinAmountMinor: number; idempotencyKey: string }): Promise<ApiTopUpSession> {
