@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { optionalString, optionalStringFromFile } from "./secret-file";
 
 export type AppNodeEnv = "development" | "test" | "production";
 export type ArcPayEnvironment = "sandbox" | "live";
@@ -32,17 +32,6 @@ export type AppConfig = {
   };
   corsOrigins: string[];
 };
-
-function optionalString(value: string | undefined): string | undefined {
-  const normalized = value?.trim();
-  return normalized ? normalized : undefined;
-}
-
-function optionalStringFromFile(path: string | undefined): string | undefined {
-  const normalizedPath = optionalString(path);
-  if (normalizedPath === undefined) return undefined;
-  return optionalString(readFileSync(normalizedPath, "utf8"));
-}
 
 function parseNodeEnv(value: string | undefined): AppNodeEnv {
   if (!value) return "development";
