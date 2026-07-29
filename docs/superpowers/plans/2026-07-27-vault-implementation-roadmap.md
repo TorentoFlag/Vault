@@ -200,13 +200,13 @@
 - [x] Persist supplier attempt before provider call. Current status: checkout persists provider-agnostic fulfillment commands first; skin submission creates `create_order`/`get_order` attempts before SIH calls, and Steam refill creates `steam_check`/`steam_pay` attempts before SIH calls.
 - [x] Treat 200 create as acknowledgement, not delivery. Current status: skin `create-order` 200 marks the attempt/command as submitted and leaves delivery/reconciliation to later status processing.
 - [x] Reconcile statuses `created`, `processing`, `sent`, `finished`, `failed`, `penalized`. Current status: deterministic reconciliation creates durable `get-order` attempts, persists provider snapshots, prevents `sent -> processing` customer-facing regression, closes `finished` commands as completed, closes `failed`/`penalized` commands as failed, and settles the order wallet hold once every order line is terminal.
-- [ ] Handle protection `processing`, `finished`, `failed`, `rollback user`, `rollback supplier`.
+- [x] Handle protection `processing`, `finished`, `failed`, `rollback user`, `rollback supplier`. Current status: `protection.processing` keeps the skin command submitted and the Coins hold active; `protection.finished` allows normal capture; `protection.failed` moves the command/order to manual review with rollback evidence and no automatic wallet settlement.
 - [x] Keep provider status regressions from corrupting local monotonic customer-facing state. Current status: `sent -> processing` does not regress an already `supplier_sent` order line, and `supplier_finished` does not regress to a non-terminal state.
 - [ ] Implement inventory projection and only enable actions backed by real transitions.
 - [x] Implement Steam refill fulfillment through SIH Steam Refill API. Current status: deterministic worker calls `steam/check`, persists SIH `transactionId`, calls `steam/pay`, retries pay with the existing `transactionId` after retryable pay failure, and settles the Coins hold on success.
 
 **Acceptance:**
-- [ ] Deterministic tests cover retries, duplicate `customId`, unknown lookup, sent-to-processing regression, rollback, partial fulfillment, and Redis-loss recovery. Current status: durable attempts, duplicate `customId`, `sent -> processing`, terminal success capture, terminal failure release, Steam refill happy path, and Steam refill pay retry with existing `transactionId` are covered.
+- [ ] Deterministic tests cover retries, duplicate `customId`, unknown lookup, sent-to-processing regression, rollback, partial fulfillment, and Redis-loss recovery. Current status: durable attempts, duplicate `customId`, `sent -> processing`, terminal success capture, terminal failure release, SIH protection wait/manual-review rollback handling, Steam refill happy path, and Steam refill pay retry with existing `transactionId` are covered.
 - [ ] Real SIH test-order acceptance is recorded before enabling skin purchase.
 - [ ] Real Steam refill provider acceptance is recorded before enabling Steam refill.
 

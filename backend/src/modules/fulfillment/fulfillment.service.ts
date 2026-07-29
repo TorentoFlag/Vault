@@ -726,6 +726,7 @@ export class FulfillmentService {
   }
 
   private async markSkinReconciled(pending: PendingSkinReconciliation, order: SihSkinOrder): Promise<void> {
+    const transition = this.skinReconciliationTransition(order);
     await this.database.transaction(async (client) => {
       await client.query(
         `
@@ -759,37 +760,96 @@ export class FulfillmentService {
         `
           UPDATE order_lines
           SET status = CASE
-            WHEN status = 'supplier_sent' AND $2 IN ('created', 'processing') THEN status
-            WHEN status = 'supplier_finished' THEN status
-            WHEN $2 = 'sent' THEN 'supplier_sent'
-            WHEN $2 = 'finished' THEN 'supplier_finished'
-            WHEN $2 IN ('failed', 'penalized') THEN 'supplier_failed'
-            ELSE status
+            WHEN status = 'supplier_sent' AND $2 = 'supplier_submitted' THEN status
+            WHEN status = 'supplier_finished' AND $2 IN ('supplier_sent', 'supplier_submitted') THEN status
+            ELSE $2
           END
           WHERE id = $1
         `,
-        [pending.orderLineId, order.status],
+        [pending.orderLineId, transition.lineStatus],
       );
       await client.query(
         `
           UPDATE fulfillment_commands
-          SET status = CASE
-                WHEN $2 = 'finished' THEN 'completed'
-                WHEN $2 IN ('failed', 'penalized') THEN 'failed'
-                ELSE status
-              END,
+          SET status = $2,
               finished_at = CASE
-                WHEN $2 IN ('finished', 'failed', 'penalized') THEN clock_timestamp()
+                WHEN $2 IN ('completed', 'failed') THEN clock_timestamp()
                 ELSE finished_at
               END,
               locked_at = NULL,
+              last_error_code = $3,
               updated_at = clock_timestamp()
           WHERE id = $1
         `,
-        [pending.commandId, order.status],
+        [pending.commandId, transition.commandStatus, transition.errorCode],
       );
-      await this.settleOrderIfTerminal(client, pending);
+      if (transition.orderStatus !== null) {
+        await client.query(
+          `
+            UPDATE orders
+            SET status = $2,
+                updated_at = clock_timestamp()
+            WHERE id = $1
+          `,
+          [pending.orderId, transition.orderStatus],
+        );
+      }
+      if (transition.shouldSettle) await this.settleOrderIfTerminal(client, pending);
     });
+  }
+
+  private skinReconciliationTransition(order: SihSkinOrder): {
+    commandStatus: "completed" | "failed" | "manual_review" | "submitted";
+    errorCode: string | null;
+    lineStatus: "protection_failed" | "supplier_failed" | "supplier_finished" | "supplier_sent" | "supplier_submitted";
+    orderStatus: "manual_review" | null;
+    shouldSettle: boolean;
+  } {
+    if (order.protection?.status === "failed") {
+      return {
+        commandStatus: "manual_review",
+        errorCode: order.protection.error === "rollback supplier"
+          ? "SIH_PROTECTION_ROLLBACK_SUPPLIER"
+          : "SIH_PROTECTION_ROLLBACK_USER",
+        lineStatus: "protection_failed",
+        orderStatus: "manual_review",
+        shouldSettle: false,
+      };
+    }
+    if (order.status === "finished" && order.protection?.status === "processing") {
+      return {
+        commandStatus: "submitted",
+        errorCode: null,
+        lineStatus: "supplier_sent",
+        orderStatus: null,
+        shouldSettle: false,
+      };
+    }
+    if (order.status === "finished") {
+      return {
+        commandStatus: "completed",
+        errorCode: null,
+        lineStatus: "supplier_finished",
+        orderStatus: null,
+        shouldSettle: true,
+      };
+    }
+    if (order.status === "failed" || order.status === "penalized") {
+      return {
+        commandStatus: "failed",
+        errorCode: null,
+        lineStatus: "supplier_failed",
+        orderStatus: null,
+        shouldSettle: true,
+      };
+    }
+    return {
+      commandStatus: "submitted",
+      errorCode: null,
+      lineStatus: order.status === "sent" ? "supplier_sent" : "supplier_submitted",
+      orderStatus: null,
+      shouldSettle: false,
+    };
   }
 
   private async settleOrderIfTerminal(client: Queryable, pending: OrderSettlementSubject): Promise<void> {
