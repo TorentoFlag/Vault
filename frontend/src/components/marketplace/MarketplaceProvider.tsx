@@ -67,7 +67,7 @@ import type { CoinTransaction, InventoryItem, MarketplaceOrder, TradeEvent } fro
 
 export type CartItemInput = { id: string; slug?: string; title?: string };
 export type CheckoutResult =
-  | { status: "empty" | "insufficient" | "auth-required" | "steam-required" | "trade-url-required" | "fulfillment-invalid" | "storage-error" | "busy" | "lock-unavailable" }
+  | { status: "empty" | "insufficient" | "auth-required" | "steam-required" | "trade-url-required" | "fulfillment-invalid" | "price-changed" | "storage-error" | "busy" | "lock-unavailable" }
   | {
       status: "success";
       orderNumber: string;
@@ -574,8 +574,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
               }, { csrfToken: () => csrfTokenRef.current });
             }
             if (latestServerCart) applyServerCart(latestServerCart);
+            const acceptedTotalCoinMinor = Math.round((latestServerCart?.totalCoins ?? 0) * 100);
             const uniqueId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
             const order = await checkoutServerCart({
+              acceptedTotalCoinMinor,
               idempotencyKey: `checkout-${uniqueId}`,
             }, { csrfToken: () => csrfTokenRef.current });
             const client = createApiClient();
@@ -601,6 +603,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
             };
           } catch (error) {
             if (error instanceof CartApiError && error.status === 402) return { status: "insufficient" };
+            if (error instanceof CartApiError && error.status === 409) return { status: "price-changed" };
             if (error instanceof CartApiError && error.status === 400) return { status: "fulfillment-invalid" };
             if (error instanceof CartApiError && error.status === 401) return { status: "auth-required" };
             return { status: "busy" };

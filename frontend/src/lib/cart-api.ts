@@ -61,6 +61,7 @@ export type SetServerCartItemInput = {
 };
 
 export type CheckoutServerCartInput = {
+  acceptedTotalCoinMinor: number;
   idempotencyKey: string;
 };
 
@@ -279,6 +280,7 @@ export async function checkoutServerCart(
   const body = await requestJson("/checkout/cart", options, {
     method: "POST",
     headers: { "idempotency-key": input.idempotencyKey },
+    body: JSON.stringify({ acceptedTotalCoinMinor: input.acceptedTotalCoinMinor }),
   });
   if (!isCheckoutResponse(body)) throw new Error("Checkout response is malformed.");
   return {

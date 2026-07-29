@@ -8,7 +8,7 @@ import { AppModule } from "../../app.module";
 import { CUSTOMER_SESSION_COOKIE } from "../sessions/session-cookies";
 import { SessionsService } from "../sessions/sessions.service";
 import { UsersService } from "../users/users.service";
-import { CheckoutInsufficientBalanceError, CheckoutService } from "./checkout.service";
+import { CheckoutInsufficientBalanceError, CheckoutPriceChangedError, CheckoutService } from "./checkout.service";
 import { WalletService } from "../wallet/wallet.service";
 
 const databaseUrl = process.env.VAULT_TEST_DATABASE_URL;
@@ -95,6 +95,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-skins-two-units",
+      acceptedTotalCoinMinor: 636_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 2 }],
     });
 
@@ -156,6 +157,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-fulfillment-outbox",
+      acceptedTotalCoinMinor: 393_000,
       items: [
         { productSlug: "desert-eagle-printstream", quantity: 1 },
         { productSlug: "steam-top-up-500-rub", quantity: 1, recipient: { steamLogin: "vault_sandbox_user" } },
@@ -245,6 +247,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     await expect(checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-insufficient",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     })).rejects.toBeInstanceOf(CheckoutInsufficientBalanceError);
 
@@ -264,7 +267,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
       .set("Cookie", `${CUSTOMER_SESSION_COOKIE}=${session.token}`)
       .set("x-csrf-token", csrfToken)
       .set("idempotency-key", "checkout-api-insufficient")
-      .send({ items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }] })
+      .send({ acceptedTotalCoinMinor: 318_000, items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }] })
       .expect(402)
       .expect(({ body }) => {
         expect(body).toMatchObject({
@@ -272,6 +275,29 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
           code: "CHECKOUT_INSUFFICIENT_BALANCE",
         });
       });
+  });
+
+  it("requires explicit confirmation when the current checkout total increased", async () => {
+    await users.saveSteamTradeCredential(userId, { partner: "39734273", token: "secretToken" });
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 400_000,
+      idempotencyKey: "topup-credit-checkout-price-increase",
+      reason: "test-credit",
+    });
+    await pool.query("UPDATE catalog_products SET price_coin_minor = 400000 WHERE slug = 'desert-eagle-printstream'");
+
+    await expect(checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-price-increase",
+      acceptedTotalCoinMinor: 318_000,
+      items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
+    })).rejects.toBeInstanceOf(CheckoutPriceChangedError);
+
+    const persisted = await pool.query<{ orders: string; holds: string }>(
+      "SELECT (SELECT count(*) FROM orders) AS orders, (SELECT count(*) FROM wallet_holds) AS holds",
+    );
+    expect(persisted.rows[0]).toEqual({ orders: "0", holds: "0" });
   });
 
   it("rejects a malformed checkout body without creating a server error", async () => {
@@ -298,6 +324,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     await expect(checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-no-trade-url",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     })).rejects.toMatchObject({ code: "STEAM_TRADE_URL_REQUIRED" });
   });
@@ -314,11 +341,13 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     const first = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-idempotent",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
     const second = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-idempotent",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
 
@@ -341,11 +370,13 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     const olderOrder = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-history-older",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
     const newerOrder = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-history-newer",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
     await pool.query("UPDATE orders SET created_at = $1 WHERE id = $2", ["2026-07-28T07:00:00.000Z", olderOrder.id]);
@@ -369,6 +400,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     await checkout.checkoutFromCart({
       userId: otherUserId,
       idempotencyKey: "checkout-history-other",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
 

@@ -131,6 +131,7 @@ test("checkoutServerCart posts idempotency key and returns held order totals", a
   const calls: RequestInit[] = [];
   const result = await checkoutServerCart({
     idempotencyKey: "checkout-123",
+    acceptedTotalCoinMinor: 18_100,
   }, {
     csrfToken: () => "csrf-token",
     fetch: async (_input, init) => {
@@ -150,6 +151,7 @@ test("checkoutServerCart posts idempotency key and returns held order totals", a
   assert.equal(calls[0]?.credentials, "include");
   assert.equal((calls[0]?.headers as Record<string, string>)["idempotency-key"], "checkout-123");
   assert.equal((calls[0]?.headers as Record<string, string>)["x-csrf-token"], "csrf-token");
+  assert.equal(calls[0]?.body, JSON.stringify({ acceptedTotalCoinMinor: 18_100 }));
   assert.deepEqual(result, {
     id: "4dd6abc3-47cc-4094-ac5e-99bd5bfe0c33",
     userId: "user_76561198000000001",

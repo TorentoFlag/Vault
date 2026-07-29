@@ -9,7 +9,8 @@ import { CustomerSessionGuard } from "../sessions/customer-session.guard";
 import type { CurrentCustomer } from "../sessions/sessions.service";
 import { CheckoutService, type CheckoutFromCartCommand, type CheckoutOrderDto } from "./checkout.service";
 
-type CheckoutRequestBody = Pick<CheckoutFromCartCommand, "items">;
+type CheckoutRequestBody = Pick<CheckoutFromCartCommand, "acceptedTotalCoinMinor" | "items">;
+type CheckoutCartRequestBody = Pick<CheckoutFromCartCommand, "acceptedTotalCoinMinor">;
 
 @ApiTags("Checkout")
 @Controller("checkout")
@@ -42,8 +43,9 @@ export class CheckoutController {
     required: true,
     schema: {
       type: "object",
-      required: ["items"],
+      required: ["items", "acceptedTotalCoinMinor"],
       properties: {
+        acceptedTotalCoinMinor: { type: "integer", minimum: 1 },
         items: {
           type: "array",
           minItems: 1,
@@ -75,6 +77,7 @@ export class CheckoutController {
     return this.checkout.checkoutFromCart({
       userId: customer.userId,
       idempotencyKey: idempotencyKey ?? "",
+      acceptedTotalCoinMinor: body.acceptedTotalCoinMinor,
       items: body.items,
     });
   }
@@ -98,15 +101,27 @@ export class CheckoutController {
     required: true,
     description: "Unique customer-scoped checkout command key.",
   })
+  @ApiBody({
+    required: true,
+    schema: {
+      type: "object",
+      required: ["acceptedTotalCoinMinor"],
+      properties: {
+        acceptedTotalCoinMinor: { type: "integer", minimum: 1 },
+      },
+    },
+  })
   @UseGuards(CustomerSessionGuard, CsrfGuard)
   @Post("cart")
   async createFromServerCart(
     @CurrentCustomerContext() customer: CurrentCustomer,
     @Headers(IDEMPOTENCY_KEY_HEADER) idempotencyKey: string | undefined,
+    @Body() body: CheckoutCartRequestBody,
   ): Promise<CheckoutOrderDto> {
     const order = await this.checkout.checkoutFromCart({
       userId: customer.userId,
       idempotencyKey: idempotencyKey ?? "",
+      acceptedTotalCoinMinor: body.acceptedTotalCoinMinor,
       items: await this.cart.getCheckoutItems(customer.userId),
     });
     await this.cart.clearCart(customer.userId);

@@ -130,6 +130,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-fulfillment-submit",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
 
@@ -243,6 +244,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-fulfillment-reconcile",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
 
@@ -353,6 +355,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-fulfillment-finished",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
 
@@ -454,6 +457,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-fulfillment-protection-processing",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
 
@@ -554,6 +558,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-fulfillment-protection-failed",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
 
@@ -661,6 +666,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-fulfillment-failed",
+      acceptedTotalCoinMinor: 318_000,
       items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
     });
 
@@ -758,6 +764,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-steam-refill",
+      acceptedTotalCoinMinor: 75_000,
       items: [{ productSlug: "steam-top-up-500-rub", quantity: 1, recipient: { steamLogin: "vault_sandbox_user" } }],
     });
 
@@ -870,6 +877,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     const order = await checkout.checkoutFromCart({
       userId,
       idempotencyKey: "checkout-steam-refill-retry",
+      acceptedTotalCoinMinor: 75_000,
       items: [{ productSlug: "steam-top-up-500-rub", quantity: 1, recipient: { steamLogin: "vault_sandbox_user" } }],
     });
 

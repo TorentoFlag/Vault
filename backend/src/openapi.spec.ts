@@ -33,8 +33,12 @@ describe("OpenAPI contract", () => {
     }));
     expect(checkout?.requestBody?.required).toBe(true);
     expect(checkout?.requestBody?.content?.["application/json"]?.schema).toMatchObject({
-      required: ["items"],
+      required: ["items", "acceptedTotalCoinMinor"],
       properties: {
+        acceptedTotalCoinMinor: {
+          type: "integer",
+          minimum: 1,
+        },
         items: {
           type: "array",
           minItems: 1,
@@ -69,6 +73,17 @@ describe("OpenAPI contract", () => {
         "/checkout/cart"?: {
           post?: {
             parameters?: Array<{ name: string; in: string; required?: boolean }>;
+            requestBody?: {
+              required?: boolean;
+              content?: {
+                "application/json"?: {
+                  schema?: {
+                    required?: string[];
+                    properties?: Record<string, unknown>;
+                  };
+                };
+              };
+            };
           };
         };
       };
@@ -93,6 +108,15 @@ describe("OpenAPI contract", () => {
       in: "header",
       required: true,
     }));
+    expect(document.paths["/checkout/cart"]?.post?.requestBody?.content?.["application/json"]?.schema).toMatchObject({
+      required: ["acceptedTotalCoinMinor"],
+      properties: {
+        acceptedTotalCoinMinor: {
+          type: "integer",
+          minimum: 1,
+        },
+      },
+    });
   });
 
   it("documents all order history statuses emitted by fulfillment", async () => {

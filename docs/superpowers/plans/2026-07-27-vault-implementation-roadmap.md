@@ -174,7 +174,7 @@
 **Tasks:**
 - [x] Implement authenticated server-side cart.
 - [x] Implement server cart quote refresh from current backend catalog prices.
-- [ ] Implement explicit customer confirmation for price increases.
+- [x] Implement explicit customer confirmation for price increases. Current status: checkout requires `acceptedTotalCoinMinor`; the backend rejects increased current totals with `409 CHECKOUT_PRICE_CHANGED` before creating orders or wallet holds, and the frontend server-cart checkout sends the reviewed total.
 - [x] Implement checkout from Coins wallet only.
 - [x] Expand each quantity unit into an independent order line.
 - [x] Snapshot nonsecret Steam Trade recipient and Steam refill recipient data immutably at checkout.

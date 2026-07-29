@@ -1847,9 +1847,14 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "items"
+                  "items",
+                  "acceptedTotalCoinMinor"
                 ],
                 "properties": {
+                  "acceptedTotalCoinMinor": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
                   "items": {
                     "type": "array",
                     "minItems": 1,
@@ -1954,6 +1959,25 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "acceptedTotalCoinMinor"
+                ],
+                "properties": {
+                  "acceptedTotalCoinMinor": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",

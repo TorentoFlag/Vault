@@ -25,6 +25,7 @@ export type CheckoutCartItem = {
 export type CheckoutFromCartCommand = {
   userId: string;
   idempotencyKey: string;
+  acceptedTotalCoinMinor: number;
   items: CheckoutCartItem[];
 };
 
@@ -108,10 +109,31 @@ export class CheckoutSteamTradeUrlRequiredError extends BadRequestException {
   }
 }
 
+export class CheckoutPriceChangedError extends ConflictException {
+  readonly code = "CHECKOUT_PRICE_CHANGED";
+
+  constructor(readonly acceptedTotalCoinMinor: number, readonly currentTotalCoinMinor: number) {
+    super({
+      statusCode: 409,
+      code: "CHECKOUT_PRICE_CHANGED",
+      message: "Checkout total increased; review the updated Coins price and confirm again",
+      acceptedTotalCoinMinor,
+      currentTotalCoinMinor,
+    });
+  }
+}
+
 function requireIdempotencyKey(value: string): string {
   const normalized = normalizeIdempotencyKey(value);
   if (normalized === undefined) throw new BadRequestException("Idempotency key is required");
   return normalized;
+}
+
+function requireAcceptedTotalCoinMinor(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new BadRequestException("Accepted checkout total is required");
+  }
+  return value;
 }
 
 function assertQuantity(quantity: number): void {
@@ -157,11 +179,21 @@ export class CheckoutService {
   async checkoutFromCart(command: CheckoutFromCartCommand): Promise<CheckoutOrderDto> {
     if (!Array.isArray(command.items) || command.items.length === 0) throw new BadRequestException("Cart is empty");
     const idempotencyKey = requireIdempotencyKey(command.idempotencyKey);
+    const acceptedTotalCoinMinor = requireAcceptedTotalCoinMinor(command.acceptedTotalCoinMinor);
+    const existingBeforeQuote = await this.findOrderByIdempotencyKey(this.database, command.userId, idempotencyKey);
+    if (existingBeforeQuote !== null) {
+      const hash = requestHash(command);
+      if (existingBeforeQuote.request_hash !== hash) throw new ConflictException("Idempotency key is already used for a different checkout request");
+      return this.loadOrder(this.database, existingBeforeQuote.id);
+    }
     const user = await this.users.requireUser(command.userId);
     const lines = await this.prepareLines(command.userId, user.steam.steamId64, command.items);
     const totalCoinMinor = lines.reduce((total, line) => total + line.unitPriceCoinMinor, 0);
     if (!Number.isSafeInteger(totalCoinMinor) || totalCoinMinor <= 0) {
       throw new BadRequestException("Cart total is invalid");
+    }
+    if (totalCoinMinor > acceptedTotalCoinMinor) {
+      throw new CheckoutPriceChangedError(acceptedTotalCoinMinor, totalCoinMinor);
     }
     const hash = requestHash(command);
     return this.database.transaction(async (client) => {
