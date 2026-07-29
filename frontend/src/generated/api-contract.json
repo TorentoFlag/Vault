@@ -436,6 +436,487 @@
         ]
       }
     },
+    "/admin/operations/payments/reconcile": {
+      "post": {
+        "operationId": "AdminController_reconcilePayments",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Unique admin operation key. Reusing the same key with the same body returns duplicate without rerunning provider reconciliation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Admin-Token",
+            "in": "header",
+            "description": "Backend-only admin token loaded from ADMIN_API_TOKEN_FILE.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 500
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "idempotencyKey",
+                    "result"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "duplicate"
+                      ]
+                    },
+                    "idempotencyKey": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "checked",
+                            "credited",
+                            "errors",
+                            "failed",
+                            "ignored",
+                            "manualReview",
+                            "unmatched"
+                          ],
+                          "properties": {
+                            "checked": {
+                              "type": "integer"
+                            },
+                            "credited": {
+                              "type": "integer"
+                            },
+                            "errors": {
+                              "type": "integer"
+                            },
+                            "failed": {
+                              "type": "integer"
+                            },
+                            "ignored": {
+                              "type": "integer"
+                            },
+                            "manualReview": {
+                              "type": "integer"
+                            },
+                            "unmatched": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/payments/top-up/sessions": {
+      "post": {
+        "operationId": "PaymentsController_createTopUpSession",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Unique customer-scoped top-up session key.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "coinAmountMinor"
+                ],
+                "properties": {
+                  "coinAmountMinor": {
+                    "type": "integer",
+                    "minimum": 10000,
+                    "maximum": 10000000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "status",
+                    "provider",
+                    "coinAmountMinor",
+                    "fiatAmountMinor",
+                    "fiatCurrency",
+                    "rate",
+                    "checkoutUrl"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "provider_configuration_required",
+                        "provider_creation_pending",
+                        "checkout_pending",
+                        "paid",
+                        "failed",
+                        "manual_review"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "arc_pay"
+                      ]
+                    },
+                    "coinAmountMinor": {
+                      "type": "integer",
+                      "minimum": 10000,
+                      "maximum": 10000000
+                    },
+                    "fiatAmountMinor": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "fiatCurrency": {
+                      "type": "string",
+                      "enum": [
+                        "RUB"
+                      ]
+                    },
+                    "rate": {
+                      "type": "object",
+                      "required": [
+                        "fiatMinor",
+                        "coinMinor"
+                      ],
+                      "properties": {
+                        "fiatMinor": {
+                          "type": "integer",
+                          "enum": [
+                            100
+                          ]
+                        },
+                        "coinMinor": {
+                          "type": "integer",
+                          "enum": [
+                            150
+                          ]
+                        }
+                      }
+                    },
+                    "checkoutUrl": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/payments/webhooks/arc-pay": {
+      "post": {
+        "operationId": "PaymentsWebhookController_handleArcPayWebhook",
+        "parameters": [
+          {
+            "name": "Webhook-Timestamp",
+            "in": "header",
+            "description": "Unix timestamp included in the Arc Pay signed payload.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Webhook-Signature",
+            "in": "header",
+            "description": "Arc Pay HMAC signature in `t=<unix>,v1=<hex>` format. Fake mode also accepts X-Arc-Pay-Signature.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Webhook-Id",
+            "in": "header",
+            "description": "Provider webhook idempotency id. In fake mode this may also be present in the JSON payload.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "duplicate",
+                        "ignored",
+                        "unmatched",
+                        "rejected"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/session/me": {
+      "get": {
+        "operationId": "SessionsController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
+    "/session/csrf": {
+      "get": {
+        "operationId": "SessionsController_csrf",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
+    "/session/logout": {
+      "post": {
+        "operationId": "SessionsController_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
+    "/wallet/me/transactions": {
+      "get": {
+        "operationId": "WalletController_transactions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "transactions"
+                  ],
+                  "properties": {
+                    "transactions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "amountCoinMinor",
+                          "balanceAfterCoinMinor",
+                          "createdAt",
+                          "direction",
+                          "id",
+                          "reason",
+                          "status"
+                        ],
+                        "properties": {
+                          "amountCoinMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "balanceAfterCoinMinor": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "credit",
+                              "debit"
+                            ]
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "orderId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "top_up",
+                              "purchase"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "completed"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Wallet"
+        ]
+      }
+    },
+    "/wallet/me": {
+      "get": {
+        "operationId": "WalletController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "postedCoinMinor",
+                    "heldCoinMinor",
+                    "availableCoinMinor"
+                  ],
+                  "properties": {
+                    "postedCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "heldCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "availableCoinMinor": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Wallet"
+        ]
+      }
+    },
     "/auth/steam/start": {
       "get": {
         "operationId": "AuthController_startSteam",
@@ -489,48 +970,6 @@
         },
         "tags": [
           "Users"
-        ]
-      }
-    },
-    "/session/me": {
-      "get": {
-        "operationId": "SessionsController_me",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Sessions"
-        ]
-      }
-    },
-    "/session/csrf": {
-      "get": {
-        "operationId": "SessionsController_csrf",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Sessions"
-        ]
-      }
-    },
-    "/session/logout": {
-      "post": {
-        "operationId": "SessionsController_logout",
-        "parameters": [],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Sessions"
         ]
       }
     },
@@ -832,129 +1271,6 @@
         },
         "tags": [
           "Catalog"
-        ]
-      }
-    },
-    "/wallet/me/transactions": {
-      "get": {
-        "operationId": "WalletController_transactions",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "transactions"
-                  ],
-                  "properties": {
-                    "transactions": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": [
-                          "amountCoinMinor",
-                          "balanceAfterCoinMinor",
-                          "createdAt",
-                          "direction",
-                          "id",
-                          "reason",
-                          "status"
-                        ],
-                        "properties": {
-                          "amountCoinMinor": {
-                            "type": "integer",
-                            "minimum": 1
-                          },
-                          "balanceAfterCoinMinor": {
-                            "type": "integer",
-                            "minimum": 0
-                          },
-                          "createdAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "direction": {
-                            "type": "string",
-                            "enum": [
-                              "credit",
-                              "debit"
-                            ]
-                          },
-                          "id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "orderId": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "reason": {
-                            "type": "string",
-                            "enum": [
-                              "top_up",
-                              "purchase"
-                            ]
-                          },
-                          "status": {
-                            "type": "string",
-                            "enum": [
-                              "completed"
-                            ]
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Wallet"
-        ]
-      }
-    },
-    "/wallet/me": {
-      "get": {
-        "operationId": "WalletController_me",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "postedCoinMinor",
-                    "heldCoinMinor",
-                    "availableCoinMinor"
-                  ],
-                  "properties": {
-                    "postedCoinMinor": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "heldCoinMinor": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "availableCoinMinor": {
-                      "type": "integer",
-                      "minimum": 0
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Wallet"
         ]
       }
     },
@@ -1875,198 +2191,6 @@
         },
         "tags": [
           "Orders"
-        ]
-      }
-    },
-    "/payments/top-up/sessions": {
-      "post": {
-        "operationId": "PaymentsController_createTopUpSession",
-        "parameters": [
-          {
-            "name": "idempotency-key",
-            "in": "header",
-            "description": "Unique customer-scoped top-up session key.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "coinAmountMinor"
-                ],
-                "properties": {
-                  "coinAmountMinor": {
-                    "type": "integer",
-                    "minimum": 10000,
-                    "maximum": 10000000
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "id",
-                    "userId",
-                    "status",
-                    "provider",
-                    "coinAmountMinor",
-                    "fiatAmountMinor",
-                    "fiatCurrency",
-                    "rate",
-                    "checkoutUrl"
-                  ],
-                  "properties": {
-                    "id": {
-                      "type": "string",
-                      "format": "uuid"
-                    },
-                    "userId": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "provider_configuration_required",
-                        "provider_creation_pending",
-                        "checkout_pending",
-                        "paid",
-                        "failed",
-                        "manual_review"
-                      ]
-                    },
-                    "provider": {
-                      "type": "string",
-                      "enum": [
-                        "arc_pay"
-                      ]
-                    },
-                    "coinAmountMinor": {
-                      "type": "integer",
-                      "minimum": 10000,
-                      "maximum": 10000000
-                    },
-                    "fiatAmountMinor": {
-                      "type": "integer",
-                      "minimum": 1
-                    },
-                    "fiatCurrency": {
-                      "type": "string",
-                      "enum": [
-                        "RUB"
-                      ]
-                    },
-                    "rate": {
-                      "type": "object",
-                      "required": [
-                        "fiatMinor",
-                        "coinMinor"
-                      ],
-                      "properties": {
-                        "fiatMinor": {
-                          "type": "integer",
-                          "enum": [
-                            100
-                          ]
-                        },
-                        "coinMinor": {
-                          "type": "integer",
-                          "enum": [
-                            150
-                          ]
-                        }
-                      }
-                    },
-                    "checkoutUrl": {
-                      "type": "string",
-                      "nullable": true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Payments"
-        ]
-      }
-    },
-    "/payments/webhooks/arc-pay": {
-      "post": {
-        "operationId": "PaymentsWebhookController_handleArcPayWebhook",
-        "parameters": [
-          {
-            "name": "Webhook-Timestamp",
-            "in": "header",
-            "description": "Unix timestamp included in the Arc Pay signed payload.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Webhook-Signature",
-            "in": "header",
-            "description": "Arc Pay HMAC signature in `t=<unix>,v1=<hex>` format. Fake mode also accepts X-Arc-Pay-Signature.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Webhook-Id",
-            "in": "header",
-            "description": "Provider webhook idempotency id. In fake mode this may also be present in the JSON payload.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "status"
-                  ],
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "processed",
-                        "duplicate",
-                        "ignored",
-                        "unmatched",
-                        "rejected"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Payments"
         ]
       }
     }

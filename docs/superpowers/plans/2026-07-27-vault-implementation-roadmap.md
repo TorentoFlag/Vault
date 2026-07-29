@@ -228,7 +228,7 @@
 - [ ] Replace placeholder company/INN/address/support values.
 - [ ] Ensure footer/document details match exactly.
 - [ ] Implement support ticket or mail handoff with clear operational behavior.
-- [ ] Implement minimal admin read models and reasoned recovery commands. Current status: `GET /admin/operations/overview` exposes token-gated, read-only, redacted queues for manual-review payments, problem orders, fulfillment commands, and unprocessed/rejected webhook events; recovery commands remain deliberately unimplemented until command/audit policy is written.
+- [ ] Implement minimal admin read models and reasoned recovery commands. Current status: `GET /admin/operations/overview` exposes token-gated, read-only, redacted queues for manual-review payments, problem orders, fulfillment commands, and unprocessed/rejected webhook events; `POST /admin/operations/payments/reconcile` runs Arc Pay pending top-up reconciliation as a reasoned, idempotent, audited command without direct balance/order overwrites. Other recovery commands remain unimplemented until their command/audit policies are written.
 - [ ] Add backup/restore, deployment, rollback, incident, reconciliation, and secret-rotation runbooks.
 
 **Acceptance:**

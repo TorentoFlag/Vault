@@ -1,6 +1,10 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { createHash } from "node:crypto";
+
+import { BadRequestException, ConflictException, Inject, Injectable } from "@nestjs/common";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { normalizeIdempotencyKey } from "../../common/idempotency/idempotency-key";
+import { PaymentsService, type PaymentReconciliationResultDto } from "../payments/payments.service";
 
 export type AdminOperationsOverviewDto = {
   fulfillment: {
@@ -59,6 +63,22 @@ export type AdminOperationsOverviewDto = {
   };
 };
 
+export type AdminPaymentReconciliationCommandBody = {
+  limit?: number;
+  reason?: string;
+};
+
+export type AdminPaymentReconciliationResultDto = {
+  idempotencyKey: string;
+  result: PaymentReconciliationResultDto | null;
+  status: "duplicate" | "processed";
+};
+
+type ReconcilePaymentsCommand = {
+  body: AdminPaymentReconciliationCommandBody;
+  idempotencyKey: string | undefined;
+};
+
 type PaymentRow = {
   coin_amount_minor: number;
   created_at: Date;
@@ -108,15 +128,60 @@ type WebhookRow = {
   status: string;
 };
 
+type IdempotencyRow = {
+  request_hash: string;
+  status: string;
+};
+
 function countTextToNumber(value: string): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed)) throw new Error("ADMIN_COUNT_INVALID");
   return parsed;
 }
 
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+    .join(",")}}`;
+}
+
+function sha256(value: unknown): string {
+  return createHash("sha256").update(stableJson(value), "utf8").digest("hex");
+}
+
+function requireAdminIdempotencyKey(value: string | undefined): string {
+  try {
+    const normalized = normalizeIdempotencyKey(value);
+    if (normalized === undefined) throw new BadRequestException("Idempotency key is required");
+    return normalized;
+  } catch (error) {
+    if (error instanceof BadRequestException) throw error;
+    throw new BadRequestException(error instanceof Error ? error.message : "Idempotency key is invalid");
+  }
+}
+
+function parseReconciliationBody(body: AdminPaymentReconciliationCommandBody): { limit: number; reason: string } {
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  if (reason.length < 10 || reason.length > 500) {
+    throw new BadRequestException("Admin operation reason must be between 10 and 500 characters");
+  }
+  const limit = body.limit ?? 20;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new BadRequestException("Reconciliation limit must be between 1 and 100");
+  }
+  return { limit, reason };
+}
+
 @Injectable()
 export class AdminService {
-  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(PaymentsService) private readonly payments: PaymentsService,
+  ) {}
 
   async getOperationsOverview(): Promise<AdminOperationsOverviewDto> {
     const [payments, orders, fulfillment, webhooks] = await Promise.all([
@@ -260,5 +325,148 @@ export class AdminService {
         })),
       },
     };
+  }
+
+  async reconcilePayments(command: ReconcilePaymentsCommand): Promise<AdminPaymentReconciliationResultDto> {
+    const idempotencyKey = requireAdminIdempotencyKey(command.idempotencyKey);
+    const parsed = parseReconciliationBody(command.body);
+    const requestHash = sha256({
+      limit: parsed.limit,
+      operation: "admin.payments.reconcile",
+      reason: parsed.reason,
+    });
+
+    const shouldProcess = await this.reserveAdminOperation(idempotencyKey, requestHash);
+    if (!shouldProcess) {
+      return {
+        idempotencyKey,
+        result: null,
+        status: "duplicate",
+      };
+    }
+
+    try {
+      const result = await this.payments.reconcilePendingTopUps({ limit: parsed.limit });
+      await this.completeAdminOperation({
+        idempotencyKey,
+        limit: parsed.limit,
+        reason: parsed.reason,
+        requestHash,
+        result,
+      });
+      return {
+        idempotencyKey,
+        result,
+        status: "processed",
+      };
+    } catch (error) {
+      await this.failAdminOperation(idempotencyKey, requestHash);
+      throw error;
+    }
+  }
+
+  private async reserveAdminOperation(idempotencyKey: string, requestHash: string): Promise<boolean> {
+    return this.database.transaction(async (client) => {
+      const inserted = await client.query(
+        `
+          INSERT INTO idempotency_keys (
+            scope,
+            id,
+            request_hash,
+            status,
+            locked_at
+          )
+          VALUES ('admin:payments:reconcile', $1, $2, 'processing', now())
+          ON CONFLICT (scope, id) DO NOTHING
+          RETURNING id
+        `,
+        [idempotencyKey, requestHash],
+      );
+      if (inserted.rowCount === 1) return true;
+
+      const existing = await client.query<IdempotencyRow>(
+        `
+          SELECT request_hash, status
+          FROM idempotency_keys
+          WHERE scope = 'admin:payments:reconcile'
+            AND id = $1
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [idempotencyKey],
+      );
+      const row = existing.rows[0];
+      if (row === undefined) throw new ConflictException("Admin operation idempotency key is not available");
+      if (row.request_hash !== requestHash) {
+        throw new ConflictException("Idempotency key is already used for a different admin operation");
+      }
+      if (row.status === "completed") return false;
+      throw new ConflictException("Admin operation is already processing or failed; use a new idempotency key after reviewing evidence");
+    });
+  }
+
+  private async completeAdminOperation(command: {
+    idempotencyKey: string;
+    limit: number;
+    reason: string;
+    requestHash: string;
+    result: PaymentReconciliationResultDto;
+  }): Promise<void> {
+    await this.database.transaction(async (client) => {
+      await client.query(
+        `
+          UPDATE idempotency_keys
+          SET
+            status = 'completed',
+            response_hash = $3,
+            locked_at = NULL,
+            completed_at = now(),
+            updated_at = now()
+          WHERE scope = 'admin:payments:reconcile'
+            AND id = $1
+            AND request_hash = $2
+        `,
+        [command.idempotencyKey, command.requestHash, sha256(command.result)],
+      );
+      await client.query(
+        `
+          INSERT INTO audit_events (
+            actor_user_id,
+            action,
+            target_type,
+            target_id,
+            request_id,
+            metadata
+          )
+          VALUES (NULL, 'admin.payments.reconcile', 'admin_operation', $1, NULL, $2::jsonb)
+        `,
+        [
+          command.idempotencyKey,
+          JSON.stringify({
+            idempotencyKey: command.idempotencyKey,
+            limit: command.limit,
+            reason: command.reason,
+            result: command.result,
+            status: "processed",
+          }),
+        ],
+      );
+    });
+  }
+
+  private async failAdminOperation(idempotencyKey: string, requestHash: string): Promise<void> {
+    await this.database.query(
+      `
+        UPDATE idempotency_keys
+        SET
+          status = 'failed',
+          locked_at = NULL,
+          updated_at = now()
+        WHERE scope = 'admin:payments:reconcile'
+          AND id = $1
+          AND request_hash = $2
+      `,
+      [idempotencyKey, requestHash],
+    );
   }
 }

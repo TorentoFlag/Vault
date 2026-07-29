@@ -25,16 +25,22 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
   let app: INestApplication | null = null;
   let pool: Pool;
   let tempDir: string | null = null;
+  let originalFetch: typeof globalThis.fetch;
   const adminToken = "vault-admin-token-for-tests";
 
   beforeAll(() => {
     process.env.DATABASE_URL = databaseUrl;
     pool = new Pool({ connectionString: databaseUrl });
+    originalFetch = globalThis.fetch;
   });
 
   afterAll(async () => {
     delete process.env.DATABASE_URL;
     delete process.env.ADMIN_API_TOKEN_FILE;
+    delete process.env.ARC_PAY_PROVIDER_MODE;
+    delete process.env.ARC_PAY_SECRET_KEY_FILE;
+    delete process.env.ARC_PAY_PUBLIC_ORIGIN;
+    globalThis.fetch = originalFetch;
     await app?.close();
     await pool.end();
     if (tempDir !== null) await rm(tempDir, { recursive: true, force: true });
@@ -45,6 +51,10 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
       await app.close();
       app = null;
     }
+    delete process.env.ARC_PAY_PROVIDER_MODE;
+    delete process.env.ARC_PAY_SECRET_KEY_FILE;
+    delete process.env.ARC_PAY_PUBLIC_ORIGIN;
+    globalThis.fetch = originalFetch;
     tempDir = await mkdtemp(join(tmpdir(), "vault-admin-"));
     const adminTokenFile = join(tempDir, "admin-token");
     await writeFile(adminTokenFile, `${adminToken}\n`, "utf8");
@@ -63,6 +73,7 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
         wallet_holds,
         wallet_ledger_entries,
         wallet_transactions,
+        idempotency_keys,
         audit_events,
         steam_trade_credentials,
         steam_openid_assertions,
@@ -309,5 +320,164 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
     expect(serialized).not.toContain("payloadSnapshot");
     expect(serialized).not.toContain("requestSnapshot");
     expect(serialized).not.toContain("responseSnapshot");
+  });
+
+  it("runs Arc Pay top-up reconciliation once behind admin auth, idempotency, reason, and durable audit", async () => {
+    await app?.close();
+    const arcPaySecretKeyFile = join(tempDir ?? tmpdir(), "arc-pay-secret");
+    await writeFile(arcPaySecretKeyFile, "sk_test_admin_reconcile\n", "utf8");
+    process.env.ARC_PAY_PROVIDER_MODE = "real";
+    process.env.ARC_PAY_SECRET_KEY_FILE = arcPaySecretKeyFile;
+    process.env.ARC_PAY_PUBLIC_ORIGIN = "https://vault.example";
+
+    const topUpId = "019facdb-b116-7434-b27c-debea8fb1c40";
+    let providerListRequests = 0;
+    globalThis.fetch = (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === `https://api.arcpay.space/v1/payments?search=${topUpId}&page_size=5`) {
+        providerListRequests += 1;
+        return Promise.resolve(new Response(JSON.stringify({
+          payments: [{
+            id: "019facdb-b116-7434-b27c-debea8fb1c41",
+            status: "captured",
+            amount: 100_000,
+            currency: "RUB",
+            external_id: topUpId,
+            metadata: {
+              vault_top_up_id: topUpId,
+            },
+          }],
+          total: 1,
+          page_size: 5,
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: "unexpected request" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      }));
+    };
+
+    await pool.query(
+      `
+        INSERT INTO top_up_payments (
+          id,
+          user_id,
+          idempotency_key,
+          request_hash,
+          provider,
+          status,
+          coin_amount_minor,
+          fiat_amount_minor,
+          fiat_currency,
+          rate_fiat_minor,
+          rate_coin_minor,
+          provider_session_id,
+          metadata
+        )
+        VALUES (
+          $1,
+          'user_76561198000000011',
+          'topup-admin-reconcile',
+          'topup-admin-reconcile-hash',
+          'arc_pay',
+          'checkout_pending',
+          150000,
+          100000,
+          'RUB',
+          100,
+          150,
+          '019facdb-b116-7434-b27c-debea8fb1c42',
+          '{}'::jsonb
+        )
+      `,
+      [topUpId],
+    );
+    app = await createApp();
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/admin/operations/payments/reconcile")
+      .set("x-admin-token", adminToken)
+      .send({ reason: "recover missing Arc Pay webhook", limit: 10 })
+      .expect(400);
+
+    const first = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/admin/operations/payments/reconcile")
+      .set("x-admin-token", adminToken)
+      .set("idempotency-key", "admin-reconcile-arc-pay-1")
+      .send({ reason: "recover missing Arc Pay webhook", limit: 10 })
+      .expect(200);
+
+    expect(first.body).toEqual({
+      status: "processed",
+      idempotencyKey: "admin-reconcile-arc-pay-1",
+      result: {
+        checked: 1,
+        credited: 1,
+        errors: 0,
+        failed: 0,
+        ignored: 0,
+        manualReview: 0,
+        unmatched: 0,
+      },
+    });
+
+    const second = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/admin/operations/payments/reconcile")
+      .set("x-admin-token", adminToken)
+      .set("idempotency-key", "admin-reconcile-arc-pay-1")
+      .send({ reason: "recover missing Arc Pay webhook", limit: 10 })
+      .expect(200);
+
+    expect(second.body).toEqual({
+      status: "duplicate",
+      idempotencyKey: "admin-reconcile-arc-pay-1",
+      result: null,
+    });
+    expect(providerListRequests).toBe(1);
+
+    const persisted = await pool.query<{
+      audit_metadata: Record<string, unknown>;
+      audit_rows: string;
+      idempotency_rows: string;
+      payment_status: string;
+      provider_status: string;
+      wallet_transactions: string;
+    }>(
+      `
+        SELECT
+          (SELECT status FROM top_up_payments WHERE id = $1) AS payment_status,
+          (SELECT provider_status FROM top_up_payments WHERE id = $1) AS provider_status,
+          (SELECT count(*) FROM wallet_transactions WHERE user_id = 'user_76561198000000011' AND type = 'top_up_credit') AS wallet_transactions,
+          (SELECT count(*) FROM idempotency_keys WHERE scope = 'admin:payments:reconcile' AND id = 'admin-reconcile-arc-pay-1' AND status = 'completed') AS idempotency_rows,
+          (SELECT count(*) FROM audit_events WHERE action = 'admin.payments.reconcile' AND target_id = 'admin-reconcile-arc-pay-1') AS audit_rows,
+          (SELECT metadata FROM audit_events WHERE action = 'admin.payments.reconcile' AND target_id = 'admin-reconcile-arc-pay-1' LIMIT 1) AS audit_metadata
+      `,
+      [topUpId],
+    );
+    expect(persisted.rows[0]).toMatchObject({
+      payment_status: "paid",
+      provider_status: "captured",
+      wallet_transactions: "1",
+      idempotency_rows: "1",
+      audit_rows: "1",
+    });
+    expect(persisted.rows[0]?.audit_metadata).toEqual({
+      idempotencyKey: "admin-reconcile-arc-pay-1",
+      limit: 10,
+      reason: "recover missing Arc Pay webhook",
+      result: {
+        checked: 1,
+        credited: 1,
+        errors: 0,
+        failed: 0,
+        ignored: 0,
+        manualReview: 0,
+        unmatched: 0,
+      },
+      status: "processed",
+    });
   });
 });

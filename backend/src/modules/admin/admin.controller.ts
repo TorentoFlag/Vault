@@ -1,8 +1,9 @@
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
-import { ApiHeader, ApiOkResponse, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Headers, HttpCode, Inject, Post, UseGuards } from "@nestjs/common";
+import { ApiBody, ApiHeader, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 
+import { IDEMPOTENCY_KEY_HEADER } from "../../common/http/http-headers";
 import { AdminGuard } from "./admin.guard";
-import { AdminService, type AdminOperationsOverviewDto } from "./admin.service";
+import { AdminService, type AdminOperationsOverviewDto, type AdminPaymentReconciliationCommandBody, type AdminPaymentReconciliationResultDto } from "./admin.service";
 
 const operationsOverviewSchema = {
   type: "object",
@@ -109,6 +110,33 @@ const operationsOverviewSchema = {
   },
 };
 
+const reconciliationResultSchema = {
+  type: "object",
+  required: ["status", "idempotencyKey", "result"],
+  properties: {
+    status: { type: "string", enum: ["processed", "duplicate"] },
+    idempotencyKey: { type: "string" },
+    result: {
+      oneOf: [
+        { type: "null" },
+        {
+          type: "object",
+          required: ["checked", "credited", "errors", "failed", "ignored", "manualReview", "unmatched"],
+          properties: {
+            checked: { type: "integer" },
+            credited: { type: "integer" },
+            errors: { type: "integer" },
+            failed: { type: "integer" },
+            ignored: { type: "integer" },
+            manualReview: { type: "integer" },
+            unmatched: { type: "integer" },
+          },
+        },
+      ],
+    },
+  },
+};
+
 @ApiTags("Admin")
 @UseGuards(AdminGuard)
 @Controller("admin")
@@ -124,5 +152,39 @@ export class AdminController {
   @Get("operations/overview")
   overview(): Promise<AdminOperationsOverviewDto> {
     return this.admin.getOperationsOverview();
+  }
+
+  @ApiOkResponse({ schema: reconciliationResultSchema })
+  @ApiHeader({
+    name: "X-Admin-Token",
+    required: true,
+    description: "Backend-only admin token loaded from ADMIN_API_TOKEN_FILE.",
+  })
+  @ApiHeader({
+    name: IDEMPOTENCY_KEY_HEADER,
+    required: true,
+    description: "Unique admin operation key. Reusing the same key with the same body returns duplicate without rerunning provider reconciliation.",
+  })
+  @ApiBody({
+    required: true,
+    schema: {
+      type: "object",
+      required: ["reason"],
+      properties: {
+        reason: { type: "string", minLength: 10, maxLength: 500 },
+        limit: { type: "integer", minimum: 1, maximum: 100 },
+      },
+    },
+  })
+  @HttpCode(200)
+  @Post("operations/payments/reconcile")
+  reconcilePayments(
+    @Headers(IDEMPOTENCY_KEY_HEADER) idempotencyKey: string | undefined,
+    @Body() body: AdminPaymentReconciliationCommandBody,
+  ): Promise<AdminPaymentReconciliationResultDto> {
+    return this.admin.reconcilePayments({
+      body,
+      idempotencyKey,
+    });
   }
 }
