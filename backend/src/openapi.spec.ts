@@ -94,4 +94,39 @@ describe("OpenAPI contract", () => {
       required: true,
     }));
   });
+
+  it("documents all order history statuses emitted by fulfillment", async () => {
+    const document = JSON.parse(await createOpenApiJson()) as {
+      paths: {
+        "/orders/me"?: {
+          get?: {
+            responses?: {
+              "200"?: {
+                content?: {
+                  "application/json"?: {
+                    schema?: {
+                      properties?: {
+                        orders?: {
+                          items?: {
+                            properties?: {
+                              status?: {
+                                enum?: string[];
+                              };
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+
+    const status = document.paths["/orders/me"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.orders?.items?.properties?.status;
+    expect(status?.enum).toEqual(["held", "fulfilled", "partially_fulfilled", "failed", "manual_review"]);
+  });
 });

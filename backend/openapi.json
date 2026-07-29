@@ -1162,7 +1162,11 @@
                           "status": {
                             "type": "string",
                             "enum": [
-                              "held"
+                              "held",
+                              "fulfilled",
+                              "partially_fulfilled",
+                              "failed",
+                              "manual_review"
                             ]
                           },
                           "totalCoinMinor": {

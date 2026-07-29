@@ -29,6 +29,8 @@ const orderStatus = {
   completed: { label: "Выполнен", tone: "success" as const },
   processing: { label: "В обработке", tone: "warning" as const },
   cancelled: { label: "Отменён", tone: "neutral" as const },
+  failed: { label: "Не выполнен", tone: "neutral" as const },
+  needs_review: { label: "На проверке", tone: "warning" as const },
 };
 
 function formatDate(value: string) {

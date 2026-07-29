@@ -243,7 +243,9 @@ export function getTransactionStatusLabel(transaction: Pick<CoinTransaction, "st
 
 export function getOrderItemDeliveryStatusLabel(status: OrderItemSnapshot["deliveryStatus"]) {
   if (status === "delivered") return "Отмечено выполненным в локальной истории";
+  if (status === "failed") return "Выдача не выполнена";
   if (status === "inventory-ready") return "Сохранено в локальном инвентаре";
+  if (status === "needs-review") return "Требуется проверка поддержки";
   return "Внешняя выдача не подключена";
 }
 

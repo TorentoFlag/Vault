@@ -192,6 +192,53 @@ test("API client maps backend order history without exposing internal request fi
   }]);
 });
 
+test("API client maps backend fulfillment order statuses into account history states", async () => {
+  const baseOrder = {
+    id: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+    userId: "user_76561198000000002",
+    totalCoinMinor: 318_000,
+    createdAt: "2026-07-28T08:00:00.000Z",
+    recipientSnapshots: [
+      { kind: "steam-trade", steamId64: "76561198000000002", steamTradePartnerAccountId: "39734273" },
+    ],
+    lines: [
+      {
+        id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+        productSlug: "desert-eagle-printstream",
+        kind: "skins",
+        title: "Desert Eagle | Printstream",
+        quantity: 1,
+        unitPriceCoinMinor: 318_000,
+        recipientSnapshot: { kind: "steam-trade", steamId64: "76561198000000002", steamTradePartnerAccountId: "39734273" },
+      },
+    ],
+  };
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    fetch: async () => new Response(JSON.stringify({
+      orders: [
+        { ...baseOrder, id: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde", status: "fulfilled" },
+        { ...baseOrder, id: "2fdb9de9-df14-4c16-82cc-7c8396e2fcdf", status: "failed" },
+        { ...baseOrder, id: "2fdb9de9-df14-4c16-82cc-7c8396e2fce0", status: "manual_review" },
+      ],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  });
+
+  const history = await client.getOrderHistory();
+
+  assert.deepEqual(history.map((order) => ({
+    deliveryStatus: order.items[0]?.deliveryStatus,
+    status: order.status,
+  })), [
+    { deliveryStatus: "delivered", status: "completed" },
+    { deliveryStatus: "failed", status: "failed" },
+    { deliveryStatus: "needs-review", status: "needs_review" },
+  ]);
+});
+
 test("API client creates top-up sessions with idempotency and maps provider-disabled status", async () => {
   const calls: RequestInit[] = [];
   const client = createApiClient({

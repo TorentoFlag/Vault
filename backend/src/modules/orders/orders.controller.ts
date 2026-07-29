@@ -18,7 +18,7 @@ const orderHistorySchema = {
         properties: {
           id: { type: "string", format: "uuid" },
           userId: { type: "string" },
-          status: { type: "string", enum: ["held"] },
+          status: { type: "string", enum: ["held", "fulfilled", "partially_fulfilled", "failed", "manual_review"] },
           totalCoinMinor: { type: "integer", minimum: 1 },
           recipientSnapshots: { type: "array", items: { type: "object" } },
           createdAt: { type: "string", format: "date-time" },

@@ -1,7 +1,7 @@
 import type { Product } from "./commerce";
 
-export type OrderStatus = "completed" | "processing" | "cancelled";
-export type OrderDeliveryStatus = "delivered" | "inventory-ready" | "pending";
+export type OrderStatus = "completed" | "processing" | "cancelled" | "failed" | "needs_review";
+export type OrderDeliveryStatus = "delivered" | "failed" | "inventory-ready" | "needs-review" | "pending";
 
 export type OrderItemSnapshot = {
   id: string;

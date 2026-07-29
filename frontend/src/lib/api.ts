@@ -82,10 +82,12 @@ type ApiOrderLine = {
   recipientSnapshot: ApiOrderRecipientSnapshot;
 };
 
+type ApiOrderStatus = "failed" | "fulfilled" | "held" | "manual_review" | "partially_fulfilled";
+
 type ApiOrder = {
   id: string;
   userId: string;
-  status: "held";
+  status: ApiOrderStatus;
   totalCoinMinor: number;
   recipientSnapshots: ApiOrderRecipientSnapshot[];
   createdAt: string;
@@ -200,12 +202,20 @@ function isApiOrderLine(value: unknown): value is ApiOrderLine {
   );
 }
 
+function isApiOrderStatus(value: unknown): value is ApiOrderStatus {
+  return value === "held" ||
+    value === "fulfilled" ||
+    value === "partially_fulfilled" ||
+    value === "failed" ||
+    value === "manual_review";
+}
+
 function isApiOrder(value: unknown): value is ApiOrder {
   if (!isRecord(value)) return false;
   return (
     typeof value.id === "string" &&
     typeof value.userId === "string" &&
-    value.status === "held" &&
+    isApiOrderStatus(value.status) &&
     typeof value.totalCoinMinor === "number" &&
     Number.isSafeInteger(value.totalCoinMinor) &&
     value.totalCoinMinor > 0 &&
@@ -258,11 +268,17 @@ function fulfillmentModeForKind(kind: Product["kind"]): Product["fulfillmentMode
 }
 
 function deliveryStatusForStatus(status: ApiOrder["status"]): OrderDeliveryStatus {
-  return status === "held" ? "pending" : "pending";
+  if (status === "fulfilled") return "delivered";
+  if (status === "failed") return "failed";
+  if (status === "manual_review" || status === "partially_fulfilled") return "needs-review";
+  return "pending";
 }
 
 function orderStatusForApiStatus(status: ApiOrder["status"]): OrderStatus {
-  return status === "held" ? "processing" : "processing";
+  if (status === "fulfilled") return "completed";
+  if (status === "failed") return "failed";
+  if (status === "manual_review" || status === "partially_fulfilled") return "needs_review";
+  return "processing";
 }
 
 function mapApiOrder(order: ApiOrder): MarketplaceOrder {

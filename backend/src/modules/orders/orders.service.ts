@@ -19,10 +19,12 @@ export type OrderHistoryLineDto = {
   recipientSnapshot: CheckoutRecipientSnapshot;
 };
 
+export type OrderHistoryStatus = "failed" | "fulfilled" | "held" | "manual_review" | "partially_fulfilled";
+
 export type OrderHistoryItemDto = {
   id: string;
   userId: string;
-  status: "held";
+  status: OrderHistoryStatus;
   totalCoinMinor: number;
   recipientSnapshots: CheckoutRecipientSnapshot[];
   createdAt: string;
