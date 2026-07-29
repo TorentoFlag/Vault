@@ -107,7 +107,7 @@
 - [x] Add encrypted write-only Steam Trade URL storage.
 - [x] Persist Steam auth attempts, users, sessions, and Trade URL credential envelopes in PostgreSQL with integration coverage.
 - [x] Generate frontend contract snapshot and implement shared API transport.
-- [ ] Migrate account header/profile/Steam settings from local mock session to backend session. Current status: the auth screen starts backend Steam OpenID; `MarketplaceProvider` hydrates backend session/cart/wallet, purchase history, inventory projection, and Steam Trade URL configured status when the cookie exists; Steam Trade URL saves through `/me/steam-trade-url` for backend sessions without exposing the saved token back into the form; trade/payment history and Email auth still use local concept state.
+- [ ] Migrate account header/profile/Steam settings from local mock session to backend session. Current status: the auth screen starts backend Steam OpenID; `MarketplaceProvider` hydrates backend session/cart/wallet, purchase history, inventory projection, posted Coins operation history, and Steam Trade URL configured status when the cookie exists; Steam Trade URL saves through `/me/steam-trade-url` for backend sessions without exposing the saved token back into the form; Steam trade history and Email auth still use local concept state.
 
 **Acceptance:**
 - [x] Backend auth/session tests pass.
@@ -149,7 +149,7 @@
 - Modify: `frontend/src/features/account/*`
 
 **Tasks:**
-- [x] Implement double-entry Coins wallet journal, active holds, active-hold settlement, and available balance projection.
+- [x] Implement double-entry Coins wallet journal, active holds, active-hold settlement, available balance projection, and current-user posted transaction history.
 - [ ] Implement wallet reconciliation.
 - [x] Implement top-up/payment aggregate with immutable displayed terms. Current status: `/payments/top-up/sessions` creates idempotent Arc Pay top-up intents and provider attempts; disabled mode returns `provider_configuration_required`, while deterministic fake mode returns `checkout_pending` plus a fake checkout URL.
 - [ ] Implement Arc Pay checkout-session creation, method discovery, real webhook verification, status/reconciliation, refund and chargeback adapters. Current status: real Hosted Checkout creation exists for sandbox keys and sends SBP-only `payment_methods`; real webhook signature verification exists for `Webhook-Id`, `Webhook-Timestamp`, and `Webhook-Signature`; method discovery, status/reconciliation, refunds, and chargebacks remain.

@@ -43,6 +43,12 @@ test("backend sessions hydrate account purchases from backend order history", ()
   assert.match(provider, /setOrders\(orderHistory\)/);
 });
 
+test("backend sessions hydrate Coins operations from backend wallet transaction history", () => {
+  const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
+  assert.match(provider, /client\.getWalletTransactions\(\)/);
+  assert.match(provider, /setTransactions\(walletTransactions\)/);
+});
+
 test("backend sessions hydrate account inventory from backend projection", () => {
   const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
   const account = source("src/features/account/AccountScreen.tsx");

@@ -337,8 +337,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const client = createApiClient();
       try {
         const user = await client.getCurrentUser();
-        const [wallet, tradeUrlStatus, cartResponse, orderHistory, inventory] = await Promise.all([
+        const [wallet, walletTransactions, tradeUrlStatus, cartResponse, orderHistory, inventory] = await Promise.all([
           client.getWalletBalance(),
+          client.getWalletTransactions(),
           client.getSteamTradeUrlStatus(),
           fetchHydratedCart(),
           client.getOrderHistory(),
@@ -350,7 +351,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         setBalanceCoins(wallet.availableCoins);
         setOrders(orderHistory);
         setInventoryItems(inventory);
-        setTransactions([]);
+        setTransactions(walletTransactions);
         setTradeEvents([]);
         setSteamTradeUrl("");
         setServerSteamTradeUrlConfigured(tradeUrlStatus.configured);
@@ -572,12 +573,14 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
               idempotencyKey: `checkout-${uniqueId}`,
             }, { csrfToken: () => csrfTokenRef.current });
             const client = createApiClient();
-            const [wallet, orderHistory, inventory] = await Promise.all([
+            const [wallet, walletTransactions, orderHistory, inventory] = await Promise.all([
               client.getWalletBalance(),
+              client.getWalletTransactions(),
               client.getOrderHistory(),
               client.getInventory(),
             ]);
             setBalanceCoins(wallet.availableCoins);
+            setTransactions(walletTransactions);
             setOrders(orderHistory);
             setInventoryItems(inventory);
             applyServerCart({ items: [], totalCoins: 0, products: [] });

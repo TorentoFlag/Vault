@@ -17,6 +17,7 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/me/steam-trade-url",
     "/me/steam-trade-url/status",
     "/wallet/me",
+    "/wallet/me/transactions",
     "/catalog",
     "/catalog/{slug}",
     "/cart",
@@ -138,6 +139,69 @@ test("API client maps backend wallet balance from Coins minor units", async () =
     heldCoins: 321,
     availableCoins: 679,
   });
+});
+
+test("API client maps backend wallet transaction history without internal metadata", async () => {
+  const requestedUrls: string[] = [];
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    fetch: async (input) => {
+      requestedUrls.push(input.toString());
+      return new Response(JSON.stringify({
+        transactions: [
+          {
+            amountCoinMinor: 35_000,
+            balanceAfterCoinMinor: 65_000,
+            createdAt: "2026-07-29T09:00:00.000Z",
+            direction: "debit",
+            id: "6aee3572-5c0b-4ba8-9dd9-488a2786c8f2",
+            orderId: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+            reason: "purchase",
+            status: "completed",
+          },
+          {
+            amountCoinMinor: 100_000,
+            balanceAfterCoinMinor: 100_000,
+            createdAt: "2026-07-29T08:00:00.000Z",
+            direction: "credit",
+            id: "cc86858e-4f16-44e6-bc51-15634d83bf73",
+            reason: "top_up",
+            status: "completed",
+          },
+        ],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  assert.deepEqual(await client.getWalletTransactions(), [
+    {
+      amountCoins: 350,
+      balanceAfterCoins: 650,
+      createdAt: "2026-07-29T09:00:00.000Z",
+      description: "Покупка VLT-2FDB9DE9",
+      direction: "debit",
+      id: "6aee3572-5c0b-4ba8-9dd9-488a2786c8f2",
+      isDemo: false,
+      orderNumber: "VLT-2FDB9DE9",
+      reason: "purchase",
+      status: "completed",
+    },
+    {
+      amountCoins: 1000,
+      balanceAfterCoins: 1000,
+      createdAt: "2026-07-29T08:00:00.000Z",
+      description: "Пополнение баланса Coins",
+      direction: "credit",
+      id: "cc86858e-4f16-44e6-bc51-15634d83bf73",
+      isDemo: false,
+      reason: "top-up",
+      status: "completed",
+    },
+  ]);
+  assert.deepEqual(requestedUrls, ["https://api.vault.example/wallet/me/transactions"]);
 });
 
 test("API client maps backend order history without exposing internal request fields", async () => {

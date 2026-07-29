@@ -1,5 +1,5 @@
 import openApiDocument from "../generated/api-contract.json" with { type: "json" };
-import type { MarketplaceOrder, OrderDeliveryStatus, OrderStatus } from "../types/account.ts";
+import type { CoinTransaction, MarketplaceOrder, OrderDeliveryStatus, OrderStatus } from "../types/account.ts";
 import type { Product } from "../types/commerce.ts";
 
 type ServerApiPath = keyof typeof openApiDocument.paths;
@@ -11,6 +11,7 @@ export const apiPaths = [
   "/me/steam-trade-url",
   "/me/steam-trade-url/status",
   "/wallet/me",
+  "/wallet/me/transactions",
   "/catalog",
   "/catalog/{slug}",
   "/cart",
@@ -50,6 +51,17 @@ export type ApiWalletBalance = {
   postedCoins: number;
   heldCoins: number;
   availableCoins: number;
+};
+
+type ApiWalletTransaction = {
+  amountCoinMinor: number;
+  balanceAfterCoinMinor: number;
+  createdAt: string;
+  direction: "credit" | "debit";
+  id: string;
+  orderId?: string;
+  reason: "purchase" | "top_up";
+  status: "completed";
 };
 
 export type ApiTopUpSession = {
@@ -208,6 +220,31 @@ function isWalletBalanceResponse(value: unknown): value is {
   );
 }
 
+function isApiWalletTransaction(value: unknown): value is ApiWalletTransaction {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.createdAt === "string" &&
+    (value.direction === "credit" || value.direction === "debit") &&
+    (value.reason === "top_up" || value.reason === "purchase") &&
+    typeof value.amountCoinMinor === "number" &&
+    Number.isSafeInteger(value.amountCoinMinor) &&
+    value.amountCoinMinor > 0 &&
+    typeof value.balanceAfterCoinMinor === "number" &&
+    Number.isSafeInteger(value.balanceAfterCoinMinor) &&
+    value.balanceAfterCoinMinor >= 0 &&
+    value.status === "completed" &&
+    (value.orderId === undefined || typeof value.orderId === "string") &&
+    !("idempotencyKey" in value) &&
+    !("requestHash" in value) &&
+    !("metadata" in value)
+  );
+}
+
+function isWalletTransactionsResponse(value: unknown): value is { transactions: ApiWalletTransaction[] } {
+  return isRecord(value) && Array.isArray(value.transactions) && value.transactions.every(isApiWalletTransaction);
+}
+
 function isApiOrderRecipientSnapshot(value: unknown): value is ApiOrderRecipientSnapshot {
   if (!isRecord(value)) return false;
   if (value.kind === "steam-trade") {
@@ -361,6 +398,23 @@ function mapApiOrder(order: ApiOrder): MarketplaceOrder {
   };
 }
 
+function mapApiWalletTransaction(transaction: ApiWalletTransaction): CoinTransaction {
+  const orderNumber = transaction.orderId === undefined ? undefined : orderNumberFromId(transaction.orderId);
+  const reason = transaction.reason === "top_up" ? "top-up" : "purchase";
+  return {
+    amountCoins: coinMinorToCoins(transaction.amountCoinMinor),
+    balanceAfterCoins: coinMinorToCoins(transaction.balanceAfterCoinMinor),
+    createdAt: transaction.createdAt,
+    description: reason === "top-up" ? "Пополнение баланса Coins" : `Покупка ${orderNumber ?? "Vault"}`,
+    direction: transaction.direction,
+    id: transaction.id,
+    isDemo: false,
+    ...(orderNumber === undefined ? {} : { orderNumber }),
+    reason,
+    status: transaction.status,
+  };
+}
+
 function mapApiInventoryItem(item: ApiInventoryItem): ApiMappedInventoryItem {
   return {
     actions: item.actions,
@@ -458,6 +512,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
         heldCoins: coinMinorToCoins(body.heldCoinMinor),
         availableCoins: coinMinorToCoins(body.availableCoinMinor),
       };
+    },
+
+    async getWalletTransactions(): Promise<CoinTransaction[]> {
+      const body = await requestJson("/wallet/me/transactions");
+      if (!isWalletTransactionsResponse(body)) throw new Error("Wallet transactions response is malformed.");
+      return body.transactions.map(mapApiWalletTransaction);
     },
 
     async getOrderHistory(): Promise<MarketplaceOrder[]> {

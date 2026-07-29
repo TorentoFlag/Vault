@@ -14,6 +14,23 @@ export type WalletBalanceDto = {
   availableCoinMinor: number;
 };
 
+export type WalletTransactionHistoryReason = "purchase" | "top_up";
+
+export type WalletTransactionHistoryItemDto = {
+  amountCoinMinor: number;
+  balanceAfterCoinMinor: number;
+  createdAt: string;
+  direction: "credit" | "debit";
+  id: string;
+  orderId?: string;
+  reason: WalletTransactionHistoryReason;
+  status: "completed";
+};
+
+export type WalletTransactionHistoryDto = {
+  transactions: WalletTransactionHistoryItemDto[];
+};
+
 export type CreditUserCommand = {
   userId: string;
   amountCoinMinor: number;
@@ -51,6 +68,15 @@ export class WalletIdempotencyConflictError extends Error {
     super("Wallet idempotency key is already used for different financial terms");
   }
 }
+
+type WalletTransactionHistoryRow = {
+  amount_coin_minor: number;
+  balance_after_coin_minor: string;
+  created_at: Date;
+  id: string;
+  order_id: string | null;
+  type: "order_hold_settlement" | "top_up_credit";
+};
 
 function assertPositiveCoinMinor(amountCoinMinor: number): void {
   if (!Number.isSafeInteger(amountCoinMinor) || amountCoinMinor <= 0) {
@@ -126,6 +152,50 @@ export class WalletService {
 
   async getBalance(userId: string): Promise<WalletBalanceDto> {
     return this.getBalanceWithClient(this.database, userId);
+  }
+
+  async listUserTransactions(userId: string): Promise<WalletTransactionHistoryDto> {
+    const result = await this.database.query<WalletTransactionHistoryRow>(
+      `
+        WITH customer_entries AS (
+          SELECT
+            wallet_transactions.id,
+            wallet_transactions.type,
+            wallet_transactions.metadata ->> 'orderId' AS order_id,
+            wallet_ledger_entries.amount_coin_minor,
+            wallet_transactions.created_at,
+            sum(wallet_ledger_entries.amount_coin_minor) OVER (
+              ORDER BY wallet_transactions.created_at ASC, wallet_transactions.id ASC
+              ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            )::text AS balance_after_coin_minor
+          FROM wallet_transactions
+          JOIN wallet_ledger_entries
+            ON wallet_ledger_entries.transaction_id = wallet_transactions.id
+          WHERE wallet_transactions.user_id = $1
+            AND wallet_transactions.type IN ('top_up_credit', 'order_hold_settlement')
+            AND wallet_transactions.status = 'posted'
+            AND wallet_ledger_entries.account_key = $2
+        )
+        SELECT id, type, order_id, amount_coin_minor, balance_after_coin_minor, created_at
+        FROM customer_entries
+        ORDER BY created_at DESC, id DESC
+        LIMIT 100
+      `,
+      [userId, customerAccount(userId)],
+    );
+
+    return {
+      transactions: result.rows.map((row) => ({
+        amountCoinMinor: Math.abs(row.amount_coin_minor),
+        balanceAfterCoinMinor: Number(row.balance_after_coin_minor),
+        createdAt: row.created_at.toISOString(),
+        direction: row.amount_coin_minor >= 0 ? "credit" : "debit",
+        id: row.id,
+        ...(row.order_id === null ? {} : { orderId: row.order_id }),
+        reason: row.type === "top_up_credit" ? "top_up" : "purchase",
+        status: "completed",
+      })),
+    };
   }
 
   async lockUserBalance(client: WalletQueryable, userId: string): Promise<void> {

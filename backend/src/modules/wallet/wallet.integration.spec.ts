@@ -1,10 +1,13 @@
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { Pool } from "pg";
+import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AppModule } from "../../app.module";
 import { DatabaseService } from "../../common/database/database.service";
+import { CUSTOMER_SESSION_COOKIE } from "../sessions/session-cookies";
+import { SessionsService } from "../sessions/sessions.service";
 import { UsersService } from "../users/users.service";
 import { WalletIdempotencyConflictError, WalletService } from "./wallet.service";
 
@@ -20,10 +23,19 @@ async function createApp(): Promise<INestApplication> {
   return app;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}
+
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
 describe.skipIf(!databaseUrl)("wallet PostgreSQL persistence", () => {
   let app: INestApplication | null = null;
   let pool: Pool;
   let database: DatabaseService;
+  let sessions: SessionsService;
   let wallet: WalletService;
   let users: UsersService;
 
@@ -60,6 +72,7 @@ describe.skipIf(!databaseUrl)("wallet PostgreSQL persistence", () => {
     const currentApp = await createApp();
     app = currentApp;
     database = currentApp.get(DatabaseService);
+    sessions = currentApp.get(SessionsService);
     wallet = currentApp.get(WalletService);
     users = currentApp.get(UsersService);
     await users.upsertSteamUser({
@@ -68,6 +81,110 @@ describe.skipIf(!databaseUrl)("wallet PostgreSQL persistence", () => {
       responseNonce: "2026-07-28T10:00:00Znonce",
       steamId64: "76561198000000003",
     });
+    await users.upsertSteamUser({
+      claimedIdentifier: "https://steamcommunity.com/openid/id/76561198000000004",
+      providerEndpoint: "https://steamcommunity.com/openid/login",
+      responseNonce: "2026-07-28T10:00:01Znonce",
+      steamId64: "76561198000000004",
+    });
+  });
+
+  it("projects the current user's posted Coins operation history without internal metadata", async () => {
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 100_000,
+      idempotencyKey: "topup-wallet-history",
+      reason: "arc_pay_top_up_capture",
+    });
+    const order = await pool.query<{ id: string }>(
+      `
+        INSERT INTO orders (user_id, idempotency_key, request_hash, status, total_coin_minor, recipient_snapshots)
+        VALUES ($1, 'checkout-wallet-history', 'hash-wallet-history', 'fulfilled', 35_000, '[]'::jsonb)
+        RETURNING id
+      `,
+      [userId],
+    );
+    const orderId = order.rows[0]?.id;
+    if (orderId === undefined) throw new Error("Expected order id");
+    await database.transaction(async (client) => {
+      await wallet.createHold(client, {
+        userId,
+        orderId,
+        amountCoinMinor: 35_000,
+        reason: "checkout",
+      });
+    });
+    await wallet.settleOrderHold({
+      userId,
+      orderId,
+      captureCoinMinor: 35_000,
+      idempotencyKey: "settle-wallet-history",
+      reason: "fulfillment_terminal",
+    });
+    await wallet.creditUser({
+      userId: "user_76561198000000004",
+      amountCoinMinor: 999_000,
+      idempotencyKey: "other-user-history",
+      reason: "test",
+    });
+    await pool.query(
+      `
+        UPDATE wallet_transactions
+        SET created_at = CASE idempotency_key
+          WHEN 'topup-wallet-history' THEN '2026-07-29T08:00:00.000Z'::timestamptz
+          WHEN 'settle-wallet-history' THEN '2026-07-29T09:00:00.000Z'::timestamptz
+          ELSE created_at
+        END
+      `,
+    );
+
+    const session = await sessions.createSession(userId, null);
+
+    await request(app?.getHttpServer() as Parameters<typeof request>[0])
+      .get("/wallet/me/transactions")
+      .set("Cookie", `${CUSTOMER_SESSION_COOKIE}=${session.token}`)
+      .expect(200)
+      .expect(({ body }) => {
+        const responseBody = body as unknown;
+        expect(isRecord(responseBody)).toBe(true);
+        if (!isRecord(responseBody)) throw new Error("Wallet transactions response body is not an object.");
+        expect(isUnknownArray(responseBody.transactions)).toBe(true);
+        if (!isUnknownArray(responseBody.transactions)) throw new Error("Wallet transactions are not an array.");
+        expect(responseBody.transactions).toHaveLength(2);
+        const [purchase, topUp] = responseBody.transactions;
+        expect(isRecord(purchase)).toBe(true);
+        expect(isRecord(topUp)).toBe(true);
+        if (!isRecord(purchase) || typeof purchase.id !== "string") throw new Error("Purchase transaction id is not a string.");
+        if (!isRecord(topUp) || typeof topUp.id !== "string") throw new Error("Top-up transaction id is not a string.");
+        expect(purchase.id).toMatch(/^[0-9a-f-]{36}$/);
+        expect(topUp.id).toMatch(/^[0-9a-f-]{36}$/);
+        expect(responseBody).toEqual({
+          transactions: [
+            {
+              amountCoinMinor: 35_000,
+              balanceAfterCoinMinor: 65_000,
+              createdAt: "2026-07-29T09:00:00.000Z",
+              direction: "debit",
+              id: purchase.id,
+              orderId,
+              reason: "purchase",
+              status: "completed",
+            },
+            {
+              amountCoinMinor: 100_000,
+              balanceAfterCoinMinor: 100_000,
+              createdAt: "2026-07-29T08:00:00.000Z",
+              direction: "credit",
+              id: topUp.id,
+              reason: "top_up",
+              status: "completed",
+            },
+          ],
+        });
+        expect(JSON.stringify(responseBody)).not.toContain("idempotency");
+        expect(JSON.stringify(responseBody)).not.toContain("request");
+        expect(JSON.stringify(responseBody)).not.toContain("999000");
+      });
   });
 
   it("rejects an idempotent credit replay with different financial terms", async () => {

@@ -168,4 +168,47 @@ describe("OpenAPI contract", () => {
     expect(item?.properties?.unitPriceCoinMinor?.type).toBe("integer");
     expect(item?.properties?.actions).toBeDefined();
   });
+
+  it("documents backend-owned wallet transaction history", async () => {
+    const document = JSON.parse(await createOpenApiJson()) as {
+      paths: {
+        "/wallet/me/transactions"?: {
+          get?: {
+            responses?: {
+              "200"?: {
+                content?: {
+                  "application/json"?: {
+                    schema?: {
+                      properties?: {
+                        transactions?: {
+                          items?: {
+                            required?: string[];
+                            properties?: {
+                              amountCoinMinor?: { type?: string };
+                              balanceAfterCoinMinor?: { type?: string };
+                              direction?: { enum?: string[] };
+                              reason?: { enum?: string[] };
+                              status?: { enum?: string[] };
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+
+    const item = document.paths["/wallet/me/transactions"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.transactions?.items;
+    expect(item?.required).toEqual(["amountCoinMinor", "balanceAfterCoinMinor", "createdAt", "direction", "id", "reason", "status"]);
+    expect(item?.properties?.amountCoinMinor?.type).toBe("integer");
+    expect(item?.properties?.balanceAfterCoinMinor?.type).toBe("integer");
+    expect(item?.properties?.direction?.enum).toEqual(["credit", "debit"]);
+    expect(item?.properties?.reason?.enum).toEqual(["top_up", "purchase"]);
+    expect(item?.properties?.status?.enum).toEqual(["completed"]);
+  });
 });
