@@ -30,7 +30,7 @@ export type AuthReturnPath =
   | "/account/steam?returnTo=%2Fcart"
   | `/balance/top-up?${string}`;
 export const MOCK_EMAIL_CODE = "482913";
-const STEAM_OPENID_RETURN_PATHS = new Set(["/", "/cart", "/checkout", "/account", "/account/steam"]);
+const STEAM_OPENID_RETURN_PATHS = new Set(["/", "/cart", "/checkout", "/balance/top-up", "/account", "/account/steam"]);
 
 export function validateEmail(value: string) {
   const normalized = value.trim();
@@ -143,7 +143,13 @@ export function createAccountAuthReturnPath(pathname: string, nestedReturnTo: st
     : accountPath;
 }
 
-export function buildSteamAuthStartUrl(returnTo: AuthReturnPath | string | null) {
+function defaultApiBaseUrl(): string | null {
+  return process.env.NEXT_PUBLIC_API_BASE_URL
+    ?? process.env.VAULT_API_BASE_URL
+    ?? null;
+}
+
+export function buildSteamAuthStartUrl(returnTo: AuthReturnPath | string | null, apiBaseUrl = defaultApiBaseUrl()) {
   let pathname = "/account";
   if (typeof returnTo === "string") {
     try {
@@ -155,7 +161,10 @@ export function buildSteamAuthStartUrl(returnTo: AuthReturnPath | string | null)
       pathname = "/account";
     }
   }
-  return `/auth/steam/start?returnTo=${encodeURIComponent(pathname)}`;
+  const path = `/auth/steam/start?returnTo=${encodeURIComponent(pathname)}`;
+  if (!apiBaseUrl) return path;
+  const base = new URL(apiBaseUrl);
+  return new URL(path, base.origin).toString();
 }
 
 export function sanitizeAuthReturnPath(value: AuthSearchValue): AuthReturnPath | null {

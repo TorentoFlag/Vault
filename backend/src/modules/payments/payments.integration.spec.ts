@@ -40,6 +40,16 @@ function fakeWebhookSignature(payload: unknown): string {
   return createHmac("sha256", fakeWebhookSecret).update(stableJson(payload), "utf8").digest("hex");
 }
 
+function arcPayWebhookSignature(rawBody: string, eventId: string, timestamp: string, secret: string): string {
+  const signature = createHmac("sha256", secret)
+    .update(Buffer.concat([
+      Buffer.from(`${eventId}.${timestamp}.`, "utf8"),
+      Buffer.from(rawBody, "utf8"),
+    ]))
+    .digest("hex");
+  return `t=${timestamp},v1=${signature}`;
+}
+
 function requireCreatedTopUpResponse(value: unknown): CreatedTopUpResponse {
   if (
     value !== null &&
@@ -62,7 +72,7 @@ async function createApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
   }).compile();
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication({ rawBody: true });
   await app.init();
   return app;
 }
@@ -342,10 +352,11 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     await writeFile(secretFile, "sk_test_vault_real_checkout\n", "utf8");
     process.env.ARC_PAY_PROVIDER_MODE = "real";
     process.env.ARC_PAY_SECRET_KEY_FILE = secretFile;
-    process.env.ARC_PAY_PUBLIC_ORIGIN = "https://vault.example";
+    process.env.ARC_PAY_PUBLIC_ORIGIN = "https://hkdk.events/source-id";
     const providerRequests: Array<{ input: string; init: RequestInit }> = [];
     globalThis.fetch = (input, init) => {
-      providerRequests.push({ input: fetchInputUrl(input), init: init ?? {} });
+      const requestInit: RequestInit = init ?? {};
+      providerRequests.push({ input: fetchInputUrl(input), init: requestInit });
       return Promise.resolve(new Response(JSON.stringify({
         id: "019f7841-4b12-7a2f-a42b-5c3a72e3b277",
         url: "https://checkout.arcpay.space/sessions/019f7841",
@@ -401,9 +412,9 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
         method: "sbp",
         payment_mode: "h2h",
       }],
-      success_url: "https://vault.example/balance/top-up?payment=success",
-      fail_url: "https://vault.example/balance/top-up?payment=failed",
-      cancel_url: "https://vault.example/balance/top-up?payment=cancelled",
+      success_url: "https://hkdk.events/source-id/balance/top-up?payment=success",
+      fail_url: "https://hkdk.events/source-id/balance/top-up?payment=failed",
+      cancel_url: "https://hkdk.events/source-id/balance/top-up?payment=cancelled",
     });
     await expect(wallet.getBalance(userId)).resolves.toEqual({
       postedCoinMinor: 0,
@@ -480,6 +491,230 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
       status: "failed",
       error_code: "ARC_PAY_CHECKOUT_CREATE_FAILED",
       idempotency_key_is_uuid: true,
+    });
+  });
+
+  it("credits Coins from a verified real Arc Pay captured webhook and deduplicates retries", async () => {
+    await app?.close();
+    app = null;
+    tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-webhook-"));
+    const secretFile = join(tempDir, "secret-key");
+    const webhookSecretFile = join(tempDir, "webhook-secret");
+    const webhookSecret = "vault-real-webhook-secret";
+    await writeFile(secretFile, "sk_test_vault_real_checkout\n", "utf8");
+    await writeFile(webhookSecretFile, webhookSecret, "utf8");
+    process.env.ARC_PAY_PROVIDER_MODE = "real";
+    process.env.ARC_PAY_SECRET_KEY_FILE = secretFile;
+    process.env.ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE = webhookSecretFile;
+    process.env.ARC_PAY_PUBLIC_ORIGIN = "https://hkdk.events/source-id";
+    const providerCheckoutSessionId = "019f7841-4b12-7a2f-a42b-5c3a72e3b277";
+    const providerPaymentId = "019facd9-9e3f-730f-9180-8a43c1499df7";
+    let createdTopUpId = "";
+    globalThis.fetch = (input) => {
+      const url = fetchInputUrl(input);
+      if (url.endsWith(`/payments/${providerPaymentId}`)) {
+        return Promise.resolve(new Response(JSON.stringify({
+          id: providerPaymentId,
+          status: "captured",
+          amount: 100_000,
+          currency: "RUB",
+          external_id: createdTopUpId,
+          metadata: {
+            vault_top_up_id: createdTopUpId,
+          },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        id: providerCheckoutSessionId,
+        url: "https://checkout.arcpay.space/sessions/019f7841",
+      }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }));
+    };
+
+    const currentApp = await createApp();
+    app = currentApp;
+    sessions = currentApp.get(SessionsService);
+    users = currentApp.get(UsersService);
+    wallet = currentApp.get(WalletService);
+    await users.upsertSteamUser({
+      claimedIdentifier: `https://steamcommunity.com/openid/id/${steamId64}`,
+      providerEndpoint: "https://steamcommunity.com/openid/login",
+      responseNonce: "2026-07-28T11:10:00Znonce",
+      steamId64,
+    });
+    const session = await sessions.createSession(userId, null);
+    const csrfToken = sessions.createCsrfToken(session.token);
+
+    const created = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/top-up/sessions")
+      .set("Cookie", `${CUSTOMER_SESSION_COOKIE}=${session.token}`)
+      .set("x-csrf-token", csrfToken)
+      .set("idempotency-key", "topup-session-real-webhook")
+      .send({ coinAmountMinor: 150_000 })
+      .expect(200);
+    const createdBody = requireCreatedTopUpResponse(created.body);
+    createdTopUpId = createdBody.id;
+    expect(createdBody.checkoutUrl).toBe("https://checkout.arcpay.space/sessions/019f7841");
+
+    const eventId = "019f7841-9265-7a53-82e7-39a81dd568ff";
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const webhookBody = JSON.stringify({
+      event_id: eventId,
+      event_type: "payment.captured",
+      created_at: "2026-07-28T11:20:00.000Z",
+      tenant_id: "019f7841-ef75-77f1-b4bb-36f556684c5a",
+      environment: "sandbox",
+      livemode: false,
+      data: {
+        payment_id: providerPaymentId,
+        amount: 100_000,
+        captured_amount: 100_000,
+        currency: "RUB",
+        payment_method: "sbp",
+      },
+    });
+    const signature = arcPayWebhookSignature(webhookBody, eventId, timestamp, webhookSecret);
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/webhooks/arc-pay")
+      .set("content-type", "application/json")
+      .set("webhook-id", eventId)
+      .set("webhook-timestamp", timestamp)
+      .set("webhook-signature", signature)
+      .send(webhookBody)
+      .expect(200, { status: "processed" });
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/webhooks/arc-pay")
+      .set("content-type", "application/json")
+      .set("webhook-id", eventId)
+      .set("webhook-timestamp", timestamp)
+      .set("webhook-signature", signature)
+      .send(webhookBody)
+      .expect(200, { status: "duplicate" });
+
+    await expect(wallet.getBalance(userId)).resolves.toEqual({
+      postedCoinMinor: 150_000,
+      heldCoinMinor: 0,
+      availableCoinMinor: 150_000,
+    });
+  });
+
+  it("marks a Hosted Checkout top-up failed from a verified real Arc Pay declined webhook", async () => {
+    await app?.close();
+    app = null;
+    tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-declined-"));
+    const secretFile = join(tempDir, "secret-key");
+    const webhookSecretFile = join(tempDir, "webhook-secret");
+    const webhookSecret = "vault-real-webhook-secret";
+    await writeFile(secretFile, "sk_test_vault_real_checkout\n", "utf8");
+    await writeFile(webhookSecretFile, webhookSecret, "utf8");
+    process.env.ARC_PAY_PROVIDER_MODE = "real";
+    process.env.ARC_PAY_SECRET_KEY_FILE = secretFile;
+    process.env.ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE = webhookSecretFile;
+    process.env.ARC_PAY_PUBLIC_ORIGIN = "https://hkdk.events/source-id";
+    const providerCheckoutSessionId = "019f7841-4b12-7a2f-a42b-5c3a72e3b277";
+    const providerPaymentId = "019facd9-9e3f-730f-9180-8a43c1499df7";
+    let createdTopUpId = "";
+    globalThis.fetch = (input) => {
+      const url = fetchInputUrl(input);
+      if (url.endsWith(`/payments/${providerPaymentId}`)) {
+        return Promise.resolve(new Response(JSON.stringify({
+          id: providerPaymentId,
+          status: "declined",
+          amount: 100_000,
+          currency: "RUB",
+          external_id: createdTopUpId,
+          metadata: {
+            vault_top_up_id: createdTopUpId,
+          },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        id: providerCheckoutSessionId,
+        url: "https://checkout.arcpay.space/sessions/019f7841",
+      }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }));
+    };
+
+    const currentApp = await createApp();
+    app = currentApp;
+    sessions = currentApp.get(SessionsService);
+    users = currentApp.get(UsersService);
+    wallet = currentApp.get(WalletService);
+    await users.upsertSteamUser({
+      claimedIdentifier: `https://steamcommunity.com/openid/id/${steamId64}`,
+      providerEndpoint: "https://steamcommunity.com/openid/login",
+      responseNonce: "2026-07-28T11:10:00Znonce",
+      steamId64,
+    });
+    const session = await sessions.createSession(userId, null);
+    const csrfToken = sessions.createCsrfToken(session.token);
+
+    const created = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/top-up/sessions")
+      .set("Cookie", `${CUSTOMER_SESSION_COOKIE}=${session.token}`)
+      .set("x-csrf-token", csrfToken)
+      .set("idempotency-key", "topup-session-real-declined")
+      .send({ coinAmountMinor: 150_000 })
+      .expect(200);
+    const createdBody = requireCreatedTopUpResponse(created.body);
+    createdTopUpId = createdBody.id;
+
+    const eventId = "019facdb-b116-7434-b27c-debea8fb1c27";
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const webhookBody = JSON.stringify({
+      event_id: eventId,
+      event_type: "payment.declined",
+      created_at: "2026-07-28T11:20:00.000Z",
+      tenant_id: "019f7841-ef75-77f1-b4bb-36f556684c5a",
+      environment: "sandbox",
+      livemode: false,
+      data: {
+        payment_id: providerPaymentId,
+        amount: 100_000,
+        currency: "RUB",
+        decline_code: "expired_card",
+      },
+    });
+    const signature = arcPayWebhookSignature(webhookBody, eventId, timestamp, webhookSecret);
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/webhooks/arc-pay")
+      .set("content-type", "application/json")
+      .set("webhook-id", eventId)
+      .set("webhook-timestamp", timestamp)
+      .set("webhook-signature", signature)
+      .send(webhookBody)
+      .expect(200, { status: "processed" });
+
+    const persisted = await pool.query<{ payment_status: string; provider_status: string; webhook_status: string }>(
+      `
+        SELECT
+          (SELECT status FROM top_up_payments WHERE id = $1) AS payment_status,
+          (SELECT provider_status FROM top_up_payments WHERE id = $1) AS provider_status,
+          (SELECT status FROM payment_webhook_events WHERE provider_event_id = $2) AS webhook_status
+      `,
+      [createdBody.id, eventId],
+    );
+    expect(persisted.rows[0]).toEqual({
+      payment_status: "failed",
+      provider_status: "declined",
+      webhook_status: "processed",
+    });
+    await expect(wallet.getBalance(userId)).resolves.toEqual({
+      postedCoinMinor: 0,
+      heldCoinMinor: 0,
+      availableCoinMinor: 0,
     });
   });
 });

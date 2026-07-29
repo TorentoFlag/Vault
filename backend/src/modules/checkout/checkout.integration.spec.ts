@@ -47,6 +47,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     if (app) await app.close();
     await pool.query(`
       TRUNCATE
+        fulfillment_commands,
         cart_items,
         carts,
         order_lines,
@@ -62,6 +63,9 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
         users
       RESTART IDENTITY
     `);
+    await pool.query(
+      "DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = 'Desert Eagle | Printstream (Minimal Wear)'",
+    );
     await pool.query(
       "UPDATE catalog_products SET price_coin_minor = 318000 WHERE slug = 'desert-eagle-printstream'",
     );
@@ -138,6 +142,95 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
       [order.id],
     );
     expect(persisted.rows[0]).toEqual({ line_count: "2", hold_count: "1" });
+  });
+
+  it("creates pending SIH fulfillment commands atomically with order lines", async () => {
+    await users.saveSteamTradeCredential(userId, { partner: "39734273", token: "secretToken" });
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 393_000,
+      idempotencyKey: "topup-credit-fulfillment-outbox",
+      reason: "test-credit",
+    });
+
+    const order = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-fulfillment-outbox",
+      items: [
+        { productSlug: "desert-eagle-printstream", quantity: 1 },
+        { productSlug: "steam-top-up-500-rub", quantity: 1, recipient: { steamLogin: "vault_sandbox_user" } },
+      ],
+    });
+
+    const commands = await pool.query<{
+      provider: string;
+      command_type: string;
+      status: string;
+      idempotency_key: string;
+      payload_snapshot: {
+        orderId: string;
+        orderLineId: string;
+        productSlug: string;
+        recipientSnapshot: unknown;
+      };
+      product_slug: string;
+    }>(
+      `
+        SELECT
+          fulfillment_commands.provider,
+          fulfillment_commands.command_type,
+          fulfillment_commands.status,
+          fulfillment_commands.idempotency_key,
+          fulfillment_commands.payload_snapshot,
+          order_lines.product_slug
+        FROM fulfillment_commands
+        JOIN order_lines ON order_lines.id = fulfillment_commands.order_line_id
+        WHERE fulfillment_commands.order_id = $1
+        ORDER BY order_lines.line_index ASC
+      `,
+      [order.id],
+    );
+
+    expect(commands.rows).toHaveLength(2);
+    expect(commands.rows.map((command) => ({
+      provider: command.provider,
+      commandType: command.command_type,
+      status: command.status,
+      productSlug: command.product_slug,
+    }))).toEqual([
+      {
+        provider: "sih",
+        commandType: "sih_skin_purchase",
+        status: "pending",
+        productSlug: "desert-eagle-printstream",
+      },
+      {
+        provider: "sih",
+        commandType: "sih_steam_refill",
+        status: "pending",
+        productSlug: "steam-top-up-500-rub",
+      },
+    ]);
+    expect(new Set(commands.rows.map((command) => command.idempotency_key)).size).toBe(2);
+    expect(commands.rows[0]?.idempotency_key).toContain(order.id);
+    expect(commands.rows[0]?.payload_snapshot).toMatchObject({
+      orderId: order.id,
+      productSlug: "desert-eagle-printstream",
+      recipientSnapshot: {
+        kind: "steam-trade",
+        steamId64,
+        steamTradePartnerAccountId: "39734273",
+      },
+    });
+    expect(commands.rows[1]?.payload_snapshot).toMatchObject({
+      orderId: order.id,
+      productSlug: "steam-top-up-500-rub",
+      recipientSnapshot: {
+        kind: "steam-refill",
+        steamLogin: "vault_sandbox_user",
+      },
+    });
+    expect(JSON.stringify(commands.rows)).not.toContain("secretToken");
   });
 
   it("does not create an order or hold when available Coins are insufficient", async () => {

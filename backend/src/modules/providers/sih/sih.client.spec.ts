@@ -22,7 +22,7 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
     ...init,
     headers,
-    status: 200,
+    status: init.status ?? 200,
   });
 }
 
@@ -196,6 +196,163 @@ describe("SihClient", () => {
       cashbackUsd: 0n,
       paymentAmountRub: 5_000n,
       status: "success",
+    });
+  });
+
+  it("creates SIH skin purchase orders with customId and exact micro-USD amount", async () => {
+    const seen: { apiKey: string | null; body: unknown; path: string } = {
+      apiKey: null,
+      body: undefined,
+      path: "",
+    };
+    const fetcher: SihFetch = (input, init) => {
+      const url = new URL(input.toString());
+      if (typeof init?.body !== "string") throw new Error("Expected JSON request body");
+      seen.path = url.pathname;
+      seen.apiKey = new Headers(init.headers).get("apikey");
+      seen.body = JSON.parse(init.body) as unknown;
+      return Promise.resolve(jsonResponse({
+        balance: 99.123456,
+        id: 42,
+        success: true,
+      }));
+    };
+    const client = new SihClient({
+      apiKeyFile: await apiKeyFile(),
+      fetcher,
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 4_096,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    const created = await client.createSkinOrder({
+      amountMicrousd: 1_011_000n,
+      customId: "12504cd4-f6f0-4396-b577-9bf22746ca94",
+      game: "cs2",
+      marketHashName: "AK-47 | Redline (Field-Tested)",
+      steamId64: "76561198027391269",
+      test: true,
+      tradeToken: "SSH18JS",
+    });
+
+    expect(seen).toEqual({
+      apiKey: "test-secret-key",
+      path: "/api/v1/create-order",
+      body: {
+        amount: 1.011,
+        appId: 730,
+        customId: "12504cd4-f6f0-4396-b577-9bf22746ca94",
+        item: "AK-47 | Redline (Field-Tested)",
+        steamId: "76561198027391269",
+        test: true,
+        token: "SSH18JS",
+      },
+    });
+    expect(created).toEqual({
+      providerBalanceMicrousd: 99_123_456n,
+      providerOrderId: "42",
+      projection: "create_acknowledgement",
+    });
+  });
+
+  it("returns the existing SIH order when create-order replays a duplicate customId", async () => {
+    const customId = "12504cd4-f6f0-4396-b577-9bf22746ca94";
+    const fetcher: SihFetch = () => Promise.resolve(jsonResponse({
+      error: "custom id already exists",
+      order: {
+        amount: 1.011,
+        customId,
+        id: 42,
+        item: "AK-47 | Redline (Field-Tested)",
+        status: "processing",
+        steamId: "76561198027391269",
+      },
+      success: false,
+    }, { status: 409 }));
+    const client = new SihClient({
+      apiKeyFile: await apiKeyFile(),
+      fetcher,
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 4_096,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    await expect(client.createSkinOrder({
+      amountMicrousd: 1_011_000n,
+      customId,
+      game: "cs2",
+      marketHashName: "AK-47 | Redline (Field-Tested)",
+      steamId64: "76561198027391269",
+      test: true,
+      tradeToken: "SSH18JS",
+    })).resolves.toMatchObject({
+      amountMicrousd: 1_011_000n,
+      customId,
+      marketHashName: "AK-47 | Redline (Field-Tested)",
+      providerOrderId: "42",
+      projection: "order",
+      status: "processing",
+    });
+  });
+
+  it("looks up SIH orders by customId with trade protection details", async () => {
+    const requests: Array<{ path: string; customId: string | null }> = [];
+    const customId = "12504cd4-f6f0-4396-b577-9bf22746ca94";
+    const fetcher: SihFetch = (input) => {
+      const url = new URL(input.toString());
+      requests.push({ path: url.pathname, customId: url.searchParams.get("customId") });
+      return Promise.resolve(jsonResponse({
+        order: {
+          amount: 1.011,
+          customId,
+          expectedAmount: 1.01,
+          id: 43,
+          item: "AK-47 | Redline (Field-Tested)",
+          protection: {
+            error: "rollback user",
+            rollbackAmount: 1.01,
+            rollbackAt: 1783468800,
+            status: "failed",
+          },
+          sender: {
+            offerId: 44,
+          },
+          status: "finished",
+          steamId: "76561198027391269",
+        },
+        success: true,
+      }));
+    };
+    const client = new SihClient({
+      apiKeyFile: await apiKeyFile(),
+      fetcher,
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 4_096,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    const order = await client.getSkinOrder({ customId });
+
+    expect(requests).toEqual([{ path: "/api/v1/get-order", customId }]);
+    expect(order).toEqual({
+      amountMicrousd: 1_011_000n,
+      customId,
+      expectedAmountMicrousd: 1_010_000n,
+      marketHashName: "AK-47 | Redline (Field-Tested)",
+      offerId: "44",
+      projection: "order",
+      protection: {
+        error: "rollback user",
+        rollbackAmountMicrousd: 1_010_000n,
+        rollbackAt: new Date("2026-07-08T00:00:00.000Z"),
+        status: "failed",
+      },
+      providerOrderId: "43",
+      status: "finished",
+      steamId64: "76561198027391269",
     });
   });
 

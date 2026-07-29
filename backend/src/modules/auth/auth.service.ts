@@ -31,10 +31,27 @@ type StoredAttempt = {
   consumedAt: number | null;
 };
 
-const SAFE_RETURN_PATHS = new Set(["/", "/cart", "/checkout", "/account", "/account/steam"]);
+const SAFE_RETURN_PATHS = new Set(["/", "/cart", "/checkout", "/balance/top-up", "/account", "/account/steam"]);
 
 function sanitizeReturnTo(value: unknown): string {
   return typeof value === "string" && SAFE_RETURN_PATHS.has(value) ? value : "/account";
+}
+
+function redirectReturnToFrontend(returnTo: string): string {
+  const frontendOrigin = process.env.PUBLIC_FRONTEND_ORIGIN?.trim();
+  if (!frontendOrigin) return returnTo;
+  const origin = new URL(frontendOrigin);
+  if (
+    (origin.protocol !== "https:" && origin.protocol !== "http:") ||
+    origin.username !== "" ||
+    origin.password !== "" ||
+    origin.pathname !== "/" ||
+    origin.search !== "" ||
+    origin.hash !== ""
+  ) {
+    throw new Error("PUBLIC_FRONTEND_ORIGIN must be a valid HTTP(S) origin.");
+  }
+  return new URL(returnTo, origin).toString();
 }
 
 @Injectable()
@@ -113,7 +130,7 @@ export class AuthService {
     const session = await this.sessions.createSession(user.id, presentedSessionToken);
 
     return {
-      returnTo: attempt.returnTo,
+      returnTo: redirectReturnToFrontend(attempt.returnTo),
       sessionToken: session.token,
       sessionMaximumAgeSeconds: session.maximumAgeSeconds,
     };

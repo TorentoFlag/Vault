@@ -5,7 +5,7 @@ import { UsersService, type CustomerUser } from "../users/users.service";
 import { CsrfGuard } from "./csrf.guard";
 import { CurrentCustomerContext } from "./current-customer";
 import { CustomerSessionGuard } from "./customer-session.guard";
-import { clearSecureCookie, CUSTOMER_SESSION_COOKIE, parseExactCookie } from "./session-cookies";
+import { clearCustomerSessionCookie, CUSTOMER_SESSION_COOKIE, parseExactCookie } from "./session-cookies";
 import { SessionsService, type CurrentCustomer } from "./sessions.service";
 
 @Controller("session")
@@ -39,6 +39,6 @@ export class SessionsController {
   async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response): Promise<void> {
     const token = parseExactCookie(request.headers.cookie, CUSTOMER_SESSION_COOKIE);
     if (token !== null) await this.sessions.revoke(token);
-    response.setHeader("Set-Cookie", clearSecureCookie(CUSTOMER_SESSION_COOKIE));
+    response.setHeader("Set-Cookie", clearCustomerSessionCookie());
   }
 }

@@ -7,6 +7,9 @@ export type AppConfig = {
   port: number;
   databaseUrl?: string;
   redisUrl?: string;
+  steam: {
+    webApiKeyFile?: string;
+  };
   arcPay: {
     environment: ArcPayEnvironment;
     providerMode: ArcPayProviderMode;
@@ -108,19 +111,19 @@ function parseHttpOrHttpsBaseUrl(name: string, value: string | undefined): strin
   return url.toString().replace(/\/$/, "");
 }
 
-function parseHttpsOrigin(name: string, value: string | undefined): string | undefined {
+function parseHttpsPublicBaseUrl(name: string, value: string | undefined): string | undefined {
   const normalized = optionalString(value);
   if (normalized === undefined) return undefined;
   let url: URL;
   try {
     url = new URL(normalized);
   } catch {
-    throw new Error(`${name} must be a valid HTTPS origin.`);
+    throw new Error(`${name} must be a valid HTTPS base URL.`);
   }
-  if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.pathname !== "/" || url.search !== "" || url.hash !== "") {
-    throw new Error(`${name} must be a valid HTTPS origin.`);
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.search !== "" || url.hash !== "") {
+    throw new Error(`${name} must be a valid HTTPS base URL.`);
   }
-  return url.origin;
+  return url.toString().replace(/\/$/, "");
 }
 
 function parseCorsOrigins(value: string | undefined): string[] {
@@ -137,8 +140,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const arcPaySecretKeyFile = optionalString(env.ARC_PAY_SECRET_KEY_FILE);
   const arcPayProviderMode = parseArcPayProviderMode(nodeEnv, env.ARC_PAY_PROVIDER_MODE);
   const arcPayFakeCheckoutBaseUrl = parseHttpOrHttpsBaseUrl("ARC_PAY_FAKE_CHECKOUT_BASE_URL", env.ARC_PAY_FAKE_CHECKOUT_BASE_URL);
-  const arcPayPublicOrigin = parseHttpsOrigin("ARC_PAY_PUBLIC_ORIGIN", env.ARC_PAY_PUBLIC_ORIGIN);
+  const arcPayPublicOrigin = parseHttpsPublicBaseUrl("ARC_PAY_PUBLIC_ORIGIN", env.ARC_PAY_PUBLIC_ORIGIN);
   const arcPayWebhookSigningSecretFile = optionalString(env.ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE);
+  const steamWebApiKeyFile = optionalString(env.STEAM_WEB_API_KEY_FILE);
   const sihApiKeyFile = optionalString(env.SIH_API_KEY_FILE);
 
   return {
@@ -146,6 +150,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     port: parsePort(env.PORT),
     ...(databaseUrl ? { databaseUrl } : {}),
     ...(redisUrl ? { redisUrl } : {}),
+    steam: {
+      ...(steamWebApiKeyFile ? { webApiKeyFile: steamWebApiKeyFile } : {}),
+    },
     arcPay: {
       environment: parseArcPayEnvironment(env.ARC_PAY_ENVIRONMENT),
       providerMode: arcPayProviderMode,

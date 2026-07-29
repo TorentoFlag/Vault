@@ -8,6 +8,36 @@ export type SihSupplierItem = {
   priceMicrousd: bigint;
 };
 
+export type SihSkinOrderStatus = "created" | "processing" | "sent" | "finished" | "failed" | "penalized";
+
+export type SihSkinProtection = {
+  error: "rollback user" | "rollback supplier" | null;
+  rollbackAmountMicrousd: bigint | null;
+  rollbackAt: Date | null;
+  status: "processing" | "finished" | "failed";
+};
+
+export type SihSkinOrder = {
+  amountMicrousd: bigint;
+  customId: string;
+  expectedAmountMicrousd: bigint | null;
+  marketHashName: string;
+  offerId: string | null;
+  projection: "order";
+  protection: SihSkinProtection | null;
+  providerOrderId: string;
+  status: SihSkinOrderStatus;
+  steamId64: string;
+};
+
+export type SihCreateSkinOrderResult =
+  | {
+    projection: "create_acknowledgement";
+    providerBalanceMicrousd: bigint | null;
+    providerOrderId: string;
+  }
+  | SihSkinOrder;
+
 export type SihSteamCheckResult = {
   transactionId: string;
 };

@@ -392,6 +392,59 @@ export const orderLines = pgTable(
   ],
 );
 
+export const fulfillmentCommands = pgTable(
+  "fulfillment_commands",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id").notNull(),
+    orderLineId: uuid("order_line_id").notNull(),
+    provider: text("provider").notNull(),
+    commandType: text("command_type").notNull(),
+    status: text("status").default("pending").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    payloadSnapshot: jsonb("payload_snapshot").default({}).notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    availableAt: timestamp("available_at", { withTimezone: true }).defaultNow().notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    lastErrorCode: text("last_error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("fulfillment_commands_order_line_uidx").on(table.orderLineId),
+    uniqueIndex("fulfillment_commands_provider_idempotency_uidx").on(table.provider, table.idempotencyKey),
+    index("fulfillment_commands_order_idx").on(table.orderId),
+    index("fulfillment_commands_status_available_idx").on(table.status, table.availableAt),
+  ],
+);
+
+export const fulfillmentProviderAttempts = pgTable(
+  "fulfillment_provider_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    commandId: uuid("command_id").notNull(),
+    orderId: uuid("order_id").notNull(),
+    orderLineId: uuid("order_line_id").notNull(),
+    provider: text("provider").notNull(),
+    operation: text("operation").notNull(),
+    status: text("status").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    providerOrderId: text("provider_order_id"),
+    requestSnapshot: jsonb("request_snapshot").default({}).notNull(),
+    responseSnapshot: jsonb("response_snapshot").default({}).notNull(),
+    errorCode: text("error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("fulfillment_provider_attempts_provider_idempotency_uidx").on(table.provider, table.idempotencyKey),
+    index("fulfillment_provider_attempts_command_idx").on(table.commandId),
+    index("fulfillment_provider_attempts_order_idx").on(table.orderId),
+    index("fulfillment_provider_attempts_status_idx").on(table.status),
+  ],
+);
+
 export const walletHolds = pgTable(
   "wallet_holds",
   {

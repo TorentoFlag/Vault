@@ -111,6 +111,9 @@ type ApiClientOptions = {
 };
 
 function defaultBaseOrigin(): string {
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+    ?? process.env.VAULT_API_BASE_URL;
+  if (configuredBaseUrl) return new URL(configuredBaseUrl).origin;
   return typeof window === "undefined" ? "http://localhost" : window.location.origin;
 }
 

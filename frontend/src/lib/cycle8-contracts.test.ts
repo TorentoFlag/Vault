@@ -14,6 +14,11 @@ test("auth commits immediately from click-bound provider intents and cannot log 
   assert.match(provider, /createMarketplaceMutationOrigin\(persistedStateRef\.current\)[\s\S]{0,500}activateSession/);
 });
 
+test("query-driven auth and top-up pages are not forced static", () => {
+  assert.doesNotMatch(source("src/app/auth/page.tsx"), /dynamic\s*=\s*["']force-static["']/);
+  assert.doesNotMatch(source("src/app/balance/top-up/page.tsx"), /dynamic\s*=\s*["']force-static["']/);
+});
+
 test("skin cart gates Steam and Trade URL before balance top-up", () => {
   const cart = source("src/features/cart/CartScreen.tsx");
   const steamGate = cart.indexOf("requiresSteam && !hasSteam");

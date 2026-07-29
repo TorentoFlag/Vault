@@ -9,15 +9,20 @@ import {
   retryAfterMs,
 } from "./sih-http";
 import {
+  buildSihCreateOrderBody,
+  parseSihCreateSkinOrder,
   parseSihItems,
   parseSihMinimumItem,
+  parseSihSkinOrder,
   parseSihSteamCheck,
   parseSihSteamPay,
   sihAppId,
 } from "./sih-contract";
 import type {
   SihCatalogGame,
+  SihCreateSkinOrderResult,
   SihFailureDisposition,
+  SihSkinOrder,
   SihSteamCheckResult,
   SihSteamPayResult,
   SihSupplierItem,
@@ -41,6 +46,20 @@ export type GetItemsCommand = {
 export type GetMinimumItemCommand = {
   game: SihCatalogGame;
   marketHashName: string;
+};
+
+export type CreateSkinOrderCommand = {
+  amountMicrousd: bigint;
+  customId: string;
+  game: SihCatalogGame;
+  marketHashName: string;
+  steamId64: string;
+  test: boolean;
+  tradeToken: string;
+};
+
+export type GetSkinOrderCommand = {
+  customId: string;
 };
 
 export type CheckSteamAccountCommand = {
@@ -98,7 +117,7 @@ export class SihClient {
 
   constructor(private readonly options: SihClientOptions) {
     validateOptions(options);
-    this.fetcher = options.fetcher ?? fetch;
+    this.fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
   }
 
   async getItems(command: GetItemsCommand): Promise<SihSupplierItem[]> {
@@ -123,6 +142,31 @@ export class SihClient {
     const payload = await this.getJson(url, "market");
     try {
       return parseSihMinimumItem(payload, command.game, marketHashName);
+    } catch (error) {
+      throw new SihProviderError("retryable", "SIH_CONTRACT_SUSPECT", undefined, { cause: error });
+    }
+  }
+
+  async createSkinOrder(command: CreateSkinOrderCommand): Promise<SihCreateSkinOrderResult> {
+    const response = await this.postJsonWithStatus(
+      new URL("/api/v1/create-order", this.options.marketBaseUrl),
+      "market",
+      buildSihCreateOrderBody(command),
+      [200, 409],
+    );
+    try {
+      return parseSihCreateSkinOrder(response.body, response.status, command.customId);
+    } catch (error) {
+      throw new SihProviderError("retryable", "SIH_CONTRACT_SUSPECT", undefined, { cause: error });
+    }
+  }
+
+  async getSkinOrder(command: GetSkinOrderCommand): Promise<SihSkinOrder> {
+    const url = new URL("/api/v1/get-order", this.options.marketBaseUrl);
+    url.searchParams.set("customId", command.customId);
+    const payload = await this.getJson(url, "market");
+    try {
+      return parseSihSkinOrder(payload, command.customId);
     } catch (error) {
       throw new SihProviderError("retryable", "SIH_CONTRACT_SUSPECT", undefined, { cause: error });
     }
@@ -170,17 +214,24 @@ export class SihClient {
   }
 
   private async getJson(url: URL, header: "market" | "steam-refill"): Promise<string> {
-    return this.requestJson(url, header, { method: "GET" });
+    return (await this.requestJson(url, header, { method: "GET" })).body;
   }
 
   private async postJson(url: URL, header: "market" | "steam-refill", body: unknown): Promise<string> {
-    return this.requestJson(url, header, {
+    return (await this.requestJson(url, header, {
       body: JSON.stringify(body),
       method: "POST",
-    });
+    })).body;
   }
 
-  private async requestJson(url: URL, header: "market" | "steam-refill", init: RequestInit): Promise<string> {
+  private async postJsonWithStatus(url: URL, header: "market" | "steam-refill", body: string, acceptedStatuses: readonly number[]): Promise<{ body: string; status: number }> {
+    return this.requestJson(url, header, {
+      body,
+      method: "POST",
+    }, acceptedStatuses);
+  }
+
+  private async requestJson(url: URL, header: "market" | "steam-refill", init: RequestInit, acceptedStatuses: readonly number[] = [200]): Promise<{ body: string; status: number }> {
     const apiKey = await this.loadApiKey();
     let response: Response;
     try {
@@ -197,7 +248,7 @@ export class SihClient {
     } catch (error) {
       throw new SihProviderError("retryable", "SIH_NETWORK_UNAVAILABLE", undefined, { cause: error });
     }
-    if (!response.ok || response.status !== 200) {
+    if (!acceptedStatuses.includes(response.status)) {
       const classified = classifyHttpFailure(response.status);
       await cancelBody(response);
       throw new SihProviderError(classified.disposition, classified.code, retryAfterMs(response));
@@ -206,7 +257,10 @@ export class SihClient {
       await cancelBody(response);
       throw new SihProviderError("retryable", "SIH_CONTRACT_SUSPECT");
     }
-    return readBoundedBody(response, this.options.maximumBodyBytes);
+    return {
+      body: await readBoundedBody(response, this.options.maximumBodyBytes),
+      status: response.status,
+    };
   }
 
   private async loadApiKey(): Promise<string> {

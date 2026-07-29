@@ -64,6 +64,20 @@
       "when": 1785285200000,
       "tag": "0008_payments_top_up",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785313861000,
+      "tag": "0009_fulfillment_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785315956000,
+      "tag": "0010_fulfillment_provider_attempts",
+      "breakpoints": true
     }
   ]
 }

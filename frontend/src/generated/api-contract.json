@@ -1372,9 +1372,18 @@
         "operationId": "PaymentsWebhookController_handleArcPayWebhook",
         "parameters": [
           {
-            "name": "X-Arc-Pay-Signature",
+            "name": "Webhook-Timestamp",
             "in": "header",
-            "description": "Webhook signature. Current deterministic local fake mode uses HMAC-SHA256 over canonical JSON.",
+            "description": "Unix timestamp included in the Arc Pay signed payload.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Webhook-Signature",
+            "in": "header",
+            "description": "Arc Pay HMAC signature in `t=<unix>,v1=<hex>` format. Fake mode also accepts X-Arc-Pay-Signature.",
             "required": true,
             "schema": {
               "type": "string"

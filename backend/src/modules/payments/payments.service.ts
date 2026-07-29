@@ -9,6 +9,7 @@ import { APP_CONFIG } from "../../config/app-config.module";
 import type { AppConfig } from "../../config/app-config";
 import { ArcPayClient } from "../providers/arc-pay/arc-pay.client";
 import { verifyFakeArcPayWebhookSignature } from "../providers/arc-pay/arc-pay-fake-webhook";
+import { verifyArcPayWebhookSignature } from "../providers/arc-pay/arc-pay-webhook-signature";
 import { WalletService } from "../wallet/wallet.service";
 
 type Queryable = {
@@ -44,7 +45,9 @@ export type TopUpSessionDto = {
 
 export type HandleArcPayWebhookCommand = {
   providerEventId?: string;
+  rawBody?: Buffer;
   signature?: string;
+  timestamp?: string;
   payload: unknown;
 };
 
@@ -78,7 +81,9 @@ type TopUpPaymentWebhookRow = {
 type NormalizedArcPayWebhook = {
   providerEventId: string;
   eventType: string;
+  providerPaymentId: string | null;
   providerSessionId: string;
+  topUpPaymentId: string | null;
   providerStatus: string;
   amountMinor: number;
   currency: string;
@@ -114,7 +119,7 @@ function fiatMinorForCoinMinor(coinAmountMinor: number): number {
 }
 
 function topUpReturnUrls(publicOrigin: string): { cancelUrl: string; failUrl: string; successUrl: string } {
-  const base = new URL("/balance/top-up", publicOrigin);
+  const base = new URL("balance/top-up", publicOrigin.endsWith("/") ? publicOrigin : `${publicOrigin}/`);
   const success = new URL(base);
   success.searchParams.set("payment", "success");
   const fail = new URL(base);
@@ -171,27 +176,59 @@ function optionalIntegerField(record: Record<string, unknown>, ...keys: string[]
   return undefined;
 }
 
+function optionalRecordField(record: Record<string, unknown>, ...keys: string[]): Record<string, unknown> {
+  for (const key of keys) {
+    const value = record[key];
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  }
+  return {};
+}
+
 function normalizeArcPayWebhook(providerEventIdHeader: string | undefined, payload: unknown): NormalizedArcPayWebhook {
   const root = asRecord(payload);
   const payment = root.payment !== null && typeof root.payment === "object" && !Array.isArray(root.payment)
     ? root.payment as Record<string, unknown>
     : {};
+  const data = root.data !== null && typeof root.data === "object" && !Array.isArray(root.data)
+    ? root.data as Record<string, unknown>
+    : {};
   const providerEventId = providerEventIdHeader ?? optionalStringField(root, "eventId", "event_id", "id");
   const eventType = optionalStringField(root, "type", "event", "event_type");
   const providerSessionId = optionalStringField(root, "checkoutSessionId", "checkout_session_id")
-    ?? optionalStringField(payment, "checkoutSessionId", "checkout_session_id", "checkout_session", "metadata_top_up_session");
-  const providerStatus = optionalStringField(root, "status") ?? optionalStringField(payment, "status");
-  const amountMinor = optionalIntegerField(root, "amount") ?? optionalIntegerField(payment, "amount", "captured_amount");
-  const currency = optionalStringField(root, "currency") ?? optionalStringField(payment, "currency");
+    ?? optionalStringField(payment, "checkoutSessionId", "checkout_session_id", "checkout_session", "metadata_top_up_session")
+    ?? optionalStringField(data, "checkoutSessionId", "checkout_session_id");
+  const providerPaymentId = optionalStringField(data, "payment_id")
+    ?? optionalStringField(payment, "payment_id", "id");
+  const providerStatus = optionalStringField(root, "status")
+    ?? optionalStringField(payment, "status")
+    ?? eventType?.replace(/^payment\./, "");
+  const amountMinor = optionalIntegerField(root, "amount")
+    ?? optionalIntegerField(payment, "amount", "captured_amount")
+    ?? optionalIntegerField(data, "captured_amount", "amount");
+  const currency = optionalStringField(root, "currency")
+    ?? optionalStringField(payment, "currency")
+    ?? optionalStringField(data, "currency");
+  const metadata = {
+    ...optionalRecordField(root, "metadata"),
+    ...optionalRecordField(payment, "metadata"),
+    ...optionalRecordField(data, "metadata"),
+  };
+  const topUpPaymentId = optionalStringField(root, "external_id", "externalId", "vault_top_up_id")
+    ?? optionalStringField(payment, "external_id", "externalId", "vault_top_up_id")
+    ?? optionalStringField(data, "external_id", "externalId", "vault_top_up_id")
+    ?? optionalStringField(metadata, "vault_top_up_id", "top_up_payment_id");
 
-  if (!providerEventId || !eventType || !providerSessionId || !providerStatus || amountMinor === undefined || !currency) {
+  const normalizedProviderSessionId = providerSessionId ?? providerPaymentId;
+  if (!providerEventId || !eventType || !normalizedProviderSessionId || !providerStatus || amountMinor === undefined || !currency) {
     throw new BadRequestException("Arc Pay webhook payload is missing required payment fields");
   }
 
   return {
     providerEventId,
     eventType,
-    providerSessionId,
+    providerPaymentId: providerPaymentId ?? null,
+    providerSessionId: normalizedProviderSessionId,
+    topUpPaymentId: topUpPaymentId ?? null,
     providerStatus,
     amountMinor,
     currency: currency.toUpperCase(),
@@ -563,7 +600,7 @@ export class PaymentsService {
   }
 
   async handleArcPayWebhook(command: HandleArcPayWebhookCommand): Promise<PaymentWebhookResultDto> {
-    if (this.config.arcPay.providerMode !== "fake") {
+    if (this.config.arcPay.providerMode === "disabled") {
       throw new ServiceUnavailableException("Arc Pay webhook verification is not configured");
     }
     const signingSecretFile = this.config.arcPay.webhookSigningSecretFile;
@@ -571,12 +608,41 @@ export class PaymentsService {
       throw new ServiceUnavailableException("Arc Pay webhook signing secret is not configured");
     }
     const signingSecret = (await readFile(signingSecretFile, "utf8")).trim();
-    if (!verifyFakeArcPayWebhookSignature(command.payload, command.signature, signingSecret)) {
-      throw new UnauthorizedException("Arc Pay webhook signature is invalid");
+    if (this.config.arcPay.providerMode === "fake") {
+      if (!verifyFakeArcPayWebhookSignature(command.payload, command.signature, signingSecret)) {
+        throw new UnauthorizedException("Arc Pay webhook signature is invalid");
+      }
+    } else {
+      if (!verifyArcPayWebhookSignature({
+        secret: signingSecret,
+        ...(command.providerEventId === undefined ? {} : { eventId: command.providerEventId }),
+        ...(command.rawBody === undefined ? {} : { rawBody: command.rawBody }),
+        ...(command.signature === undefined ? {} : { signature: command.signature }),
+        ...(command.timestamp === undefined ? {} : { timestamp: command.timestamp }),
+      })) {
+        throw new UnauthorizedException("Arc Pay webhook signature is invalid");
+      }
     }
 
-    const event = normalizeArcPayWebhook(command.providerEventId, command.payload);
+    const event = await this.enrichArcPayWebhook(normalizeArcPayWebhook(command.providerEventId, command.payload));
     return this.processVerifiedArcPayWebhook(event);
+  }
+
+  private async enrichArcPayWebhook(event: NormalizedArcPayWebhook): Promise<NormalizedArcPayWebhook> {
+    if (this.config.arcPay.providerMode !== "real" || event.topUpPaymentId !== null || event.providerPaymentId === null) {
+      return event;
+    }
+    let payment: Awaited<ReturnType<ArcPayClient["getPayment"]>>;
+    try {
+      payment = await this.arcPay.getPayment(event.providerPaymentId);
+    } catch (error) {
+      throw new ServiceUnavailableException(providerErrorCode(error));
+    }
+    const topUpPaymentId = payment.metadata.vault_top_up_id ?? payment.externalId;
+    return {
+      ...event,
+      topUpPaymentId: topUpPaymentId ?? null,
+    };
   }
 
   private async processVerifiedArcPayWebhook(event: NormalizedArcPayWebhook): Promise<PaymentWebhookResultDto> {
@@ -610,11 +676,14 @@ export class PaymentsService {
             fiat_currency
           FROM top_up_payments
           WHERE provider = $1
-            AND provider_session_id = $2
+            AND (
+              provider_session_id = $2
+              OR ($3::text IS NOT NULL AND id::text = $3)
+            )
           LIMIT 1
           FOR UPDATE
         `,
-        [TOP_UP_PROVIDER, event.providerSessionId],
+        [TOP_UP_PROVIDER, event.providerSessionId, event.topUpPaymentId],
       );
       const topUpPayment = payment.rows[0];
       if (topUpPayment === undefined) {

@@ -5,6 +5,7 @@ import {
   clearSecureCookie,
   CUSTOMER_SESSION_COOKIE,
   parseExactCookie,
+  secureCustomerSessionCookie,
   secureCookie,
   STEAM_AUTH_BROWSER_COOKIE,
 } from "../sessions/session-cookies";
@@ -40,7 +41,7 @@ export class AuthController {
     const sessionToken = parseExactCookie(request.headers.cookie, CUSTOMER_SESSION_COOKIE);
     const completed = await this.auth.completeSteam(rawQuery(request), browserToken, sessionToken);
     response.setHeader("Set-Cookie", [
-      secureCookie(CUSTOMER_SESSION_COOKIE, completed.sessionToken, completed.sessionMaximumAgeSeconds),
+      secureCustomerSessionCookie(completed.sessionToken, completed.sessionMaximumAgeSeconds),
       clearSecureCookie(STEAM_AUTH_BROWSER_COOKIE),
     ]);
     return { url: completed.returnTo, statusCode: 302 };

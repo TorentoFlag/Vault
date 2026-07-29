@@ -76,6 +76,12 @@ describe("AuthModule", () => {
     expect(sessionCookieHeader).toContain("__Host-vault_session=");
     expect(sessionCookieHeader).toContain("HttpOnly");
     expect(sessionCookieHeader).toContain("Secure");
+    expect(sessionCookieHeader).toContain("SameSite=None");
+
+    const authCookieRaw = start.headers["set-cookie"] as unknown;
+    const authCookieHeader = Array.isArray(authCookieRaw) ? authCookieRaw.join("\n") : String(authCookieRaw);
+    expect(authCookieHeader).toContain("__Host-vault_steam_auth=");
+    expect(authCookieHeader).toContain("SameSite=Lax");
 
     const sessionCookie = setCookie(callback, "__Host-vault_session");
     const me = await request(httpServer)
@@ -112,6 +118,30 @@ describe("AuthModule", () => {
       .get("/session/me")
       .set("Cookie", sessionCookie)
       .expect(401);
+  });
+
+  it("redirects completed Steam auth to the configured frontend origin", async () => {
+    const originalFrontendOrigin = process.env.PUBLIC_FRONTEND_ORIGIN;
+    process.env.PUBLIC_FRONTEND_ORIGIN = "https://app.vault.example";
+    try {
+      const start = await request(httpServer)
+        .get("/auth/steam/start")
+        .query({ returnTo: "/balance/top-up" })
+        .expect(302);
+
+      const callback = await request(httpServer)
+        .get(`/auth/steam/callback?${callbackQuery(start.headers.location as string).replace("2026-07-27T10%3A00%3A00Znonce", "2026-07-27T10%3A00%3A01Znonce")}`)
+        .set("Cookie", setCookie(start, "__Host-vault_steam_auth"))
+        .expect(302);
+
+      expect(callback.headers.location).toBe("https://app.vault.example/balance/top-up");
+    } finally {
+      if (originalFrontendOrigin === undefined) {
+        delete process.env.PUBLIC_FRONTEND_ORIGIN;
+      } else {
+        process.env.PUBLIC_FRONTEND_ORIGIN = originalFrontendOrigin;
+      }
+    }
   });
 
   it("stores Steam Trade URL as write-only account state behind session and CSRF", async () => {

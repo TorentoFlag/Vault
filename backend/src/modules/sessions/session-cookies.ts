@@ -5,6 +5,7 @@ export const STEAM_AUTH_BROWSER_COOKIE = "__Host-vault_steam_auth";
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const CSRF_PATTERN = /^(v1)\.([A-Za-z0-9_-]{43})$/;
+type CookieSameSite = "Lax" | "None";
 
 export function createOpaqueToken(): string {
   return randomBytes(32).toString("base64url");
@@ -28,12 +29,25 @@ export function parseExactCookie(cookieHeader: string | undefined, name: string)
   return values[0] as string;
 }
 
-export function secureCookie(name: string, value: string, maximumAgeSeconds: number): string {
-  return `${name}=${value}; Max-Age=${maximumAgeSeconds}; Path=/; HttpOnly; Secure; SameSite=Lax`;
+export function secureCookie(
+  name: string,
+  value: string,
+  maximumAgeSeconds: number,
+  sameSite: CookieSameSite = "Lax",
+): string {
+  return `${name}=${value}; Max-Age=${maximumAgeSeconds}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`;
 }
 
-export function clearSecureCookie(name: string): string {
-  return `${name}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`;
+export function clearSecureCookie(name: string, sameSite: CookieSameSite = "Lax"): string {
+  return `${name}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=${sameSite}`;
+}
+
+export function secureCustomerSessionCookie(value: string, maximumAgeSeconds: number): string {
+  return secureCookie(CUSTOMER_SESSION_COOKIE, value, maximumAgeSeconds, "None");
+}
+
+export function clearCustomerSessionCookie(): string {
+  return clearSecureCookie(CUSTOMER_SESSION_COOKIE, "None");
 }
 
 export function createCsrfToken(sessionToken: string, secret: Buffer): string {

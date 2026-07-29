@@ -36,6 +36,36 @@ test("buildApiUrl keeps API calls same-origin by default and accepts configured 
   );
 });
 
+test("API client uses configured backend origin by default", async () => {
+  const original = process.env.NEXT_PUBLIC_API_BASE_URL;
+  process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.vault.example/base";
+  try {
+    const requestedUrls: string[] = [];
+    const client = createApiClient({
+      fetch: async (input) => {
+        requestedUrls.push(input.toString());
+        return new Response(JSON.stringify({
+          id: "user_76561198000000001",
+          steam: { connected: true, steamId64: "76561198000000001" },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+
+    await client.getCurrentUser();
+
+    assert.deepEqual(requestedUrls, ["https://api.vault.example/session/me"]);
+  } finally {
+    if (original === undefined) {
+      delete process.env.NEXT_PUBLIC_API_BASE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_API_BASE_URL = original;
+    }
+  }
+});
+
 test("API client sends credentials and CSRF for state-changing requests", async () => {
   const calls: RequestInit[] = [];
   const client = createApiClient({

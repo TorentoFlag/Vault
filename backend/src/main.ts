@@ -7,7 +7,7 @@ import { loadAppConfig } from "./config/app-config";
 
 export async function bootstrap(): Promise<void> {
   const config = loadAppConfig(process.env);
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
 
   if (config.corsOrigins.length > 0) {
     app.enableCors({ origin: config.corsOrigins, credentials: true });

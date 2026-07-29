@@ -152,15 +152,15 @@
 - [x] Implement double-entry Coins wallet journal, active holds, and available balance projection.
 - [ ] Implement wallet reconciliation.
 - [x] Implement top-up/payment aggregate with immutable displayed terms. Current status: `/payments/top-up/sessions` creates idempotent Arc Pay top-up intents and provider attempts; disabled mode returns `provider_configuration_required`, while deterministic fake mode returns `checkout_pending` plus a fake checkout URL.
-- [ ] Implement Arc Pay checkout-session creation, method discovery, real webhook verification, status/reconciliation, refund and chargeback adapters. Current status: real Hosted Checkout creation exists for sandbox keys and sends SBP-only `payment_methods`; method discovery, real webhook verification, status/reconciliation, refunds, and chargebacks remain.
-- [ ] Implement webhook inbox, status polling, idempotent posting, and reconciliation. Current status: fake signed webhook inbox and idempotent wallet posting exist; status polling and real reconciliation remain.
+- [ ] Implement Arc Pay checkout-session creation, method discovery, real webhook verification, status/reconciliation, refund and chargeback adapters. Current status: real Hosted Checkout creation exists for sandbox keys and sends SBP-only `payment_methods`; real webhook signature verification exists for `Webhook-Id`, `Webhook-Timestamp`, and `Webhook-Signature`; method discovery, status/reconciliation, refunds, and chargebacks remain.
+- [ ] Implement webhook inbox, status polling, idempotent posting, and reconciliation. Current status: signed webhook inbox and idempotent wallet posting exist for fake and real Arc Pay signature formats; real Hosted Checkout webhooks are correlated by signed `data.payment_id` plus `GET /payments/{id}` lookup to recover `external_id`/`metadata.vault_top_up_id`; status polling and full reconciliation remain.
 - [ ] Implement top-up UI with active rate, Coins credited, fiat amount, accepted legal checkbox, and disabled payment until consent. Current status: UI shows active rate/fiat amount, requires legal consent, creates backend top-up sessions, redirects when backend returns a checkout URL, and shows provider-configuration state when no checkout URL exists.
 - [x] Ensure browser return never credits wallet by itself.
 
 **Acceptance:**
 - [ ] Wallet tests prove balanced immutable journal and idempotency.
 - [ ] Arc Pay adapter contract tests cover idempotency, method discovery, checkout creation, webhook verification, status mapping, unknown events, refunds/chargebacks, and retries.
-- [ ] Real Arc Pay sandbox/test transaction evidence is recorded before enabling Coins top-up. Current blocker: Vault needs a public HTTPS backend origin/webhook address before real webhook delivery and crediting can be accepted.
+- [ ] Real Arc Pay sandbox/test transaction evidence is recorded before enabling Coins top-up. Current status: Vault has sandbox Hookdeck endpoints for local Hosted Checkout return URLs and webhook delivery; signed Hookdeck delivery into local backend was accepted and posted Coins in test DB. A real paid Arc Pay sandbox transaction still needs provider-side payment completion evidence before release.
 
 ### Phase 6: Cart and Checkout
 
@@ -179,7 +179,7 @@
 - [x] Expand each quantity unit into an independent order line.
 - [x] Snapshot nonsecret Steam Trade recipient and Steam refill recipient data immutably at checkout.
 - [x] Create wallet holds atomically with orders.
-- [ ] Create fulfillment outbox commands atomically after fulfillment module exists.
+- [x] Create fulfillment outbox commands atomically after fulfillment module exists. Current status: checkout creates one pending SIH fulfillment command per persisted order line in the same database transaction as order creation and wallet hold creation; worker execution and provider reconciliation remain Phase 7.
 - [ ] Migrate frontend cart/checkout from localStorage purchase records to backend API. Current status: backend-cookie sessions use `/wallet/me`, `/cart`, `/checkout/cart`, `/orders/me`, and backend-owned Steam Trade URL readiness; unauthenticated/demo frontend auth still falls back to local concept state until Phase 3 account/session migration is complete.
 
 **Acceptance:**
@@ -196,9 +196,9 @@
 - Modify: `frontend/src/features/account/*`
 
 **Tasks:**
-- [ ] Implement SIH create-order/get-order/get-orders flow with `customId` idempotency.
-- [ ] Persist supplier attempt before provider call.
-- [ ] Treat 200 create as acknowledgement, not delivery.
+- [ ] Implement SIH create-order/get-order/get-orders flow with `customId` idempotency. Current status: `create-order` and `get-order` client methods are implemented with deterministic contract coverage; batch `get-orders` remains.
+- [ ] Persist supplier attempt before provider call. Current status: checkout persists provider-agnostic fulfillment commands first, and skin submission processing creates a `started` provider attempt before the SIH `create-order` call; Steam refill attempts remain.
+- [x] Treat 200 create as acknowledgement, not delivery. Current status: skin `create-order` 200 marks the attempt/command as submitted and leaves delivery/reconciliation to later status processing.
 - [ ] Reconcile statuses `created`, `processing`, `sent`, `finished`, `failed`, `penalized`.
 - [ ] Handle protection `processing`, `finished`, `failed`, `rollback user`, `rollback supplier`.
 - [ ] Keep provider status regressions from corrupting local monotonic customer-facing state.

@@ -19,6 +19,15 @@ export type HostedCheckoutResult = {
   checkoutUrl: string;
 };
 
+export type ArcPayPayment = {
+  id: string;
+  status: string;
+  amount: number;
+  currency: string;
+  externalId: string | null;
+  metadata: Record<string, string>;
+};
+
 export type ArcPayClientOptions = {
   apiKeyFile: string;
   baseUrl?: string;
@@ -61,6 +70,31 @@ function parseCheckoutResponse(value: unknown): HostedCheckoutResult {
     return {
       providerSessionId: (value as { id: string }).id,
       checkoutUrl: (value as { url: string }).url,
+    };
+  }
+  throw new Error("ARC_PAY_RESPONSE_INVALID");
+}
+
+function parsePaymentResponse(value: unknown): ArcPayPayment {
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as { id?: unknown }).id === "string" &&
+    typeof (value as { status?: unknown }).status === "string" &&
+    Number.isSafeInteger((value as { amount?: unknown }).amount) &&
+    typeof (value as { currency?: unknown }).currency === "string"
+  ) {
+    const metadata = (value as { metadata?: unknown }).metadata;
+    const externalId = (value as { external_id?: unknown }).external_id;
+    return {
+      id: (value as { id: string }).id,
+      status: (value as { status: string }).status,
+      amount: (value as { amount: number }).amount,
+      currency: (value as { currency: string }).currency.toUpperCase(),
+      externalId: typeof externalId === "string" && externalId.trim().length > 0 ? externalId.trim() : null,
+      metadata: metadata !== null && typeof metadata === "object" && !Array.isArray(metadata)
+        ? Object.fromEntries(Object.entries(metadata).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+        : {},
     };
   }
   throw new Error("ARC_PAY_RESPONSE_INVALID");
@@ -120,5 +154,23 @@ export class ArcPayClient {
     });
     if (!response.ok) throw new Error("ARC_PAY_CHECKOUT_CREATE_FAILED");
     return parseCheckoutResponse(body);
+  }
+
+  async getPayment(paymentId: string): Promise<ArcPayPayment> {
+    assertUuid("ARC_PAY_PAYMENT_ID", paymentId);
+    const apiKey = (await readFile(this.options.apiKeyFile, "utf8")).trim();
+    if (!apiKey.startsWith("sk_test_")) throw new Error("ARC_PAY_SECRET_KEY_INVALID");
+
+    const response = await this.fetch(`${this.baseUrl}/payments/${paymentId}`, {
+      method: "GET",
+      headers: {
+        "authorization": `Bearer ${apiKey}`,
+      },
+    });
+    const body = await response.json().catch(() => {
+      throw new Error("ARC_PAY_RESPONSE_INVALID");
+    });
+    if (!response.ok) throw new Error("ARC_PAY_PAYMENT_LOOKUP_FAILED");
+    return parsePaymentResponse(body);
   }
 }

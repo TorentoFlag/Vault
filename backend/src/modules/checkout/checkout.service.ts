@@ -6,6 +6,7 @@ import { DatabaseService } from "../../common/database/database.service";
 import { normalizeIdempotencyKey } from "../../common/idempotency/idempotency-key";
 import { CatalogService } from "../catalog/catalog.service";
 import type { CatalogProductDto } from "../catalog/catalog.types";
+import { FulfillmentService, type FulfillmentOrderLineInput } from "../fulfillment/fulfillment.service";
 import { UsersService } from "../users/users.service";
 import { WalletInsufficientFundsError, WalletService } from "../wallet/wallet.service";
 
@@ -148,6 +149,7 @@ export class CheckoutService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(CatalogService) private readonly catalog: CatalogService,
+    @Inject(FulfillmentService) private readonly fulfillment: FulfillmentService,
     @Inject(UsersService) private readonly users: UsersService,
     @Inject(WalletService) private readonly wallet: WalletService,
   ) {}
@@ -195,8 +197,9 @@ export class CheckoutService {
         throw error;
       }
 
+      const persistedLines: FulfillmentOrderLineInput[] = [];
       for (const line of lines) {
-        await client.query(
+        const insertedLine = await client.query<{ id: string }>(
           `
             INSERT INTO order_lines (
               order_id,
@@ -211,6 +214,7 @@ export class CheckoutService {
               status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8::jsonb, 'held')
+            RETURNING id
           `,
           [
             orderId,
@@ -223,7 +227,18 @@ export class CheckoutService {
             JSON.stringify(line.recipientSnapshot),
           ],
         );
+        const lineId = insertedLine.rows[0]?.id;
+        if (lineId === undefined) throw new Error("CHECKOUT_ORDER_LINE_NOT_CREATED");
+        persistedLines.push({
+          id: lineId,
+          productSlug: line.productSlug,
+          kind: line.kind,
+          title: line.title,
+          unitPriceCoinMinor: line.unitPriceCoinMinor,
+          recipientSnapshot: line.recipientSnapshot,
+        });
       }
+      await this.fulfillment.enqueueOrderLineCommands(client, { orderId, lines: persistedLines });
 
       return this.loadOrder(client, orderId);
     });

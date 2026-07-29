@@ -34,7 +34,7 @@ Relevant API facts:
 - Mutating server-side operations require UUID-shaped `Idempotency-Key`; duplicate same-key/same-payload requests are retained for 72 hours, and same-key/different-payload requests conflict.
 - Checkout session request uses integer `amount` in minor units and `currency` such as `RUB`, `KZT`, or `UZS`.
 - Use `capture_mode: "one_stage"` for immediate capture.
-- `success_url`, `fail_url`, and `cancel_url` must be HTTPS URLs.
+- `success_url`, `fail_url`, and `cancel_url` must be HTTPS URLs; temporary Hookdeck acceptance URLs include the Hookdeck source id as a path prefix.
 - `payment_methods` must use method/mode pairs returned by `GET /payment-methods/available` for the same API key environment and shop configuration.
 - Environment is selected by API key prefix; do not send a separate environment field to create checkout.
 - Standard methods include `bank_card` and `sbp`, but actual availability must come from discovery for the active merchant/shop/environment.
@@ -48,6 +48,8 @@ Webhook facts:
 - Retries use exponential backoff up to 72 hours.
 - Webhook verification must happen before business processing.
 - Webhook delivery deduplicates by `Webhook-Id`; endpoint/tenant secrets are separate from API keys.
+- Hosted Checkout webhook events identify the resulting payment by `data.payment_id`, not by the checkout session id returned from `POST /checkout/sessions`.
+- For Hosted Checkout correlation, fetch `GET /payments/{payment_id}` after signature verification and before opening a database transaction; use the returned `external_id` or `metadata.vault_top_up_id` to match the Vault top-up record.
 
 Architecture implication:
 
@@ -55,7 +57,7 @@ Architecture implication:
 - Top-up amount is RUB kopecks at Arc Pay and Coins minor units in Vault's wallet journal.
 - The frontend shows active rate, Coins credited, and final RUB amount before redirecting to Arc Pay.
 - Browser return may show pending/success UI copy, but must not post Coins by itself.
-- Current real checkout implementation uses only `sbp/h2h` in the Arc Pay Hosted Checkout request, even if the Arc Pay shop also has card methods available.
+- Current real checkout implementation uses only `sbp/h2h` in the Arc Pay Hosted Checkout request, even if the Arc Pay shop also has card methods available. Card test credentials are not valid acceptance evidence for this SBP-only checkout path.
 - Current deterministic implementation includes `ARC_PAY_PROVIDER_MODE=fake` for local tests: it creates a fake checkout URL, accepts only a local HMAC-signed fake webhook, deduplicates by webhook id, validates amount/currency, and posts Coins through the wallet journal in the same database transaction as webhook processing. This is not real Arc Pay signature verification or acceptance evidence.
 
 ## BreenX findings, not selected
@@ -167,10 +169,11 @@ Architecture implication:
 
 - SIH skin purchase is a supplier fulfillment flow after Vault wallet hold/debit logic, not a direct customer payment flow.
 - SIH Steam Refill is the first-release Steam refill fulfillment path because Vault sells refill orders for internal Coins first, then fulfills them from project/provider balance.
-- Implemented Vault adapter scope: `get-items`, `get-min-item`, Steam `check`, and Steam `pay` are available as backend-only SIH client methods with file-backed `SIH_API_KEY_FILE`, request timeout, response byte bound, JSON content-type checks, sanitized provider errors, and integer normalized supplier amounts.
+- Implemented Vault adapter scope: `get-items`, `get-min-item`, skin `create-order`, skin `get-order`, Steam `check`, and Steam `pay` are available as backend-only SIH client methods with file-backed `SIH_API_KEY_FILE`, request timeout, response byte bound, JSON content-type checks, sanitized provider errors, and integer normalized supplier amounts. Skin `create-order` serializes integer micro-USD into the SIH decimal `amount` field at the adapter boundary, treats 200 as provider acknowledgement rather than delivery, and maps 409 duplicate `customId` responses to the existing provider order projection.
 - Implemented Vault sync persistence scope: `catalog_sync_runs` records promoted SIH snapshots and `supplier_listings` stores latest per-item supplier price, quantity, image, active flag, and observed freshness per `(supplier, game, market_hash_name)`.
 - Implemented Vault pricing scope: append-only `pricing_settings` selects active supplier pricing by scope and converts integer supplier microunits into Coins minor units with integer rate, markup, minimum, and rounding rules. Seed rates are development defaults until the final fixed commercial rate is approved.
 - Implemented Vault catalog quote scope: supplier-linked skin products use active `supplier_listings` prices converted through `pricing_settings` for public Coins quotes, while falling back to stored catalog prices when no active supplier listing exists.
+- Implemented Vault fulfillment submission scope: checkout creates one durable pending SIH command per order line, and the deterministic skin processor claims a pending skin command, creates a `started` provider attempt before the SIH network call, uses the attempt UUID as SIH `customId`, submits SIH `create-order`, and then marks the attempt and order line as submitted. This is deterministic fake-HTTP coverage, not real SIH test-order acceptance.
 - The adapter is not release acceptance by itself. Real SIH inventory/minimum acceptance is an opt-in integration test and must record only nonsecret evidence such as game, count, and hashed item identity.
 
 ## Resolved decisions

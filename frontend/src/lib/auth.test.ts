@@ -94,7 +94,14 @@ test("Steam auth start URL targets backend route with only backend-accepted retu
   assert.equal(buildSteamAuthStartUrl("/cart"), "/auth/steam/start?returnTo=%2Fcart");
   assert.equal(buildSteamAuthStartUrl("/checkout"), "/auth/steam/start?returnTo=%2Fcheckout");
   assert.equal(buildSteamAuthStartUrl("/account/steam?returnTo=%2Fcheckout"), "/auth/steam/start?returnTo=%2Faccount%2Fsteam");
-  assert.equal(buildSteamAuthStartUrl("/balance/top-up?returnTo=%2Fcart&requiredCoins=1000"), "/auth/steam/start?returnTo=%2Faccount");
+  assert.equal(buildSteamAuthStartUrl("/balance/top-up?returnTo=%2Fcart&requiredCoins=1000"), "/auth/steam/start?returnTo=%2Fbalance%2Ftop-up");
   assert.equal(buildSteamAuthStartUrl("https://evil.example"), "/auth/steam/start?returnTo=%2Faccount");
   assert.equal(buildSteamAuthStartUrl(null), "/auth/steam/start?returnTo=%2Faccount");
+});
+
+test("Steam auth start URL targets configured backend API origin", () => {
+  assert.equal(
+    buildSteamAuthStartUrl("/balance/top-up", "https://api.vault.example/base"),
+    "https://api.vault.example/auth/steam/start?returnTo=%2Fbalance%2Ftop-up",
+  );
 });

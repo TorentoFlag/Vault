@@ -9,13 +9,14 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { CartModule } from "./modules/cart/cart.module";
 import { CatalogModule } from "./modules/catalog/catalog.module";
 import { CheckoutModule } from "./modules/checkout/checkout.module";
+import { FulfillmentModule } from "./modules/fulfillment/fulfillment.module";
 import { HealthModule } from "./modules/health/health.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { WalletModule } from "./modules/wallet/wallet.module";
 
 @Module({
-  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AuthModule, CatalogModule, WalletModule, CartModule, CheckoutModule, OrdersModule, PaymentsModule],
+  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AuthModule, CatalogModule, WalletModule, CartModule, CheckoutModule, FulfillmentModule, OrdersModule, PaymentsModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
