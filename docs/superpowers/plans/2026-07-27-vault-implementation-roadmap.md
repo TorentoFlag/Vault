@@ -219,6 +219,7 @@
 - Create: `backend/src/modules/support/*`
 - Create: `backend/src/modules/admin/*`
 - Create: `docs/operations/*`
+- Created: `docs/operations/provider-acceptance.md`
 - Modify: `frontend/src/components/layout/SiteFooter.tsx`
 - Modify: `frontend/src/features/legal/*`
 - Modify: `frontend/src/features/support/*`
@@ -229,7 +230,7 @@
 - [ ] Ensure footer/document details match exactly.
 - [ ] Implement support ticket or mail handoff with clear operational behavior.
 - [ ] Implement minimal admin read models and reasoned recovery commands. Current status: `GET /admin/operations/overview` exposes token-gated, read-only, redacted queues for manual-review payments, problem orders, fulfillment commands, and unprocessed/rejected webhook events; `POST /admin/operations/payments/reconcile` runs Arc Pay pending top-up reconciliation as a reasoned, idempotent, audited command without direct balance/order overwrites; `POST /admin/operations/fulfillment/reconcile` runs submitted SIH skin status polling as a reasoned, idempotent, audited command without direct order/status overwrites. Other recovery commands remain unimplemented until their command/audit policies are written.
-- [ ] Add backup/restore, deployment, rollback, incident, reconciliation, and secret-rotation runbooks. Current status: deterministic commerce smoke runbook exists for Coins top-up, mixed checkout, SIH skin delivery, Steam refill delivery, and customer projections; it remains separate from live provider acceptance.
+- [ ] Add backup/restore, deployment, rollback, incident, reconciliation, and secret-rotation runbooks. Current status: deterministic commerce smoke runbook exists for Coins top-up, mixed checkout, SIH skin delivery, Steam refill delivery, and customer projections; provider acceptance runbook and executable readiness preflight exist for Steam OpenID, Arc Pay, SIH catalog, SIH skin test order, and SIH Steam refill gates; backup/restore/deployment/rollback/incident/secret-rotation runbooks remain.
 
 **Acceptance:**
 - [ ] Footer contains payment logos, legal identity, support email, work hours, Valve disclaimer, and legal links.
@@ -248,13 +249,13 @@
 - [ ] Add production-build Playwright gate with deterministic API fixtures.
 - [ ] Cover desktop/mobile home, catalog, product, auth, Steam settings, cart, checkout, top-up, account history, inventory, support, and legal routes.
 - [ ] Add accessibility checks for focus, keyboard, tap targets, landmarks, and contrast where practical.
-- [ ] Add provider acceptance runbooks that are explicitly separate from fixture E2E.
+- [x] Add provider acceptance runbooks that are explicitly separate from fixture E2E. Current status: `docs/operations/provider-acceptance.md` plus `npm --prefix backend run acceptance:readiness` define required env, blocked/ready gates, and redacted evidence rules.
 - [ ] Run final full backend/frontend verification and record skipped external gates.
 
 **Acceptance:**
 - [ ] Unit/type/lint/build gates pass.
 - [ ] Browser E2E passes on desktop and mobile.
-- [ ] Real provider gates required for release are recorded or explicitly blocked.
+- [ ] Real provider gates required for release are recorded or explicitly blocked. Current status: `acceptance:readiness` records blocked/ready state locally; current shell has no provider secret files or public HTTPS origins, so live provider acceptance remains blocked until supplied.
 - [ ] No customer-facing mock/local-only copy remains on real flows.
 
 ## Self-review

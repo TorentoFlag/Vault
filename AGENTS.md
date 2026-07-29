@@ -87,9 +87,10 @@ Run from the repository root:
 - Integration tests: `npm --prefix backend run test:integration`
 - Commerce smoke: `npm --prefix backend run smoke:commerce`
 - Reconcile pending Arc Pay top-ups: `npm --prefix backend run payments:reconcile -- --limit=20`
-- SIH sandbox catalog acceptance: `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run test:integration -- src/modules/providers/sih/sih.sandbox.integration.spec.ts`
+- Provider acceptance readiness: `npm --prefix backend run acceptance:readiness`
+- SIH sandbox catalog acceptance: `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run acceptance:sih-catalog`
 - Full gate: `npm --prefix backend run verify`
 - Dev dependencies: `docker compose -f compose.dev.yaml up -d --wait postgres redis`
 - Integration dependencies: `docker compose -f compose.dev.yaml --profile integration up -d --wait postgres-test redis-test`
 
-Never echo, commit, or paste `SIH_API_KEY_FILE` contents. SIH sandbox acceptance evidence may include only nonsecret counts, game ids, request ids, and hashed item identities.
+Never echo, commit, or paste `SIH_API_KEY_FILE` contents. SIH sandbox acceptance evidence may include only nonsecret counts, game ids, request ids, and hashed item identities. Run `acceptance:readiness` before live/sandbox provider acceptance and treat blocked gates as unreleased until provider evidence plus database proof exists.
