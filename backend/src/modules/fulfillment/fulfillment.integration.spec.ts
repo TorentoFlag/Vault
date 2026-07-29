@@ -231,4 +231,114 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     });
     expect(JSON.stringify(persisted.rows)).not.toContain("tradeToken");
   });
+
+  it("reconciles SIH sent status without regressing a sent line back to processing", async () => {
+    await users.saveSteamTradeCredential(userId, { partner: "39734273", token: "tradeToken" });
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 500_000,
+      idempotencyKey: "topup-credit-fulfillment-reconcile",
+      reason: "test-credit",
+    });
+    const order = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-fulfillment-reconcile",
+      items: [{ productSlug: "desert-eagle-printstream", quantity: 1 }],
+    });
+
+    globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify({ success: true, id: 42, balance: 99.123456 }), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    }));
+    await fulfillment.processNextPendingCommand({ skinTestMode: true });
+
+    const createAttempt = await pool.query<{ id: string }>(
+      "SELECT id FROM fulfillment_provider_attempts WHERE order_id = $1 AND operation = 'create_order'",
+      [order.id],
+    );
+    const customId = createAttempt.rows[0]?.id;
+    if (customId === undefined) throw new Error("Expected create-order attempt");
+
+    const providerStatuses = ["sent", "processing"] as const;
+    const providerRequests: Array<{ customId: string | null; path: string }> = [];
+    globalThis.fetch = (input) => {
+      const url = input instanceof URL
+        ? input
+        : new URL(typeof input === "string" ? input : input.url);
+      providerRequests.push({
+        customId: url.searchParams.get("customId"),
+        path: url.pathname,
+      });
+      const status = providerStatuses[Math.min(providerRequests.length - 1, providerStatuses.length - 1)];
+      return Promise.resolve(new Response(JSON.stringify({
+        order: {
+          amount: 1.011,
+          customId,
+          expectedAmount: 1.011,
+          id: 42,
+          item: "Desert Eagle | Printstream (Minimal Wear)",
+          sender: {
+            offerId: 123456,
+          },
+          status,
+          steamId: steamId64,
+        },
+        success: true,
+      }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      }));
+    };
+
+    const firstReconciliation = await fulfillment.reconcileNextSubmittedSkinCommand();
+    expect(firstReconciliation.status).toBe("reconciled");
+    if (firstReconciliation.status !== "reconciled") throw new Error("Expected reconciled result");
+    expect(firstReconciliation.commandId).toEqual(expect.any(String));
+    expect(firstReconciliation.providerStatus).toBe("sent");
+
+    const secondReconciliation = await fulfillment.reconcileNextSubmittedSkinCommand();
+    expect(secondReconciliation.status).toBe("reconciled");
+    if (secondReconciliation.status !== "reconciled") throw new Error("Expected reconciled result");
+    expect(secondReconciliation.commandId).toEqual(expect.any(String));
+    expect(secondReconciliation.providerStatus).toBe("processing");
+
+    expect(providerRequests).toEqual([
+      { customId, path: "/api/v1/get-order" },
+      { customId, path: "/api/v1/get-order" },
+    ]);
+    const persisted = await pool.query<{
+      command_status: string;
+      line_status: string;
+      lookup_attempts: string;
+      provider_statuses: string[];
+      response_snapshots: Array<Record<string, unknown>>;
+    }>(
+      `
+        SELECT
+          fulfillment_commands.status AS command_status,
+          order_lines.status AS line_status,
+          count(*) FILTER (WHERE fulfillment_provider_attempts.operation = 'get_order')::text AS lookup_attempts,
+          array_agg(fulfillment_provider_attempts.response_snapshot ->> 'status' ORDER BY fulfillment_provider_attempts.created_at)
+            FILTER (WHERE fulfillment_provider_attempts.operation = 'get_order') AS provider_statuses,
+          array_agg(fulfillment_provider_attempts.response_snapshot ORDER BY fulfillment_provider_attempts.created_at)
+            FILTER (WHERE fulfillment_provider_attempts.operation = 'get_order') AS response_snapshots
+        FROM fulfillment_commands
+        JOIN order_lines ON order_lines.id = fulfillment_commands.order_line_id
+        JOIN fulfillment_provider_attempts ON fulfillment_provider_attempts.command_id = fulfillment_commands.id
+        WHERE fulfillment_commands.order_id = $1
+        GROUP BY fulfillment_commands.status, order_lines.status
+      `,
+      [order.id],
+    );
+    expect(persisted.rows[0]).toMatchObject({
+      command_status: "submitted",
+      line_status: "supplier_sent",
+      lookup_attempts: "2",
+      provider_statuses: ["sent", "processing"],
+    });
+    expect(persisted.rows[0]?.response_snapshots[0]).toMatchObject({
+      offerId: "123456",
+      status: "sent",
+    });
+  });
 });

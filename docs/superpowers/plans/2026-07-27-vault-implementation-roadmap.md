@@ -199,9 +199,9 @@
 - [ ] Implement SIH create-order/get-order/get-orders flow with `customId` idempotency. Current status: `create-order` and `get-order` client methods are implemented with deterministic contract coverage; batch `get-orders` remains.
 - [ ] Persist supplier attempt before provider call. Current status: checkout persists provider-agnostic fulfillment commands first, and skin submission processing creates a `started` provider attempt before the SIH `create-order` call; Steam refill attempts remain.
 - [x] Treat 200 create as acknowledgement, not delivery. Current status: skin `create-order` 200 marks the attempt/command as submitted and leaves delivery/reconciliation to later status processing.
-- [ ] Reconcile statuses `created`, `processing`, `sent`, `finished`, `failed`, `penalized`.
+- [ ] Reconcile statuses `created`, `processing`, `sent`, `finished`, `failed`, `penalized`. Current status: deterministic reconciliation creates durable `get-order` attempts and persists `sent`/`processing` snapshots; `finished`, `failed`, and `penalized` terminal effects remain.
 - [ ] Handle protection `processing`, `finished`, `failed`, `rollback user`, `rollback supplier`.
-- [ ] Keep provider status regressions from corrupting local monotonic customer-facing state.
+- [ ] Keep provider status regressions from corrupting local monotonic customer-facing state. Current status: `sent -> processing` does not regress an already `supplier_sent` order line.
 - [ ] Implement inventory projection and only enable actions backed by real transitions.
 - [ ] Implement Steam refill fulfillment through SIH Steam Refill API.
 

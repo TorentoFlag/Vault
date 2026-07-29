@@ -5,7 +5,7 @@ import { DatabaseService } from "../../common/database/database.service";
 import type { CatalogProductDto } from "../catalog/catalog.types";
 import type { CheckoutRecipientSnapshot } from "../checkout/checkout.service";
 import { SihClient, SihProviderError } from "../providers/sih/sih.client";
-import type { SihCatalogGame, SihCreateSkinOrderResult } from "../providers/sih/sih.types";
+import type { SihCatalogGame, SihCreateSkinOrderResult, SihSkinOrder, SihSkinOrderStatus } from "../providers/sih/sih.types";
 import { UsersService } from "../users/users.service";
 
 type Queryable = {
@@ -35,6 +35,13 @@ type PendingSkinCommand = {
   userId: string;
 };
 
+type PendingSkinReconciliation = {
+  attemptId: string;
+  commandId: string;
+  customId: string;
+  orderLineId: string;
+};
+
 export type ProcessFulfillmentCommand = {
   skinTestMode: boolean;
 };
@@ -47,6 +54,16 @@ export type ProcessFulfillmentResult =
     commandId: string;
     providerOrderId: string;
     status: "submitted";
+  };
+
+export type ReconcileFulfillmentResult =
+  | {
+    status: "none";
+  }
+  | {
+    commandId: string;
+    providerStatus: SihSkinOrderStatus;
+    status: "reconciled";
   };
 
 function commandTypeForLine(line: FulfillmentOrderLineInput): FulfillmentCommandType {
@@ -132,6 +149,26 @@ export class FulfillmentService {
       commandId: pending.commandId,
       providerOrderId,
       status: "submitted",
+    };
+  }
+
+  async reconcileNextSubmittedSkinCommand(): Promise<ReconcileFulfillmentResult> {
+    const pending = await this.claimNextSubmittedSkinCommand();
+    if (pending === null) return { status: "none" };
+
+    let order: SihSkinOrder;
+    try {
+      order = await this.sih.getSkinOrder({ customId: pending.customId });
+    } catch (error) {
+      await this.markReconciliationFailed(pending, this.errorCode(error));
+      throw error;
+    }
+
+    await this.markSkinReconciled(pending, order);
+    return {
+      commandId: pending.commandId,
+      providerStatus: order.status,
+      status: "reconciled",
     };
   }
 
@@ -270,6 +307,162 @@ export class FulfillmentService {
       await client.query(
         "UPDATE order_lines SET status = 'supplier_submitted' WHERE id = $1",
         [pending.orderLineId],
+      );
+    });
+  }
+
+  private async claimNextSubmittedSkinCommand(): Promise<PendingSkinReconciliation | null> {
+    return this.database.transaction(async (client) => {
+      const claimed = await client.query<{
+        command_id: string;
+        custom_id: string;
+        order_id: string;
+        order_line_id: string;
+      }>(
+        `
+          SELECT
+            fulfillment_commands.id AS command_id,
+            fulfillment_commands.order_id,
+            fulfillment_commands.order_line_id,
+            create_attempt.id AS custom_id
+          FROM fulfillment_commands
+          JOIN fulfillment_provider_attempts AS create_attempt
+            ON create_attempt.command_id = fulfillment_commands.id
+            AND create_attempt.operation = 'create_order'
+            AND create_attempt.status = 'succeeded'
+          WHERE fulfillment_commands.provider = 'sih'
+            AND fulfillment_commands.command_type = 'sih_skin_purchase'
+            AND fulfillment_commands.status = 'submitted'
+          ORDER BY fulfillment_commands.updated_at ASC, fulfillment_commands.id ASC
+          FOR UPDATE OF fulfillment_commands SKIP LOCKED
+          LIMIT 1
+        `,
+      );
+      const row = claimed.rows[0];
+      if (row === undefined) return null;
+      await client.query(
+        `
+          UPDATE fulfillment_commands
+          SET locked_at = clock_timestamp(),
+              updated_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [row.command_id],
+      );
+      const attempt = await client.query<{ id: string }>(
+        `
+          INSERT INTO fulfillment_provider_attempts (
+            command_id,
+            order_id,
+            order_line_id,
+            provider,
+            operation,
+            status,
+            idempotency_key,
+            request_snapshot
+          )
+          VALUES ($1, $2, $3, 'sih', 'get_order', 'started', gen_random_uuid()::text, $4::jsonb)
+          RETURNING id
+        `,
+        [
+          row.command_id,
+          row.order_id,
+          row.order_line_id,
+          JSON.stringify({ customId: row.custom_id }),
+        ],
+      );
+      const attemptId = attempt.rows[0]?.id;
+      if (attemptId === undefined) throw new Error("FULFILLMENT_RECONCILIATION_ATTEMPT_NOT_CREATED");
+      await client.query(
+        "UPDATE fulfillment_provider_attempts SET idempotency_key = $1 WHERE id = $1",
+        [attemptId],
+      );
+      return {
+        attemptId,
+        commandId: row.command_id,
+        customId: row.custom_id,
+        orderLineId: row.order_line_id,
+      };
+    });
+  }
+
+  private async markSkinReconciled(pending: PendingSkinReconciliation, order: SihSkinOrder): Promise<void> {
+    await this.database.transaction(async (client) => {
+      await client.query(
+        `
+          UPDATE fulfillment_provider_attempts
+          SET status = 'succeeded',
+              provider_order_id = $2,
+              response_snapshot = $3::jsonb,
+              finished_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [
+          pending.attemptId,
+          order.providerOrderId,
+          JSON.stringify({
+            expectedAmountMicrousd: order.expectedAmountMicrousd?.toString() ?? null,
+            offerId: order.offerId,
+            protection: order.protection === null
+              ? null
+              : {
+                error: order.protection.error,
+                rollbackAmountMicrousd: order.protection.rollbackAmountMicrousd?.toString() ?? null,
+                rollbackAt: order.protection.rollbackAt?.toISOString() ?? null,
+                status: order.protection.status,
+              },
+            providerOrderId: order.providerOrderId,
+            status: order.status,
+          }),
+        ],
+      );
+      await client.query(
+        `
+          UPDATE order_lines
+          SET status = CASE
+            WHEN status = 'supplier_sent' AND $2 IN ('created', 'processing') THEN status
+            WHEN $2 = 'sent' THEN 'supplier_sent'
+            WHEN $2 = 'finished' THEN 'supplier_finished'
+            WHEN $2 IN ('failed', 'penalized') THEN 'supplier_failed'
+            ELSE status
+          END
+          WHERE id = $1
+        `,
+        [pending.orderLineId, order.status],
+      );
+      await client.query(
+        `
+          UPDATE fulfillment_commands
+          SET locked_at = NULL,
+              updated_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [pending.commandId],
+      );
+    });
+  }
+
+  private async markReconciliationFailed(pending: PendingSkinReconciliation, errorCode: string): Promise<void> {
+    await this.database.transaction(async (client) => {
+      await client.query(
+        `
+          UPDATE fulfillment_provider_attempts
+          SET status = 'failed',
+              error_code = $2,
+              finished_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [pending.attemptId, errorCode],
+      );
+      await client.query(
+        `
+          UPDATE fulfillment_commands
+          SET locked_at = NULL,
+              last_error_code = $2,
+              updated_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [pending.commandId, errorCode],
       );
     });
   }
