@@ -337,13 +337,14 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const client = createApiClient();
       try {
         const user = await client.getCurrentUser();
-        const [wallet, walletTransactions, tradeUrlStatus, cartResponse, orderHistory, inventory] = await Promise.all([
+        const [wallet, walletTransactions, tradeUrlStatus, cartResponse, orderHistory, inventory, tradeHistory] = await Promise.all([
           client.getWalletBalance(),
           client.getWalletTransactions(),
           client.getSteamTradeUrlStatus(),
           fetchHydratedCart(),
           client.getOrderHistory(),
           client.getInventory(),
+          client.getFulfillmentTradeHistory(),
         ]);
         if (cancelled) return;
         setServerSyncStatus("authenticated");
@@ -352,7 +353,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         setOrders(orderHistory);
         setInventoryItems(inventory);
         setTransactions(walletTransactions);
-        setTradeEvents([]);
+        setTradeEvents(tradeHistory);
         setSteamTradeUrl("");
         setServerSteamTradeUrlConfigured(tradeUrlStatus.configured);
         setHasSeedData(false);
@@ -573,16 +574,18 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
               idempotencyKey: `checkout-${uniqueId}`,
             }, { csrfToken: () => csrfTokenRef.current });
             const client = createApiClient();
-            const [wallet, walletTransactions, orderHistory, inventory] = await Promise.all([
+            const [wallet, walletTransactions, orderHistory, inventory, tradeHistory] = await Promise.all([
               client.getWalletBalance(),
               client.getWalletTransactions(),
               client.getOrderHistory(),
               client.getInventory(),
+              client.getFulfillmentTradeHistory(),
             ]);
             setBalanceCoins(wallet.availableCoins);
             setTransactions(walletTransactions);
             setOrders(orderHistory);
             setInventoryItems(inventory);
+            setTradeEvents(tradeHistory);
             applyServerCart({ items: [], totalCoins: 0, products: [] });
             return {
               status: "success",
@@ -703,6 +706,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
             setServerSyncStatus("fallback");
             setServerCart(null);
             setInventoryItems([]);
+            setTradeEvents([]);
             setServerSteamTradeUrlConfigured(false);
           } catch {
             setNotice("Не удалось завершить серверную сессию. Повторите действие.");

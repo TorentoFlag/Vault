@@ -1,5 +1,5 @@
 import openApiDocument from "../generated/api-contract.json" with { type: "json" };
-import type { CoinTransaction, MarketplaceOrder, OrderDeliveryStatus, OrderStatus } from "../types/account.ts";
+import type { CoinTransaction, MarketplaceOrder, OrderDeliveryStatus, OrderStatus, TradeEvent } from "../types/account.ts";
 import type { Product } from "../types/commerce.ts";
 
 type ServerApiPath = keyof typeof openApiDocument.paths;
@@ -20,6 +20,7 @@ export const apiPaths = [
   "/checkout/cart",
   "/orders/me",
   "/inventory/me",
+  "/fulfillment/me/trades",
   "/payments/top-up/sessions",
 ] as const satisfies readonly ServerApiPath[];
 
@@ -124,6 +125,16 @@ type ApiInventoryItem = {
   status: "owned";
   title: string;
   unitPriceCoinMinor: number;
+};
+
+type ApiFulfillmentTradeEvent = {
+  createdAt: string;
+  direction: "purchase";
+  id: string;
+  itemId: string;
+  orderNumber: string;
+  status: "completed" | "pending" | "processing";
+  title: string;
 };
 
 export type ApiMappedInventoryItem = {
@@ -325,6 +336,27 @@ function isApiInventoryItem(value: unknown): value is ApiInventoryItem {
 
 function isInventoryResponse(value: unknown): value is { items: ApiInventoryItem[] } {
   return isRecord(value) && Array.isArray(value.items) && value.items.every(isApiInventoryItem);
+}
+
+function isApiFulfillmentTradeEvent(value: unknown): value is ApiFulfillmentTradeEvent {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.createdAt === "string" &&
+    value.direction === "purchase" &&
+    typeof value.id === "string" &&
+    typeof value.itemId === "string" &&
+    typeof value.orderNumber === "string" &&
+    (value.status === "completed" || value.status === "pending" || value.status === "processing") &&
+    typeof value.title === "string" &&
+    !("provider" in value) &&
+    !("providerOrderId" in value) &&
+    !("requestSnapshot" in value) &&
+    !("responseSnapshot" in value)
+  );
+}
+
+function isFulfillmentTradeHistoryResponse(value: unknown): value is { events: ApiFulfillmentTradeEvent[] } {
+  return isRecord(value) && Array.isArray(value.events) && value.events.every(isApiFulfillmentTradeEvent);
 }
 
 function isTopUpSessionResponse(value: unknown): value is ApiTopUpSession {
@@ -530,6 +562,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const body = await requestJson("/inventory/me");
       if (!isInventoryResponse(body)) throw new Error("Inventory response is malformed.");
       return body.items.map(mapApiInventoryItem);
+    },
+
+    async getFulfillmentTradeHistory(): Promise<TradeEvent[]> {
+      const body = await requestJson("/fulfillment/me/trades");
+      if (!isFulfillmentTradeHistoryResponse(body)) throw new Error("Fulfillment trade history response is malformed.");
+      return body.events.map((event) => ({ ...event }));
     },
 
     async createTopUpSession(input: { coinAmountMinor: number; idempotencyKey: string }): Promise<ApiTopUpSession> {

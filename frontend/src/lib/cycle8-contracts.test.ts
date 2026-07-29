@@ -60,6 +60,14 @@ test("backend sessions hydrate account inventory from backend projection", () =>
   assert.doesNotMatch(account, /Coins зачисляются сразу после локального подтверждения продажи/);
 });
 
+test("backend sessions hydrate Steam trade history from backend fulfillment projection", () => {
+  const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
+  const account = source("src/features/account/AccountScreen.tsx");
+  assert.match(provider, /client\.getFulfillmentTradeHistory\(\)/);
+  assert.match(provider, /setTradeEvents\(tradeHistory\)/);
+  assert.doesNotMatch(account, /Локальные записи заказов и действий с игровыми предметами/);
+});
+
 test("storage events compare against the live persisted ref", () => {
   const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
   assert.match(provider, /parseMarketplaceStorageEvent\(STORAGE_KEY, event, persistedStateRef\.current\.revision\)/);

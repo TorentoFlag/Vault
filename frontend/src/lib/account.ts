@@ -250,7 +250,9 @@ export function getOrderItemDeliveryStatusLabel(status: OrderItemSnapshot["deliv
 }
 
 export function getTradeStatusLabel(status: TradeEvent["status"]) {
-  return status === "completed" ? "Локальная запись завершена" : "Внешний трейд не запущен";
+  if (status === "completed") return "Завершено";
+  if (status === "processing") return "В обработке";
+  return "Ожидает обработки";
 }
 
 export function validateSteamTradeUrl(value: string) {

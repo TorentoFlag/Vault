@@ -161,13 +161,13 @@ test("overview operations are newest-first and failed rows state that balance di
   assert.equal(overview[1].amountLabel, "+500 Coins");
 });
 
-test("order and trade statuses describe local records without promising external fulfillment", () => {
+test("order and trade statuses avoid unsupported automatic fulfillment promises", () => {
   assert.equal(getOrderItemDeliveryStatusLabel("delivered"), "Отмечено выполненным в локальной истории");
   assert.equal(getOrderItemDeliveryStatusLabel("inventory-ready"), "Сохранено в локальном инвентаре");
   assert.equal(getOrderItemDeliveryStatusLabel("pending"), "Внешняя выдача не подключена");
-  assert.equal(getTradeStatusLabel("completed"), "Локальная запись завершена");
-  assert.equal(getTradeStatusLabel("processing"), "Внешний трейд не запущен");
-  assert.equal(getTradeStatusLabel("pending"), "Внешний трейд не запущен");
+  assert.equal(getTradeStatusLabel("completed"), "Завершено");
+  assert.equal(getTradeStatusLabel("processing"), "В обработке");
+  assert.equal(getTradeStatusLabel("pending"), "Ожидает обработки");
 });
 
 test("повреждённый Trade URL из localStorage сбрасывается", () => {

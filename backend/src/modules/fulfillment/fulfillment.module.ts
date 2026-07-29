@@ -4,12 +4,16 @@ import { DatabaseModule } from "../../common/database/database.module";
 import { APP_CONFIG } from "../../config/app-config.module";
 import type { AppConfig } from "../../config/app-config";
 import { SihClient } from "../providers/sih/sih.client";
+import { SessionsModule } from "../sessions/sessions.module";
 import { UsersModule } from "../users/users.module";
 import { WalletModule } from "../wallet/wallet.module";
+import { FulfillmentHistoryController } from "./fulfillment-history.controller";
+import { FulfillmentHistoryService } from "./fulfillment-history.service";
 import { FulfillmentService } from "./fulfillment.service";
 
 @Module({
-  imports: [DatabaseModule, UsersModule, WalletModule],
+  imports: [DatabaseModule, SessionsModule, UsersModule, WalletModule],
+  controllers: [FulfillmentHistoryController],
   providers: [
     {
       provide: SihClient,
@@ -22,8 +26,9 @@ import { FulfillmentService } from "./fulfillment.service";
         steamRefillBaseUrl: config.sih.steamRefillBaseUrl,
       }),
     },
+    FulfillmentHistoryService,
     FulfillmentService,
   ],
-  exports: [FulfillmentService],
+  exports: [FulfillmentHistoryService, FulfillmentService],
 })
 export class FulfillmentModule {}

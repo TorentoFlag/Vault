@@ -211,4 +211,41 @@ describe("OpenAPI contract", () => {
     expect(item?.properties?.reason?.enum).toEqual(["top_up", "purchase"]);
     expect(item?.properties?.status?.enum).toEqual(["completed"]);
   });
+
+  it("documents backend-owned fulfillment trade history", async () => {
+    const document = JSON.parse(await createOpenApiJson()) as {
+      paths: {
+        "/fulfillment/me/trades"?: {
+          get?: {
+            responses?: {
+              "200"?: {
+                content?: {
+                  "application/json"?: {
+                    schema?: {
+                      properties?: {
+                        events?: {
+                          items?: {
+                            required?: string[];
+                            properties?: {
+                              direction?: { enum?: string[] };
+                              status?: { enum?: string[] };
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+
+    const item = document.paths["/fulfillment/me/trades"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.events?.items;
+    expect(item?.required).toEqual(["id", "createdAt", "direction", "title", "itemId", "orderNumber", "status"]);
+    expect(item?.properties?.direction?.enum).toEqual(["purchase"]);
+    expect(item?.properties?.status?.enum).toEqual(["pending", "processing", "completed"]);
+  });
 });

@@ -26,6 +26,7 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/checkout/cart",
     "/orders/me",
     "/inventory/me",
+    "/fulfillment/me/trades",
     "/payments/top-up/sessions",
   ]);
 });
@@ -345,6 +346,45 @@ test("API client maps backend inventory projection with disabled provider-backed
       title: "Desert Eagle | Printstream",
     },
   ]);
+});
+
+test("API client maps backend fulfillment trade history without provider snapshots", async () => {
+  const requestedUrls: string[] = [];
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    fetch: async (input) => {
+      requestedUrls.push(input.toString());
+      return new Response(JSON.stringify({
+        events: [
+          {
+            createdAt: "2026-07-29T09:22:00.000Z",
+            direction: "purchase",
+            id: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+            itemId: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+            orderNumber: "VLT-11111111",
+            status: "processing",
+            title: "AK-47 | Redline",
+          },
+        ],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  assert.deepEqual(await client.getFulfillmentTradeHistory(), [
+    {
+      createdAt: "2026-07-29T09:22:00.000Z",
+      direction: "purchase",
+      id: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
+      itemId: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+      orderNumber: "VLT-11111111",
+      status: "processing",
+      title: "AK-47 | Redline",
+    },
+  ]);
+  assert.deepEqual(requestedUrls, ["https://api.vault.example/fulfillment/me/trades"]);
 });
 
 test("API client creates top-up sessions with idempotency and maps provider-disabled status", async () => {

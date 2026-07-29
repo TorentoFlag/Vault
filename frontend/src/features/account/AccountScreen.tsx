@@ -157,7 +157,7 @@ function TradeLog({ events }: { events: TradeEvent[] }) {
 
   return (
     <section className={styles.panel}>
-      <SectionHeading label="Steam Trade" title="Лог торговых операций" description="Локальные записи заказов и действий с игровыми предметами." />
+      <SectionHeading label="Steam Trade" title="Лог торговых операций" description="Статусы выдачи игровых предметов и действий с инвентарём." />
       {sorted.length ? (
         <div className={styles.tradeLog}>
           {sorted.map((event) => (
