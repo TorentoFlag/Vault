@@ -15,6 +15,7 @@ import { CUSTOMER_SESSION_COOKIE } from "../sessions/session-cookies";
 import { SessionsService } from "../sessions/sessions.service";
 import { UsersService } from "../users/users.service";
 import { WalletService } from "../wallet/wallet.service";
+import { PaymentsService } from "./payments.service";
 
 const databaseUrl = process.env.VAULT_TEST_DATABASE_URL;
 const userId = "user_76561198000000004";
@@ -83,6 +84,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
   let sessions: SessionsService;
   let users: UsersService;
   let wallet: WalletService;
+  let payments: PaymentsService;
   let tempDir: string | null = null;
   let originalFetch: typeof globalThis.fetch;
 
@@ -135,6 +137,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     sessions = currentApp.get(SessionsService);
     users = currentApp.get(UsersService);
     wallet = currentApp.get(WalletService);
+    payments = currentApp.get(PaymentsService);
     await users.upsertSteamUser({
       claimedIdentifier: `https://steamcommunity.com/openid/id/${steamId64}`,
       providerEndpoint: "https://steamcommunity.com/openid/login",
@@ -715,6 +718,122 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
       postedCoinMinor: 0,
       heldCoinMinor: 0,
       availableCoinMinor: 0,
+    });
+  });
+
+  it("reconciles a missing Arc Pay webhook by polling payment status without double-crediting Coins", async () => {
+    await app?.close();
+    app = null;
+    tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-reconcile-"));
+    const secretFile = join(tempDir, "secret-key");
+    await writeFile(secretFile, "sk_test_vault_real_checkout\n", "utf8");
+    process.env.ARC_PAY_PROVIDER_MODE = "real";
+    process.env.ARC_PAY_SECRET_KEY_FILE = secretFile;
+    process.env.ARC_PAY_PUBLIC_ORIGIN = "https://hkdk.events/source-id";
+    const providerCheckoutSessionId = "019f7841-4b12-7a2f-a42b-5c3a72e3b277";
+    const providerPaymentId = "019facd9-9e3f-730f-9180-8a43c1499df7";
+    let createdTopUpId = "";
+    const providerRequests: string[] = [];
+    globalThis.fetch = (input) => {
+      const url = fetchInputUrl(input);
+      providerRequests.push(url);
+      if (url.startsWith("https://api.arcpay.space/v1/payments?")) {
+        return Promise.resolve(new Response(JSON.stringify({
+          payments: [{
+            id: providerPaymentId,
+            status: "captured",
+            amount: 100_000,
+            currency: "RUB",
+            external_id: createdTopUpId,
+            metadata: {
+              vault_top_up_id: createdTopUpId,
+            },
+          }],
+          total: 1,
+          page_size: 5,
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        id: providerCheckoutSessionId,
+        url: "https://checkout.arcpay.space/sessions/019f7841",
+      }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }));
+    };
+
+    const currentApp = await createApp();
+    app = currentApp;
+    sessions = currentApp.get(SessionsService);
+    users = currentApp.get(UsersService);
+    wallet = currentApp.get(WalletService);
+    payments = currentApp.get(PaymentsService);
+    await users.upsertSteamUser({
+      claimedIdentifier: `https://steamcommunity.com/openid/id/${steamId64}`,
+      providerEndpoint: "https://steamcommunity.com/openid/login",
+      responseNonce: "2026-07-28T11:25:00Znonce",
+      steamId64,
+    });
+    const session = await sessions.createSession(userId, null);
+    const csrfToken = sessions.createCsrfToken(session.token);
+
+    const created = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post("/payments/top-up/sessions")
+      .set("Cookie", `${CUSTOMER_SESSION_COOKIE}=${session.token}`)
+      .set("x-csrf-token", csrfToken)
+      .set("idempotency-key", "topup-session-real-reconcile")
+      .send({ coinAmountMinor: 150_000 })
+      .expect(200);
+    const createdBody = requireCreatedTopUpResponse(created.body);
+    createdTopUpId = createdBody.id;
+
+    await expect(payments.reconcilePendingTopUps({ limit: 10 })).resolves.toEqual({
+      checked: 1,
+      credited: 1,
+      failed: 0,
+      ignored: 0,
+      unmatched: 0,
+      errors: 0,
+    });
+    await expect(payments.reconcilePendingTopUps({ limit: 10 })).resolves.toEqual({
+      checked: 0,
+      credited: 0,
+      failed: 0,
+      ignored: 0,
+      unmatched: 0,
+      errors: 0,
+    });
+
+    expect(providerRequests).toContain(`https://api.arcpay.space/v1/payments?search=${createdBody.id}&page_size=5`);
+    await expect(wallet.getBalance(userId)).resolves.toEqual({
+      postedCoinMinor: 150_000,
+      heldCoinMinor: 0,
+      availableCoinMinor: 150_000,
+    });
+
+    const persisted = await pool.query<{
+      payment_status: string;
+      provider_status: string;
+      wallet_transactions: string;
+      reconcile_attempts: string;
+    }>(
+      `
+        SELECT
+          (SELECT status FROM top_up_payments WHERE id = $1) AS payment_status,
+          (SELECT provider_status FROM top_up_payments WHERE id = $1) AS provider_status,
+          (SELECT count(*) FROM wallet_transactions WHERE user_id = $2 AND type = 'top_up_credit') AS wallet_transactions,
+          (SELECT count(*) FROM payment_provider_attempts WHERE top_up_payment_id = $1 AND idempotency_key = 'reconcile:' || $1::text) AS reconcile_attempts
+      `,
+      [createdBody.id, userId],
+    );
+    expect(persisted.rows[0]).toEqual({
+      payment_status: "paid",
+      provider_status: "captured",
+      wallet_transactions: "1",
+      reconcile_attempts: "1",
     });
   });
 });

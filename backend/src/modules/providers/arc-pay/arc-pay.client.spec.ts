@@ -119,4 +119,64 @@ describe("ArcPayClient", () => {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("lists payments by merchant external id for reconciliation when a webhook is missing", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-list-payments-"));
+    try {
+      const keyFile = join(tempDir, "secret-key");
+      await writeFile(keyFile, "sk_test_vault_secret\n", "utf8");
+      const requests: Array<{ input: string; init: RequestInit }> = [];
+      const client = new ArcPayClient({
+        apiKeyFile: keyFile,
+        baseUrl: "https://api.arc-pay.test/v1",
+        fetch: (input, init) => {
+          requests.push({ input, init: init ?? {} });
+          return Promise.resolve(new Response(JSON.stringify({
+            payments: [{
+              id: "019facd9-9e3f-730f-9180-8a43c1499df7",
+              status: "captured",
+              amount: 100_000,
+              currency: "RUB",
+              external_id: "e358a6c5-56f0-460f-9666-46bed1662141",
+              metadata: {
+                vault_top_up_id: "e358a6c5-56f0-460f-9666-46bed1662141",
+              },
+            }],
+            total: 1,
+            page_size: 5,
+          }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }));
+        },
+      });
+
+      await expect(client.listPayments({
+        pageSize: 5,
+        search: "e358a6c5-56f0-460f-9666-46bed1662141",
+      })).resolves.toEqual({
+        nextCursor: null,
+        pageSize: 5,
+        payments: [{
+          id: "019facd9-9e3f-730f-9180-8a43c1499df7",
+          status: "captured",
+          amount: 100_000,
+          currency: "RUB",
+          externalId: "e358a6c5-56f0-460f-9666-46bed1662141",
+          metadata: {
+            vault_top_up_id: "e358a6c5-56f0-460f-9666-46bed1662141",
+          },
+        }],
+        total: 1,
+      });
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.input).toBe("https://api.arc-pay.test/v1/payments?search=e358a6c5-56f0-460f-9666-46bed1662141&page_size=5");
+      expect(requests[0]?.init.headers).toEqual({
+        "authorization": "Bearer sk_test_vault_secret",
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });

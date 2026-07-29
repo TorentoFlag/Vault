@@ -85,6 +85,7 @@ Run from the repository root:
 - Generate DB migration: `npm --prefix backend run db:generate -- --name=<name>`
 - Apply DB migration: `npm --prefix backend run db:migrate`
 - Integration tests: `npm --prefix backend run test:integration`
+- Reconcile pending Arc Pay top-ups: `npm --prefix backend run payments:reconcile -- --limit=20`
 - SIH sandbox catalog acceptance: `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run test:integration -- src/modules/providers/sih/sih.sandbox.integration.spec.ts`
 - Full gate: `npm --prefix backend run verify`
 - Dev dependencies: `docker compose -f compose.dev.yaml up -d --wait postgres redis`

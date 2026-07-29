@@ -28,6 +28,13 @@ export type ArcPayPayment = {
   metadata: Record<string, string>;
 };
 
+export type ArcPayPaymentList = {
+  nextCursor: string | null;
+  pageSize: number;
+  payments: ArcPayPayment[];
+  total: number;
+};
+
 export type ArcPayClientOptions = {
   apiKeyFile: string;
   baseUrl?: string;
@@ -95,6 +102,25 @@ function parsePaymentResponse(value: unknown): ArcPayPayment {
       metadata: metadata !== null && typeof metadata === "object" && !Array.isArray(metadata)
         ? Object.fromEntries(Object.entries(metadata).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
         : {},
+    };
+  }
+  throw new Error("ARC_PAY_RESPONSE_INVALID");
+}
+
+function parsePaymentListResponse(value: unknown): ArcPayPaymentList {
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    Array.isArray((value as { payments?: unknown }).payments) &&
+    Number.isSafeInteger((value as { total?: unknown }).total) &&
+    Number.isSafeInteger((value as { page_size?: unknown }).page_size)
+  ) {
+    const nextCursor = (value as { next_cursor?: unknown }).next_cursor;
+    return {
+      nextCursor: typeof nextCursor === "string" && nextCursor.trim().length > 0 ? nextCursor.trim() : null,
+      pageSize: (value as { page_size: number }).page_size,
+      payments: (value as { payments: unknown[] }).payments.map(parsePaymentResponse),
+      total: (value as { total: number }).total,
     };
   }
   throw new Error("ARC_PAY_RESPONSE_INVALID");
@@ -172,5 +198,28 @@ export class ArcPayClient {
     });
     if (!response.ok) throw new Error("ARC_PAY_PAYMENT_LOOKUP_FAILED");
     return parsePaymentResponse(body);
+  }
+
+  async listPayments(command: { pageSize?: number; search: string }): Promise<ArcPayPaymentList> {
+    assertNonBlank("ARC_PAY_PAYMENT_SEARCH", command.search);
+    const pageSize = command.pageSize ?? 5;
+    if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new Error("ARC_PAY_PAGE_SIZE_INVALID");
+    const apiKey = (await readFile(this.options.apiKeyFile, "utf8")).trim();
+    if (!apiKey.startsWith("sk_test_")) throw new Error("ARC_PAY_SECRET_KEY_INVALID");
+
+    const url = new URL(`${this.baseUrl}/payments`);
+    url.searchParams.set("search", command.search);
+    url.searchParams.set("page_size", String(pageSize));
+    const response = await this.fetch(url.href, {
+      method: "GET",
+      headers: {
+        "authorization": `Bearer ${apiKey}`,
+      },
+    });
+    const body = await response.json().catch(() => {
+      throw new Error("ARC_PAY_RESPONSE_INVALID");
+    });
+    if (!response.ok) throw new Error("ARC_PAY_PAYMENT_LIST_FAILED");
+    return parsePaymentListResponse(body);
   }
 }

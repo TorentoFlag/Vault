@@ -55,6 +55,15 @@ export type PaymentWebhookResultDto = {
   status: "processed" | "duplicate" | "ignored" | "unmatched" | "rejected";
 };
 
+export type PaymentReconciliationResultDto = {
+  checked: number;
+  credited: number;
+  errors: number;
+  failed: number;
+  ignored: number;
+  unmatched: number;
+};
+
 type TopUpPaymentRow = {
   id: string;
   user_id: string;
@@ -76,6 +85,10 @@ type TopUpPaymentWebhookRow = {
   coin_amount_minor: number;
   fiat_amount_minor: number;
   fiat_currency: TopUpSessionDto["fiatCurrency"];
+};
+
+type TopUpPaymentReconciliationRow = TopUpPaymentWebhookRow & {
+  request_hash: string;
 };
 
 type NormalizedArcPayWebhook = {
@@ -241,8 +254,16 @@ function isCapturedWebhook(event: NormalizedArcPayWebhook): boolean {
 }
 
 function isFailedWebhook(event: NormalizedArcPayWebhook): boolean {
-  return ["payment.failed", "payment.declined", "payment.expired", "payment.voided"].includes(event.eventType)
-    || ["failed", "declined", "expired", "voided"].includes(event.providerStatus);
+  return ["payment.failed", "payment.declined", "payment.expired", "payment.voided", "payment.timeout"].includes(event.eventType)
+    || isFailedProviderStatus(event.providerStatus);
+}
+
+function isCapturedProviderStatus(status: string): boolean {
+  return status === "captured" || status === "settled";
+}
+
+function isFailedProviderStatus(status: string): boolean {
+  return ["failed", "declined", "expired", "voided", "timeout"].includes(status);
 }
 
 @Injectable()
@@ -628,6 +649,94 @@ export class PaymentsService {
     return this.processVerifiedArcPayWebhook(event);
   }
 
+  async reconcilePendingTopUps(command: { limit?: number } = {}): Promise<PaymentReconciliationResultDto> {
+    if (this.config.arcPay.providerMode !== "real") {
+      throw new ServiceUnavailableException("Arc Pay reconciliation requires real provider mode");
+    }
+    const limit = command.limit ?? 20;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new BadRequestException("Reconciliation limit must be between 1 and 100");
+    const pending = await this.database.query<TopUpPaymentReconciliationRow>(
+      `
+        SELECT
+          id,
+          user_id,
+          status,
+          coin_amount_minor,
+          fiat_amount_minor,
+          fiat_currency,
+          request_hash
+        FROM top_up_payments
+        WHERE provider = $1
+          AND status = 'checkout_pending'
+        ORDER BY created_at ASC, id ASC
+        LIMIT $2
+      `,
+      [TOP_UP_PROVIDER, limit],
+    );
+    const result: PaymentReconciliationResultDto = {
+      checked: pending.rows.length,
+      credited: 0,
+      errors: 0,
+      failed: 0,
+      ignored: 0,
+      unmatched: 0,
+    };
+
+    for (const topUpPayment of pending.rows) {
+      const attemptKey = `reconcile:${topUpPayment.id}`;
+      await this.beginReconciliationAttempt(topUpPayment, attemptKey);
+      let providerPayments: Awaited<ReturnType<ArcPayClient["listPayments"]>>;
+      try {
+        providerPayments = await this.arcPay.listPayments({
+          pageSize: 5,
+          search: topUpPayment.id,
+        });
+      } catch (error) {
+        result.errors += 1;
+        await this.finishReconciliationAttempt(topUpPayment.id, attemptKey, "failed", {
+          providerErrorCode: providerErrorCode(error),
+        }, providerErrorCode(error));
+        continue;
+      }
+
+      const matched = providerPayments.payments.find((payment) => (
+        payment.externalId === topUpPayment.id ||
+        payment.metadata.vault_top_up_id === topUpPayment.id
+      ));
+      if (matched === undefined) {
+        result.unmatched += 1;
+        await this.finishReconciliationAttempt(topUpPayment.id, attemptKey, "succeeded", {
+          matched: false,
+          pageSize: providerPayments.pageSize,
+          providerPaymentCount: providerPayments.payments.length,
+          total: providerPayments.total,
+        });
+        continue;
+      }
+
+      await this.finishReconciliationAttempt(topUpPayment.id, attemptKey, "succeeded", {
+        amount: matched.amount,
+        currency: matched.currency,
+        matched: true,
+        providerPaymentId: matched.id,
+        providerStatus: matched.status,
+      });
+      const applied = await this.applyArcPayProviderPaymentStatus({
+        amountMinor: matched.amount,
+        currency: matched.currency,
+        providerPaymentId: matched.id,
+        providerStatus: matched.status,
+        topUpPaymentId: topUpPayment.id,
+      });
+      if (applied === "credited") result.credited += 1;
+      if (applied === "failed") result.failed += 1;
+      if (applied === "ignored") result.ignored += 1;
+      if (applied === "rejected") result.errors += 1;
+    }
+
+    return result;
+  }
+
   private async enrichArcPayWebhook(event: NormalizedArcPayWebhook): Promise<NormalizedArcPayWebhook> {
     if (this.config.arcPay.providerMode !== "real" || event.topUpPaymentId !== null || event.providerPaymentId === null) {
       return event;
@@ -697,37 +806,13 @@ export class PaymentsService {
       }
 
       if (isCapturedWebhook(event)) {
-        if (topUpPayment.status !== "paid") {
-          await this.wallet.creditUserWithClient(client, {
-            userId: topUpPayment.user_id,
-            amountCoinMinor: topUpPayment.coin_amount_minor,
-            idempotencyKey: `top-up:${topUpPayment.id}`,
-            reason: "arc_pay_top_up_capture",
-          });
-          await client.query(
-            `
-              UPDATE top_up_payments
-              SET status = 'paid', provider_status = $2, updated_at = now()
-              WHERE id = $1
-            `,
-            [topUpPayment.id, event.providerStatus],
-          );
-        }
+        await this.applyArcPayProviderPaymentStatusWithClient(client, topUpPayment, event.providerStatus);
         await this.markWebhookEvent(client, event.providerEventId, "processed");
         return { status: "processed" };
       }
 
       if (isFailedWebhook(event)) {
-        if (topUpPayment.status !== "paid") {
-          await client.query(
-            `
-              UPDATE top_up_payments
-              SET status = 'failed', provider_status = $2, updated_at = now()
-              WHERE id = $1
-            `,
-            [topUpPayment.id, event.providerStatus],
-          );
-        }
+        await this.applyArcPayProviderPaymentStatusWithClient(client, topUpPayment, event.providerStatus);
         await this.markWebhookEvent(client, event.providerEventId, "processed");
         return { status: "processed" };
       }
@@ -735,6 +820,173 @@ export class PaymentsService {
       await this.markWebhookEvent(client, event.providerEventId, "ignored");
       return { status: "ignored" };
     });
+  }
+
+  private async applyArcPayProviderPaymentStatus(command: {
+    amountMinor: number;
+    currency: string;
+    providerPaymentId: string;
+    providerStatus: string;
+    topUpPaymentId: string;
+  }): Promise<"credited" | "failed" | "ignored" | "rejected"> {
+    return this.database.transaction(async (client) => {
+      const payment = await client.query<TopUpPaymentWebhookRow>(
+        `
+          SELECT
+            id,
+            user_id,
+            status,
+            coin_amount_minor,
+            fiat_amount_minor,
+            fiat_currency
+          FROM top_up_payments
+          WHERE provider = $1
+            AND id = $2
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [TOP_UP_PROVIDER, command.topUpPaymentId],
+      );
+      const topUpPayment = payment.rows[0];
+      if (topUpPayment === undefined) return "ignored";
+      if (topUpPayment.fiat_amount_minor !== command.amountMinor || topUpPayment.fiat_currency !== command.currency) {
+        await client.query(
+          `
+            UPDATE top_up_payments
+            SET
+              provider_status = $2,
+              metadata = metadata || $3::jsonb,
+              updated_at = now()
+            WHERE id = $1
+          `,
+          [
+            topUpPayment.id,
+            command.providerStatus,
+            JSON.stringify({
+              reconciliationError: "amount_or_currency_mismatch",
+              reconciliationProviderPaymentId: command.providerPaymentId,
+            }),
+          ],
+        );
+        return "rejected";
+      }
+      return this.applyArcPayProviderPaymentStatusWithClient(client, topUpPayment, command.providerStatus);
+    });
+  }
+
+  private async applyArcPayProviderPaymentStatusWithClient(
+    client: Queryable,
+    topUpPayment: TopUpPaymentWebhookRow,
+    providerStatus: string,
+  ): Promise<"credited" | "failed" | "ignored"> {
+    if (isCapturedProviderStatus(providerStatus)) {
+      if (topUpPayment.status !== "paid") {
+        await this.wallet.creditUserWithClient(client, {
+          userId: topUpPayment.user_id,
+          amountCoinMinor: topUpPayment.coin_amount_minor,
+          idempotencyKey: `top-up:${topUpPayment.id}`,
+          reason: "arc_pay_top_up_capture",
+        });
+        await client.query(
+          `
+            UPDATE top_up_payments
+            SET status = 'paid', provider_status = $2, updated_at = now()
+            WHERE id = $1
+          `,
+          [topUpPayment.id, providerStatus],
+        );
+        return "credited";
+      }
+      await client.query(
+        `
+          UPDATE top_up_payments
+          SET provider_status = $2, updated_at = now()
+          WHERE id = $1
+        `,
+        [topUpPayment.id, providerStatus],
+      );
+      return "ignored";
+    }
+
+    if (isFailedProviderStatus(providerStatus)) {
+      if (topUpPayment.status !== "paid") {
+        await client.query(
+          `
+            UPDATE top_up_payments
+            SET status = 'failed', provider_status = $2, updated_at = now()
+            WHERE id = $1
+          `,
+          [topUpPayment.id, providerStatus],
+        );
+        return "failed";
+      }
+      await client.query(
+        `
+          UPDATE top_up_payments
+          SET provider_status = $2, updated_at = now()
+          WHERE id = $1
+        `,
+        [topUpPayment.id, providerStatus],
+      );
+    }
+    return "ignored";
+  }
+
+  private async beginReconciliationAttempt(topUpPayment: TopUpPaymentReconciliationRow, attemptKey: string): Promise<void> {
+    await this.database.query(
+      `
+        INSERT INTO payment_provider_attempts (
+          top_up_payment_id,
+          provider,
+          idempotency_key,
+          status,
+          request_hash,
+          request_snapshot
+        )
+        VALUES ($1, $2, $3, 'pending', $4, $5::jsonb)
+        ON CONFLICT (provider, idempotency_key)
+        DO UPDATE SET
+          status = 'pending',
+          request_snapshot = EXCLUDED.request_snapshot,
+          response_snapshot = '{}'::jsonb,
+          error_code = NULL,
+          finished_at = NULL
+      `,
+      [
+        topUpPayment.id,
+        TOP_UP_PROVIDER,
+        attemptKey,
+        topUpPayment.request_hash,
+        JSON.stringify({
+          provider: TOP_UP_PROVIDER,
+          search: topUpPayment.id,
+          type: "payment_status_reconciliation",
+        }),
+      ],
+    );
+  }
+
+  private async finishReconciliationAttempt(
+    topUpPaymentId: string,
+    attemptKey: string,
+    status: "failed" | "succeeded",
+    responseSnapshot: Record<string, unknown>,
+    errorCode: string | null = null,
+  ): Promise<void> {
+    await this.database.query(
+      `
+        UPDATE payment_provider_attempts
+        SET
+          status = $4,
+          response_snapshot = $5::jsonb,
+          error_code = $6,
+          finished_at = now()
+        WHERE provider = $1
+          AND idempotency_key = $2
+          AND top_up_payment_id = $3
+      `,
+      [TOP_UP_PROVIDER, attemptKey, topUpPaymentId, status, JSON.stringify(responseSnapshot), errorCode],
+    );
   }
 
   private async markWebhookEvent(client: Queryable, providerEventId: string, status: string): Promise<void> {
