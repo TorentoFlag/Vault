@@ -1,0 +1,11 @@
+vaultapp24.com {
+	reverse_proxy frontend:3000
+}
+
+www.vaultapp24.com {
+	redir https://vaultapp24.com{uri} permanent
+}
+
+api.vaultapp24.com {
+	reverse_proxy backend:3000
+}
