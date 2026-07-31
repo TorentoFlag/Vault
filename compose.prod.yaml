@@ -51,10 +51,10 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_BASE_URL: https://api.vaultapp24.com
+        NEXT_PUBLIC_API_BASE_URL: https://vaultapp24.com
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_BASE_URL: https://api.vaultapp24.com
+      NEXT_PUBLIC_API_BASE_URL: https://vaultapp24.com
       VAULT_API_BASE_URL: http://backend:3000
     depends_on:
       backend:

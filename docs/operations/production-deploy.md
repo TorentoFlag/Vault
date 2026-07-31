@@ -6,6 +6,7 @@ Target:
 
 - Frontend: `https://vaultapp24.com`
 - API: `https://api.vaultapp24.com`
+- Browser API/auth origin: `https://vaultapp24.com` through same-origin Caddy routes.
 - Server: `/opt/vault`
 
 ## DNS
@@ -27,7 +28,9 @@ Source is deployed to `/opt/vault/app`.
 The frontend container uses two API origins:
 
 - `VAULT_API_BASE_URL=http://backend:3000` for server-side rendering inside Docker.
-- `NEXT_PUBLIC_API_BASE_URL=https://api.vaultapp24.com` for browser requests.
+- `NEXT_PUBLIC_API_BASE_URL=https://vaultapp24.com` for browser requests and Steam OpenID start links.
+
+The backend `PUBLIC_BASE_URL` should also be `https://vaultapp24.com` so Steam OpenID callback cookies are issued on the same host the browser uses for frontend API requests. Keep `api.vaultapp24.com` available for direct provider webhooks and health checks.
 
 Runtime config lives outside git:
 

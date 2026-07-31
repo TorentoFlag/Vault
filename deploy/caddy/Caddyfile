@@ -1,4 +1,12 @@
 vaultapp24.com {
+	@backend_exact path /auth/steam/start /auth/steam/callback /session/me /session/csrf /session/logout /me/steam-trade-url /me/steam-trade-url/status /wallet/me /wallet/me/transactions /catalog /cart /checkout /checkout/cart /orders/me /inventory/me /fulfillment/me/trades /payments/top-up/sessions /payments/webhooks/arc-pay
+	@backend_dynamic path_regexp backend_dynamic ^/(catalog/[^/]+|cart/items/[^/]+|inventory/me/items/[^/]+/withdrawals)$
+	handle @backend_exact {
+		reverse_proxy backend:3000
+	}
+	handle @backend_dynamic {
+		reverse_proxy backend:3000
+	}
 	reverse_proxy frontend:3000
 }
 
