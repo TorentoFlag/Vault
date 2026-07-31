@@ -59,13 +59,21 @@ function optionalText(value: unknown, maximumLength: number): string | null {
 }
 
 function decimalString(value: unknown): string {
-  if (typeof value !== "string" || !canonicalDecimal.test(value)) invalid("CATALOG_METADATA_SCMM_ITEM_INVALID");
+  let normalized: string;
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) invalid("CATALOG_METADATA_SCMM_ITEM_INVALID");
+    normalized = String(value);
+  } else if (typeof value === "string" && canonicalDecimal.test(value)) {
+    normalized = value;
+  } else {
+    invalid("CATALOG_METADATA_SCMM_ITEM_INVALID");
+  }
   try {
-    if (BigInt(value) > maxSignedInt64) invalid("CATALOG_METADATA_SCMM_ITEM_INVALID");
+    if (BigInt(normalized) > maxSignedInt64) invalid("CATALOG_METADATA_SCMM_ITEM_INVALID");
   } catch {
     invalid("CATALOG_METADATA_SCMM_ITEM_INVALID");
   }
-  return value;
+  return normalized;
 }
 
 function optionalDecimalString(value: unknown): string | null {
@@ -75,8 +83,14 @@ function optionalDecimalString(value: unknown): string | null {
 }
 
 function safePaginationInteger(value: unknown): number {
-  if (typeof value !== "string" || !canonicalDecimal.test(value)) invalid("CATALOG_METADATA_SCMM_PAGE_INVALID");
-  const parsed = Number(value);
+  let parsed: number;
+  if (typeof value === "number") {
+    parsed = value;
+  } else if (typeof value === "string" && canonicalDecimal.test(value)) {
+    parsed = Number(value);
+  } else {
+    invalid("CATALOG_METADATA_SCMM_PAGE_INVALID");
+  }
   if (!Number.isSafeInteger(parsed)) invalid("CATALOG_METADATA_SCMM_PAGE_INVALID");
   return parsed;
 }

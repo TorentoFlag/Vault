@@ -9,12 +9,12 @@ describe("ScmmClient", () => {
 
   it("fetches Rust SCMM pages and returns only requested market hashes", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({
-      start: "0",
-      count: "1",
-      total: "1",
+      start: 0,
+      count: 1,
+      total: 1,
       items: [{
-        appId: "252490",
-        id: "123",
+        appId: 252490,
+        id: 123,
         nameHash: "Metal Facemask",
         name: "Metal Facemask",
         itemType: "Mask",
