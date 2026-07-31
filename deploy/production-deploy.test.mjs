@@ -43,6 +43,8 @@ test("remote deploy script gates deployment with migrations, compose wait, and p
   assert.match(remoteScript, /docker compose -f "\$COMPOSE_FILE" config/);
   assert.match(remoteScript, /npm run db:migrate/);
   assert.match(remoteScript, /up -d --wait --wait-timeout/);
+  assert.match(remoteScript, /wait_for_url\(\)/);
+  assert.match(remoteScript, /PUBLIC_HEALTH_RETRIES=/);
   assert.match(remoteScript, /https:\/\/api\.vaultapp24\.com\/health\/live/);
   assert.match(remoteScript, /https:\/\/api\.vaultapp24\.com\/health\/ready/);
   assert.match(remoteScript, /https:\/\/vaultapp24\.com\//);

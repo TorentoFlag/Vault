@@ -6,9 +6,30 @@ BACKUP_ROOT="${BACKUP_ROOT:-/opt/vault/backups}"
 INCOMING_ROOT="${INCOMING_ROOT:-/opt/vault/deploy-incoming}"
 COMPOSE_FILE="${COMPOSE_FILE:-compose.prod.yaml}"
 COMPOSE_WAIT_TIMEOUT="${COMPOSE_WAIT_TIMEOUT:-180}"
+PUBLIC_HEALTH_RETRIES="${PUBLIC_HEALTH_RETRIES:-30}"
+PUBLIC_HEALTH_SLEEP_SECONDS="${PUBLIC_HEALTH_SLEEP_SECONDS:-2}"
 JOURNAL_VACUUM_SIZE="${JOURNAL_VACUUM_SIZE:-50M}"
 DEPLOY_SHA="${VAULT_DEPLOY_SHA:-manual}"
 RELEASE_DIR="${VAULT_RELEASE_DIR:?VAULT_RELEASE_DIR is required}"
+
+wait_for_url() {
+  url="$1"
+  attempt=1
+
+  while [ "$attempt" -le "$PUBLIC_HEALTH_RETRIES" ]; do
+    if curl -fsS "$url" >/dev/null; then
+      return 0
+    fi
+
+    if [ "$attempt" -lt "$PUBLIC_HEALTH_RETRIES" ]; then
+      sleep "$PUBLIC_HEALTH_SLEEP_SECONDS"
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  curl -fsS "$url" >/dev/null
+}
 
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 short_sha="$(printf '%s' "$DEPLOY_SHA" | cut -c 1-12 | tr -c 'A-Za-z0-9._-' '-')"
@@ -45,9 +66,9 @@ docker compose -f "$COMPOSE_FILE" up -d postgres redis
 docker compose -f "$COMPOSE_FILE" run --rm backend npm run db:migrate
 docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT"
 
-curl -fsS https://api.vaultapp24.com/health/live >/dev/null
-curl -fsS https://api.vaultapp24.com/health/ready >/dev/null
-curl -fsS https://vaultapp24.com/ >/dev/null
+wait_for_url https://api.vaultapp24.com/health/live
+wait_for_url https://api.vaultapp24.com/health/ready
+wait_for_url https://vaultapp24.com/
 
 docker compose -f "$COMPOSE_FILE" ps
 
