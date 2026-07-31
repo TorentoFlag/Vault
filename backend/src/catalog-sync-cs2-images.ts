@@ -27,13 +27,27 @@ const weaponTypes: Array<[RegExp, string]> = [
   [/^★ .*Gloves\b|Gloves\b/i, "Перчатки"],
   [/^★ |Knife\b|Bayonet\b|Karambit\b|Daggers\b/i, "Нож"],
   [/^Sticker\b/i, "Наклейка"],
+  [/Capsule\b/i, "Капсула"],
   [/^Music Kit\b/i, "Музыкальный набор"],
   [/^Agent\b|^Operator\b/i, "Агент"],
   [/^Patch\b/i, "Нашивка"],
   [/^Graffiti\b/i, "Граффити"],
   [/^Charm\b/i, "Брелок"],
+  [/Pin\b/i, "Значок"],
   [/Case\b/i, "Кейс"],
   [/Key\b/i, "Ключ"],
+];
+const fallbackCategories: Array<[RegExp, string]> = [
+  [/Capsule\b/i, "Капсулы"],
+  [/^Sticker\b|Sticker Slab\b/i, "Наклейки"],
+  [/Graffiti\b/i, "Граффити"],
+  [/Music Kit\b/i, "Музыкальные наборы"],
+  [/^Patch\b/i, "Нашивки"],
+  [/Charm\b/i, "Брелоки"],
+  [/Pin\b/i, "Значки"],
+  [/Package\b/i, "Наборы"],
+  [/Case\b/i, "Кейсы"],
+  [/Key\b/i, "Ключи"],
 ];
 
 export type Cs2MetadataImage = {
@@ -113,9 +127,16 @@ function normalizeCatalogDescription(description: unknown): string | null {
   return normalized.length === 0 || /<(?:\/?[A-Za-z][^>]*|[!?][^>]*)>/.test(normalized) ? null : normalized;
 }
 
-function categoryName(value: unknown): string | null {
-  if (!isRecord(value)) return null;
-  return canonicalText(value.name, 256);
+function categoryName(value: unknown, marketHashName: string, id: unknown): string | null {
+  if (!isRecord(value)) return fallbackCategoryName(marketHashName, id);
+  const explicit = canonicalText(value.name, 256);
+  if (explicit !== null) return explicit;
+  return fallbackCategoryName(marketHashName, id);
+}
+
+function fallbackCategoryName(marketHashName: string, id: unknown): string | null {
+  if (typeof id === "string" && id.startsWith("agent-")) return "Агенты";
+  return fallbackCategories.find(([pattern]) => pattern.test(marketHashName))?.[1] ?? null;
 }
 
 function rarityName(value: unknown): string | null {
@@ -159,7 +180,7 @@ export function parseCs2MetadataImages(rawPayload: string): Cs2MetadataImage[] {
     if (imageUrl === null) continue;
     const title = canonicalText(item.name, 1_024);
     const description = normalizeCatalogDescription(item.description);
-    const category = categoryName(item.category);
+    const category = categoryName(item.category, marketHashName, item.id);
     if (title === null || description === null || category === null) continue;
     if (!byMarketHashName.has(marketHashName)) {
       byMarketHashName.set(marketHashName, {

@@ -30,6 +30,14 @@ describe("parseCs2MetadataImages", () => {
         market_hash_name: "Blocked SIH item",
         name: "Заблокированный SIH товар",
       },
+      "sticker-capsule": {
+        description: "В этой капсуле содержатся разнообразные наклейки от художников из мастерской Steam.",
+        id: "crate-4847",
+        image: "https://community.akamai.steamstatic.com/economy/image/capsule123",
+        market_hash_name: "10 Year Birthday Sticker Capsule",
+        name: "Капсула наклеек десятилетнего юбилея",
+        rarity: { color: "#b0c3d9", id: "common", name: "базового класса" },
+      },
       "no-market-hash": {
         id: "no-market-hash",
         image: "https://community.akamai.steamstatic.com/economy/image/skip",
@@ -37,6 +45,16 @@ describe("parseCs2MetadataImages", () => {
     }));
 
     expect(images).toEqual([
+      {
+        categoryName: "Капсулы",
+        conditionName: null,
+        description: "В этой капсуле содержатся разнообразные наклейки от художников из мастерской Steam.",
+        imageUrl: "https://community.akamai.steamstatic.com/economy/image/capsule123",
+        inferredProductType: "Капсула",
+        marketHashName: "10 Year Birthday Sticker Capsule",
+        rarityName: "базового класса",
+        title: "Капсула наклеек десятилетнего юбилея",
+      },
       {
         categoryName: "Винтовки",
         conditionName: "После полевых испытаний",
