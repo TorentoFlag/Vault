@@ -5,22 +5,13 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { siteConfig } from "@/config/site";
-import { Icon, type IconName } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/Icon";
 import { MarketplaceSearch } from "@/components/marketplace/MarketplaceSearch";
 import { CartButton } from "@/components/marketplace/CartButton";
 import { useMarketplace } from "@/components/marketplace/MarketplaceProvider";
 import { formatCoinRate } from "@/lib/marketplace";
 
 import styles from "./layout.module.css";
-
-const serviceNavigation: { label: string; href: string; icon: IconName }[] = [
-  { label: "Все товары", href: "/catalog", icon: "bag" },
-  { label: "Пополнение Steam", href: "/catalog?category=steam", icon: "steam" },
-  { label: "Скины CS2", href: "/catalog?category=skins&game=cs2", icon: "shield" },
-  { label: "Скины Rust", href: "/catalog?category=skins&game=rust", icon: "shield" },
-  { label: "Скины TF2", href: "/catalog?category=skins&game=tf2", icon: "shield" },
-  { label: "Пополнить Coins", href: "/balance/top-up", icon: "coin" },
-];
 
 function SyncedHeaderSearch() {
   const searchParams = useSearchParams();
@@ -34,36 +25,6 @@ function HeaderSearch() {
     <Suspense fallback={<MarketplaceSearch products={[]} />}>
       <SyncedHeaderSearch />
     </Suspense>
-  );
-}
-
-function SyncedServiceNavigation({ isSignedIn }: { isSignedIn: boolean }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  function isCurrentService(href: string) {
-    const target = new URL(href, "https://vault.local");
-    if (target.pathname !== pathname) return false;
-    if (target.pathname === "/balance/top-up") return true;
-    if (target.searchParams.size === 0) {
-      return pathname === "/catalog" && !searchParams.has("category") && !searchParams.has("q");
-    }
-    return [...target.searchParams].every(([key, value]) => searchParams.get(key) === value);
-  }
-
-  return (
-    <div className={styles.serviceNavInner}>
-      {serviceNavigation.map((item) => (
-        <Link
-          key={item.label}
-          href={item.href === "/balance/top-up" && !isSignedIn ? "/auth?returnTo=%2Fbalance%2Ftop-up" : item.href}
-          aria-current={isCurrentService(item.href) ? "page" : undefined}
-        >
-          <Icon name={item.icon} width="17" height="17" />
-          <span>{item.label}</span>
-        </Link>
-      ))}
-    </div>
   );
 }
 
@@ -169,11 +130,6 @@ export function SiteHeader() {
           <HeaderSearch />
         </div>
       </div>
-      <nav className={styles.serviceNav} aria-label="Услуги Vault">
-        <Suspense fallback={<div className={styles.serviceNavInner} aria-hidden="true" />}>
-          <SyncedServiceNavigation isSignedIn={Boolean(session)} />
-        </Suspense>
-      </nav>
       {menuOpen ? (
         <nav ref={menuRef} id="catalog-menu" className={styles.catalogMenu} aria-label="Каталог">
           <div className={styles.headerContainer}>

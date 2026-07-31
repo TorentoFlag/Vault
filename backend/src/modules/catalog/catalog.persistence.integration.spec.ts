@@ -428,4 +428,113 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
     expect(body.items).toHaveLength(1);
     expect(body.items[0]?.slug).toBe("test-api-game-filter-cs2-field-tested-m4");
   });
+
+  it("filters catalog totals and pages by Coins price before pagination", async () => {
+    await pool.query(
+      `
+        INSERT INTO catalog_products (
+          id,
+          slug,
+          kind,
+          category,
+          game,
+          product_type,
+          title,
+          description,
+          price_coin_minor,
+          availability,
+          fulfillment_mode,
+          popularity,
+          image,
+          image_alt,
+          meta,
+          keywords,
+          details,
+          public_enabled
+        )
+        VALUES
+          (
+            'test-api-game-filter-cs2-price-low',
+            'test-api-game-filter-cs2-price-low',
+            'skins',
+            'Игровые предметы',
+            'cs2',
+            'Пистолет',
+            'Pistol | Price Low',
+            'CS2 pistol item.',
+            10000,
+            'available',
+            'steam-trade',
+            1,
+            'https://cdn.example/cs2/low.png',
+            'Low Price Test',
+            ARRAY['CS2'],
+            ARRAY['cs2','price'],
+            '{"specifications":[],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          ),
+          (
+            'test-api-game-filter-cs2-price-middle',
+            'test-api-game-filter-cs2-price-middle',
+            'skins',
+            'Игровые предметы',
+            'cs2',
+            'Пистолет',
+            'Pistol | Price Middle',
+            'CS2 pistol item.',
+            20000,
+            'available',
+            'steam-trade',
+            200,
+            'https://cdn.example/cs2/middle.png',
+            'Middle Price Test',
+            ARRAY['CS2'],
+            ARRAY['cs2','price'],
+            '{"specifications":[],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          ),
+          (
+            'test-api-game-filter-cs2-price-high',
+            'test-api-game-filter-cs2-price-high',
+            'skins',
+            'Игровые предметы',
+            'cs2',
+            'Пистолет',
+            'Pistol | Price High',
+            'CS2 pistol item.',
+            30000,
+            'available',
+            'steam-trade',
+            300,
+            'https://cdn.example/cs2/high.png',
+            'High Price Test',
+            ARRAY['CS2'],
+            ARRAY['cs2','price'],
+            '{"specifications":[],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          )
+      `,
+    );
+
+    const emptyResponse = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .query({ category: "skins", game: "cs2", max: "60", limit: 1 })
+      .expect(200);
+    const emptyBody = emptyResponse.body as CatalogListDto;
+
+    expect(emptyBody.pagination.total).toBe(0);
+    expect(emptyBody.pagination.hasMore).toBe(false);
+    expect(emptyBody.items).toHaveLength(0);
+
+    const middleResponse = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .query({ category: "skins", game: "cs2", min: "150", max: "250", sort: "price_asc", limit: 1 })
+      .expect(200);
+    const middleBody = middleResponse.body as CatalogListDto;
+
+    expect(middleBody.pagination.total).toBe(1);
+    expect(middleBody.pagination.hasMore).toBe(false);
+    expect(middleBody.items).toHaveLength(1);
+    expect(middleBody.items[0]?.slug).toBe("test-api-game-filter-cs2-price-middle");
+  });
 });

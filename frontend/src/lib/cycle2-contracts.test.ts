@@ -34,10 +34,13 @@ test("all visible coin rates use the localized centralized formatter", () => {
   assert.doesNotMatch(copy, /\{summary\.rate\} Coins/);
 });
 
-test("mobile filters use a draft and an explicit apply action", () => {
+test("catalog sidebar edits draft filters and applies them explicitly", () => {
   const catalog = source("src/features/catalog/CatalogScreen.tsx");
-  assert.match(catalog, /draftFilters/);
-  assert.match(catalog, />Применить фильтры</);
+  assert.match(catalog, /filters=\{draftFilters\}/);
+  assert.match(catalog, /onChange=\{setDraftFilters\}/);
+  assert.match(catalog, /<Button type="button" onClick=\{onApply\}>Применить фильтры<\/Button>/);
+  assert.doesNotMatch(catalog, /filters=\{filtersOpen \? draftFilters : filters\}/);
+  assert.doesNotMatch(catalog, /onChange=\{filtersOpen \? setDraftFilters : updateFilters\}/);
 });
 
 test("checkout error boundary has a page heading", () => {

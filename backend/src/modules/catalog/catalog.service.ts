@@ -219,6 +219,8 @@ export class CatalogService {
         ...(category === undefined ? {} : { category }),
         ...(game === undefined ? {} : { game }),
         conditions,
+        ...(minPriceCoinMinor === undefined ? {} : { minPriceCoinMinor }),
+        ...(maxPriceCoinMinor === undefined ? {} : { maxPriceCoinMinor }),
         search,
         types,
         limit,
@@ -230,6 +232,8 @@ export class CatalogService {
         ...(category === undefined ? {} : { category }),
         ...(game === undefined ? {} : { game }),
         conditions,
+        ...(minPriceCoinMinor === undefined ? {} : { minPriceCoinMinor }),
+        ...(maxPriceCoinMinor === undefined ? {} : { maxPriceCoinMinor }),
         search,
         types,
       }),
@@ -291,6 +295,8 @@ export class CatalogService {
     conditions?: string[];
     game?: CatalogGame;
     limit?: number;
+    maxPriceCoinMinor?: number;
+    minPriceCoinMinor?: number;
     offset?: number;
     search?: string;
     slug?: string;
@@ -405,6 +411,8 @@ export class CatalogService {
     category?: CatalogProductKind;
     conditions?: string[];
     game?: CatalogGame;
+    maxPriceCoinMinor?: number;
+    minPriceCoinMinor?: number;
     search?: string;
     slug?: string;
     types?: string[];
@@ -425,6 +433,14 @@ export class CatalogService {
     if (command.slug !== undefined) {
       params.push(command.slug);
       where.push(`catalog_products.slug = $${params.length}`);
+    }
+    if (command.minPriceCoinMinor !== undefined) {
+      params.push(command.minPriceCoinMinor);
+      where.push(`catalog_products.price_coin_minor >= $${params.length}`);
+    }
+    if (command.maxPriceCoinMinor !== undefined) {
+      params.push(command.maxPriceCoinMinor);
+      where.push(`catalog_products.price_coin_minor <= $${params.length}`);
     }
     const typeFilters = command.types ?? [];
     if (typeFilters.length > 0) {
@@ -494,6 +510,8 @@ export class CatalogService {
     category?: CatalogProductKind;
     conditions?: string[];
     game?: CatalogGame;
+    maxPriceCoinMinor?: number;
+    minPriceCoinMinor?: number;
     search?: string;
     slug?: string;
     types?: string[];

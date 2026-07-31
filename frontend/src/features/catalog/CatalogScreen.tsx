@@ -1,15 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { ProductCard } from "@/components/marketplace/ProductCard";
+import { useMarketplace } from "@/components/marketplace/MarketplaceProvider";
+import { Icon } from "@/components/ui/Icon";
 import { Breadcrumbs, Button, Checkbox, Container, EmptyState } from "@/components/ui/UI";
-import {
-  CATALOG_GAMES,
-  getCatalogGameLabel,
-  type CatalogGame,
-} from "@/lib/catalog-games";
+import { getCatalogGameLabel } from "@/lib/catalog-games";
 import {
   createDefaultCatalogFilters,
   filterAndSortCatalog,
@@ -27,6 +26,7 @@ import {
   getNextCatalogFeedSize,
 } from "@/lib/catalog-feed";
 import type { ProductFilter } from "@/lib/marketplace";
+import { getServiceNavigationHref, serviceNavigation } from "@/lib/service-navigation";
 import type { Product } from "@/types/commerce";
 
 import styles from "./catalog.module.css";
@@ -228,7 +228,7 @@ function FilterPanel({
       </fieldset>
 
       <div className={styles.filterActions}>
-        {open ? <Button type="button" onClick={onApply}>Применить фильтры</Button> : null}
+        <Button type="button" onClick={onApply}>Применить фильтры</Button>
         <Button
           className={styles.resetButton}
           tone="secondary"
@@ -325,24 +325,25 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { session } = useMarketplace();
+  const filters = useMemo(() => parseCatalogSearchParams(searchParams), [searchParams]);
+  const filtersKey = useMemo(() => serializeCatalogFilters(filters).toString(), [filters]);
   const [loadedProducts, setLoadedProducts] = useState(products);
   const [serverPagination, setServerPagination] = useState(pagination);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [feedState, setFeedState] = useState({ key: "", count: CATALOG_FEED_BATCH_SIZE });
-  const [loadedFiltersKey, setLoadedFiltersKey] = useState("");
+  const [loadedFiltersKey, setLoadedFiltersKey] = useState(filtersKey);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const filterDialogRef = useRef<HTMLElement>(null);
   const closeFilterButtonRef = useRef<HTMLButtonElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  const filters = useMemo(() => parseCatalogSearchParams(searchParams), [searchParams]);
-  const [draftFilters, setDraftFilters] = useState<CatalogFilters>(() => createDefaultCatalogFilters());
+  const [draftFilters, setDraftFilters] = useState<CatalogFilters>(() => filters);
   const visibleProducts = useMemo(
     () => filterAndSortCatalog(loadedProducts, filters),
     [filters, loadedProducts],
   );
-  const filtersKey = useMemo(() => serializeCatalogFilters(filters).toString(), [filters]);
   const visibleCount = feedState.key === filtersKey
     ? feedState.count
     : CATALOG_FEED_BATCH_SIZE;
@@ -357,35 +358,33 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
   const catalogReturnHref = filtersKey ? `${pathname}?${filtersKey}` : pathname;
 
   useEffect(() => {
-    setLoadedFiltersKey((current) => current || filtersKey);
-  }, [filtersKey]);
-
-  useEffect(() => {
     if (loadedFiltersKey === "" || loadedFiltersKey === filtersKey) return;
     let cancelled = false;
-    setLoadingMore(true);
-    setLoadMoreError("");
 
-    void fetchCatalogList({
-      filters,
-      limit: serverPagination.limit,
-      offset: 0,
-    })
-      .then((nextPage) => {
+    async function refreshCatalogPage() {
+      setLoadingMore(true);
+      setLoadMoreError("");
+      try {
+        const nextPage = await fetchCatalogList({
+          filters,
+          limit: serverPagination.limit,
+          offset: 0,
+        });
         if (cancelled) return;
         setLoadedProducts(nextPage.items);
         setServerPagination(nextPage.pagination);
         setFeedState({ key: filtersKey, count: CATALOG_FEED_BATCH_SIZE });
         setLoadedFiltersKey(filtersKey);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           setLoadMoreError("Не удалось обновить каталог по выбранным фильтрам. Повторите действие.");
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoadingMore(false);
-      });
+      }
+    }
+
+    void refreshCatalogPage();
 
     return () => {
       cancelled = true;
@@ -518,7 +517,10 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
   }, [filtersOpen]);
 
   function updateFilters(next: CatalogFilters) {
-    const query = serializeCatalogFilters(next).toString();
+    const serialized = serializeCatalogFilters(next);
+    const normalized = parseCatalogSearchParams(serialized);
+    setDraftFilters(normalized);
+    const query = serialized.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
 
@@ -532,21 +534,31 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
   }
 
   function resetVisibleFilters() {
-    if (filtersOpen) {
-      setDraftFilters(createDefaultCatalogFilters());
-      return;
-    }
-    resetFilters();
+    const defaults = createDefaultCatalogFilters();
+    setDraftFilters(defaults);
+    if (!filtersOpen) updateFilters(defaults);
   }
 
   function applyFilters() {
     updateFilters(draftFilters);
-    closeFilters();
+    if (filtersOpen) closeFilters();
   }
 
   function closeFilters() {
     setFiltersOpen(false);
     requestAnimationFrame(() => filterTriggerRef.current?.focus());
+  }
+
+  function isCurrentService(href: string) {
+    const target = new URL(href, "https://vault.local");
+    if (target.pathname !== pathname) return false;
+    if (target.searchParams.size === 0) {
+      return pathname === "/catalog"
+        && !searchParams.has("category")
+        && !searchParams.has("game")
+        && !searchParams.has("q");
+    }
+    return [...target.searchParams].every(([key, value]) => searchParams.get(key) === value);
   }
 
   return (
@@ -558,47 +570,18 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
           <p>Пополнение Steam и игровые предметы с ценами в Coins.</p>
         </div>
 
-        <div className={styles.categoryTabs} role="group" aria-label="Категории каталога">
-          {categories.map((category) => (
-            <button
-              key={category.value}
-              type="button"
-              className={filters.category === category.value ? styles.activeTab : ""}
-              aria-pressed={filters.category === category.value}
-              onClick={() => updateFilters({
-                ...filters,
-                category: category.value,
-                ...(category.value === "skins" ? {} : { game: undefined }),
-                types: [],
-                conditions: [],
-              })}
+        <nav className={styles.catalogServiceNav} aria-label="Разделы каталога">
+          {serviceNavigation.map((item) => (
+            <Link
+              key={item.label}
+              href={getServiceNavigationHref(item, Boolean(session))}
+              aria-current={isCurrentService(item.href) ? "page" : undefined}
             >
-              {category.label}
-            </button>
+              <Icon name={item.icon} width="17" height="17" />
+              <span>{item.label}</span>
+            </Link>
           ))}
-        </div>
-
-        {(filters.category === "skins" || filters.game !== undefined) ? (
-          <div className={styles.categoryTabs} role="group" aria-label="Игры каталога">
-            {CATALOG_GAMES.map((game: CatalogGame) => (
-              <button
-                key={game}
-                type="button"
-                className={filters.game === game ? styles.activeTab : ""}
-                aria-pressed={filters.game === game}
-                onClick={() => updateFilters({
-                  ...filters,
-                  category: "skins",
-                  game,
-                  types: [],
-                  conditions: [],
-                })}
-              >
-                {getCatalogGameLabel(game)}
-              </button>
-            ))}
-          </div>
-        ) : null}
+        </nav>
 
         <div className={styles.toolbar}>
           <div className={styles.resultSummary}>
@@ -664,13 +647,13 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
             onClick={closeFilters}
           />
           <FilterPanel
-            filters={filtersOpen ? draftFilters : filters}
-            onChange={filtersOpen ? setDraftFilters : updateFilters}
+            filters={draftFilters}
+            onChange={setDraftFilters}
             onReset={resetVisibleFilters}
             onApply={applyFilters}
             onClose={closeFilters}
             open={filtersOpen}
-            hasActiveFilters={(filtersOpen ? draftChips : activeChips).length > 0}
+            hasActiveFilters={draftChips.length > 0}
             dialogRef={filterDialogRef}
             closeButtonRef={closeFilterButtonRef}
             products={loadedProducts}

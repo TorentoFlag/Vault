@@ -6,19 +6,24 @@ const headerSource = readFileSync(
   new URL("../components/layout/SiteHeader.tsx", import.meta.url),
   "utf8",
 );
-const stylesSource = readFileSync(
-  new URL("../components/layout/layout.module.css", import.meta.url),
+const serviceNavigationSource = readFileSync(
+  new URL("./service-navigation.ts", import.meta.url),
+  "utf8",
+);
+const catalogStylesSource = readFileSync(
+  new URL("../features/catalog/catalog.module.css", import.meta.url),
   "utf8",
 );
 const productCardSource = readFileSync(
   new URL("../components/marketplace/ProductCard.tsx", import.meta.url),
   "utf8",
 );
+const catalogSource = readFileSync(
+  new URL("../features/catalog/CatalogScreen.tsx", import.meta.url),
+  "utf8",
+);
 
-test("под поиском отображается навигация по услугам Vault", () => {
-  assert.match(headerSource, /className=\{styles\.serviceNav\}/);
-  assert.match(headerSource, /aria-label="Услуги Vault"/);
-
+test("сервисная навигация хранит первый релиз без GPT и Dota 2", () => {
   for (const label of [
     "Все товары",
     "Пополнение Steam",
@@ -27,12 +32,18 @@ test("под поиском отображается навигация по у�
     "Скины TF2",
     "Пополнить Coins",
   ]) {
-    assert.match(headerSource, new RegExp(label));
+    assert.match(serviceNavigationSource, new RegExp(label));
   }
 
-  assert.doesNotMatch(headerSource, /GPT Plus/);
-  assert.doesNotMatch(headerSource, /GPT API/);
-  assert.doesNotMatch(headerSource, /Скины Dota 2/);
+  assert.doesNotMatch(serviceNavigationSource, /GPT Plus/);
+  assert.doesNotMatch(serviceNavigationSource, /GPT API/);
+  assert.doesNotMatch(serviceNavigationSource, /Скины Dota 2/);
+});
+
+test("верхний header больше не дублирует сервисную навигацию каталога", () => {
+  assert.doesNotMatch(headerSource, /className=\{styles\.serviceNav\}/);
+  assert.doesNotMatch(headerSource, /aria-label="Услуги Vault"/);
+  assert.doesNotMatch(headerSource, /serviceNavigation\.map/);
 });
 
 test("ссылки меню ведут в существующие разделы и фильтры каталога", () => {
@@ -44,11 +55,11 @@ test("ссылки меню ведут в существующие раздел�
     "/catalog?category=skins&game=tf2",
     "/balance/top-up",
   ]) {
-    assert.match(headerSource, new RegExp(href.replace(/[?]/g, "\\?")));
+    assert.match(serviceNavigationSource, new RegExp(href.replace(/[?]/g, "\\?")));
   }
-  assert.doesNotMatch(headerSource, /category=gpt/);
-  assert.doesNotMatch(headerSource, /q=Dota%202/);
-  assert.doesNotMatch(headerSource, /q=Rust/);
+  assert.doesNotMatch(serviceNavigationSource, /category=gpt/);
+  assert.doesNotMatch(serviceNavigationSource, /q=Dota%202/);
+  assert.doesNotMatch(serviceNavigationSource, /q=Rust/);
 });
 
 test("поиск в шапке не питается локальным seed catalog", () => {
@@ -62,11 +73,17 @@ test("карточки скинов без изображения не пока�
 
 test("меню услуг сохраняет одну строку и горизонтально прокручивается на узких экранах", () => {
   assert.match(
-    stylesSource,
-    /\.serviceNavInner\s*{[\s\S]*?overflow-x:\s*auto;[\s\S]*?}/,
+    catalogStylesSource,
+    /\.catalogServiceNav\s*{[\s\S]*?overflow-x:\s*auto;[\s\S]*?}/,
   );
   assert.match(
-    stylesSource,
-    /\.serviceNav a\s*{[\s\S]*?white-space:\s*nowrap;[\s\S]*?}/,
+    catalogStylesSource,
+    /\.catalogServiceNav a\s*{[\s\S]*?white-space:\s*nowrap;[\s\S]*?}/,
   );
+});
+
+test("каталог использует сервисную навигацию как единственный ряд категорий под заголовком", () => {
+  assert.match(catalogSource, /catalogServiceNav/);
+  assert.doesNotMatch(catalogSource, /aria-label="Категории каталога"/);
+  assert.doesNotMatch(catalogSource, /aria-label="Игры каталога"/);
 });
