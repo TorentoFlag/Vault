@@ -7,6 +7,7 @@ import {
   createCanonicalCatalogReturnPath,
   filterAndSortCatalog,
   getProductStatusLabel,
+  getCatalogResultTitle,
   getCatalogScrollStorageKey,
   shouldStoreCatalogScroll,
   parseCatalogScrollPosition,
@@ -92,6 +93,36 @@ test("активные фильтры сериализуются без знач
     "q=AK-47&category=skins&game=rust&type=%D0%90%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82&condition=Field-Tested&min=1000&max=8000&sort=price_asc",
   );
   assert.equal(serializeCatalogFilters(createDefaultCatalogFilters()).toString(), "");
+});
+
+test("заголовок результатов каталога отражает выбранный раздел", () => {
+  assert.equal(getCatalogResultTitle(createDefaultCatalogFilters()), "Все товары");
+  assert.equal(
+    getCatalogResultTitle({
+      ...createDefaultCatalogFilters(),
+      category: "steam",
+      minPrice: 1,
+      maxPrice: 500000,
+    }),
+    "Пополнение Steam",
+  );
+  assert.equal(
+    getCatalogResultTitle({
+      ...createDefaultCatalogFilters(),
+      category: "skins",
+      game: "cs2",
+    }),
+    "Скины CS2",
+  );
+  assert.equal(
+    getCatalogResultTitle({
+      ...createDefaultCatalogFilters(),
+      query: "AK",
+      category: "skins",
+      game: "cs2",
+    }),
+    "Результаты по запросу «AK»",
+  );
 });
 
 test("категория Steam возвращает только пополнения Steam", () => {

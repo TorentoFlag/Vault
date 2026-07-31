@@ -1,7 +1,7 @@
 import type { Product } from "../types/commerce.ts";
 import type { ProductFilter } from "./marketplace.ts";
 import { searchProducts } from "./marketplace.ts";
-import { CATALOG_GAMES, parseCatalogGame, type CatalogGame } from "./catalog-games.ts";
+import { getCatalogGameLabel, parseCatalogGame, type CatalogGame } from "./catalog-games.ts";
 
 export type CatalogSort =
   | "relevance"
@@ -105,6 +105,18 @@ export function serializeCatalogFilters(filters: CatalogFilters) {
   if (filters.sort !== "relevance") searchParams.set("sort", filters.sort);
 
   return searchParams;
+}
+
+export function getCatalogResultTitle(filters: CatalogFilters) {
+  const query = filters.query.trim();
+  if (query) return `Результаты по запросу «${query}»`;
+  if (filters.category === "steam") return "Пополнение Steam";
+  if (filters.category === "skins" && filters.game !== undefined) {
+    return `Скины ${getCatalogGameLabel(filters.game)}`;
+  }
+  if (filters.category === "skins") return "Игровые предметы";
+  if (filters.category === "gpt") return "GPT";
+  return "Все товары";
 }
 
 export function createCanonicalCatalogReturnPath(pathname: string, currentSearch: string, query: string) {

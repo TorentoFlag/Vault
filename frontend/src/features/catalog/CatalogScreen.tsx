@@ -12,6 +12,7 @@ import { getCatalogGameLabel } from "@/lib/catalog-games";
 import {
   createDefaultCatalogFilters,
   filterAndSortCatalog,
+  getCatalogResultTitle,
   getCatalogScrollStorageKey,
   parseCatalogScrollPosition,
   parseCatalogSearchParams,
@@ -585,7 +586,7 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
 
         <div className={styles.toolbar}>
           <div className={styles.resultSummary}>
-            <strong>{filters.query ? `Результаты по запросу «${filters.query}»` : "Все товары"}</strong>
+            <strong>{getCatalogResultTitle(filters)}</strong>
             <span className={styles.demoNote}>Тип оформления указан в каждой карточке</span>
             <span className={styles.srOnly} aria-live="polite">
               Показано товаров: {feedEntries.length} из {serverPagination.total}
