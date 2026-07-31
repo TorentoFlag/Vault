@@ -4,14 +4,16 @@ import test from "node:test";
 
 const source = (path: string) => readFileSync(path, "utf8");
 
-test("auth commits immediately from click-bound provider intents and cannot log out while loading", () => {
+test("auth uses server Steam start and cannot log out while loading", () => {
   const auth = source("src/features/auth/AuthScreen.tsx");
   assert.doesNotMatch(auth, /setTimeout\(resolve,\s*(?:550|650)/);
   assert.doesNotMatch(auth, /connectSteamDemo/);
   assert.match(auth, /buildSteamAuthStartUrl\(returnTo\)/);
   assert.match(auth, /disabled=\{isLoading\}[\s\S]{0,120}>Выйти/);
   const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
-  assert.match(provider, /createMarketplaceMutationOrigin\(persistedStateRef\.current\)[\s\S]{0,500}activateSession/);
+  assert.match(provider, /client\.getCurrentUser\(\)/);
+  assert.match(provider, /setSession\(sessionFromApiUser\(user\)\)/);
+  assert.doesNotMatch(provider, /activateSession|connectSteamDemo/);
 });
 
 test("query-driven auth and top-up pages are not forced static", () => {

@@ -11,7 +11,8 @@ test("checkout consent is invalidated by reviewed state changes and immutable re
   assert.match(checkout, /setAccepted\(false\)/);
   assert.match(checkout, /Данные заказа обновились/i);
   assert.match(checkout, /checkoutCart\(fulfillment,\s*review/i);
-  assert.match(provider, /expectedRevision:\s*review/i);
+  assert.match(provider, /acceptedTotalCoinMinor/);
+  assert.match(provider, /checkoutServerCart\(\{/);
 });
 
 test("Steam settings and guest account gate preserve a nested checkout return", () => {

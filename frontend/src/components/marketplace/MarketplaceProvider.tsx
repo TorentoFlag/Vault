@@ -156,7 +156,7 @@ function mapProviderInventoryItem(item: ApiMappedInventoryItem): MarketplaceInve
     actions: {
       sellToSite: {
         enabled: item.actions.sellToSite.enabled,
-        reason: "Выкуп предметов сайтом временно отключён.",
+        reason: "Выкуп предметов сайтом отключён: для этой операции нет утверждённого способа оценки и расчёта.",
       },
       withdrawToSteam: {
         enabled: item.actions.withdrawToSteam.enabled,
@@ -477,6 +477,18 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       async checkoutCart(fulfillment, review) {
         if (isServerBacked) {
           if (!exposedHydrated) return { status: "busy" };
+          const currentSessionSignature = [session?.emailAccount?.id, session?.steamAccount?.id].filter(Boolean).sort().join("|");
+          const currentTradeUrlState = hasSteamTradeUrl ? steamTradeUrl || "server-configured" : "";
+          const currentCartIds = cart.map((product) => product.id).join("\0");
+          if (
+            review.revision !== marketplaceRevision ||
+            review.sessionSignature !== currentSessionSignature ||
+            review.accountKey !== accountKey ||
+            review.steamTradeUrl !== currentTradeUrlState
+          ) {
+            return { status: "fulfillment-invalid" };
+          }
+          if (review.cartIds.join("\0") !== currentCartIds) return { status: "price-changed" };
           try {
             await ensureCsrfToken();
             let latestServerCart = serverCart;
@@ -551,7 +563,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       },
       async sellInventoryItem(itemId) {
         void itemId;
-        setNotice("Выкуп предметов сайтом отключён до подключения provider-backed оценки.");
+        setNotice("Выкуп предметов сайтом отключён: для этой операции нет утверждённого способа оценки и расчёта.");
         return false;
       },
       async withdrawInventoryItem(itemId) {

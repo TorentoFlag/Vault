@@ -14,10 +14,11 @@ test("checkout is serialized against the latest persisted state and listens for 
   assert.match(provider, /steamTradeUrl:/);
 });
 
-test("auth method switching releases its submit lock and identity conflicts are visible", () => {
+test("auth method switching releases its submit lock and Steam start preserves return", () => {
   const auth = source("src/features/auth/AuthScreen.tsx");
   assert.match(auth, /function selectMethod[\s\S]*submitLock\.current = false/);
-  assert.match(auth, /result\.message|identity.*conflict|уже связан/i);
+  assert.match(auth, /buildSteamAuthStartUrl\(returnTo\)/);
+  assert.match(auth, /href=\{steamAuthUrl\}/);
 });
 
 test("support clear retains the draft when local removal fails", () => {
@@ -49,10 +50,11 @@ test("unsupported Web Locks produce an explicit user-facing error", () => {
   assert.match(checkout, /Безопасное оформление недоступно/);
 });
 
-test("auth completion branches on the committed session and keeps checkout return", () => {
+test("auth completion redirects only after the requested provider is committed", () => {
   const auth = source("src/features/auth/AuthScreen.tsx");
-  assert.match(auth, /result\.session\.steamAccount/);
-  assert.match(auth, /finishAndReturn\(result\.session\)/);
+  assert.match(auth, /requestedProviderPresent/);
+  assert.match(auth, /requiresSteamNow && !hasSteam/);
+  assert.match(auth, /router\.replace\(returnTo\)/);
 });
 
 test("account Steam CTA preserves a nested checkout return", () => {

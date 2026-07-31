@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { demoOrders, demoTransactions } from "../data/account.ts";
-import type { TradeEvent } from "../types/account.ts";
+import type { CoinTransaction, MarketplaceOrder, TradeEvent } from "../types/account.ts";
 import { createMockEmailUser, createMockSteamUser, connectAuthAccount } from "./auth.ts";
 import {
   buildIdentityLinks,
@@ -26,6 +26,59 @@ import {
   type PersistedMarketplaceState,
 } from "./marketplace-state.ts";
 
+function createPurchasedSkinFixtureSnapshot(): AccountSnapshot {
+  const sourceOrder = demoOrders.find((order) => order.status === "completed" && order.items.some((item) => item.kind === "skins"));
+  assert.ok(sourceOrder);
+  const skinItem = sourceOrder.items.find((item) => item.kind === "skins");
+  assert.ok(skinItem);
+  const order: MarketplaceOrder = {
+    ...sourceOrder,
+    id: "fixture-skin-order",
+    number: "VLT-FIXTURE-SKIN",
+    isDemo: false,
+    recipient: { steamTradeUrl: "https://steamcommunity.com/tradeoffer/new/?partner=123456789&token=AbCdEf12" },
+  };
+  const credit: CoinTransaction = {
+    ...demoTransactions.at(-2)!,
+    id: "fixture-skin-credit",
+    createdAt: "2026-07-01T00:00:00.000Z",
+    direction: "credit",
+    reason: "top-up",
+    amountCoins: 20_000,
+    balanceAfterCoins: 20_000,
+    status: "completed",
+    orderNumber: undefined,
+  };
+  const debit: CoinTransaction = {
+    ...demoTransactions[0],
+    id: "fixture-skin-debit",
+    createdAt: "2026-07-02T00:00:00.000Z",
+    direction: "debit",
+    reason: "purchase",
+    amountCoins: order.totalCoins,
+    balanceAfterCoins: 20_000 - order.totalCoins,
+    status: "completed",
+    orderNumber: order.number,
+  };
+  const trade: TradeEvent = {
+    id: "fixture-skin-trade",
+    createdAt: debit.createdAt,
+    direction: "purchase",
+    title: skinItem.title,
+    itemId: skinItem.id,
+    orderNumber: order.number,
+    status: "completed",
+  };
+  return {
+    balanceCoins: debit.balanceAfterCoins,
+    orders: [order],
+    transactions: [debit, credit],
+    tradeEvents: [trade],
+    steamTradeUrl: "https://steamcommunity.com/tradeoffer/new/?partner=123456789&token=AbCdEf12",
+    isSeedData: false,
+  };
+}
+
 test("stable account identity separates email accounts and preserves email identity when Steam is connected", () => {
   const first = connectAuthAccount(null, createMockEmailUser("first@example.com"));
   const firstWithSteam = connectAuthAccount(first, createMockSteamUser());
@@ -36,14 +89,11 @@ test("stable account identity separates email accounts and preserves email ident
   assert.equal(getSessionAccountKey(second), "email:second@example.com");
 });
 
-test("new email account is empty while fixed Steam profile has isolated seed history", () => {
+test("new email and Steam accounts start without local seed history", () => {
   const empty = createEmptyAccountSnapshot();
   const steam = createSeedSteamAccountSnapshot();
   assert.deepEqual(empty, { balanceCoins: 0, orders: [], transactions: [], tradeEvents: [], steamTradeUrl: "", isSeedData: false });
-  assert.ok(steam.orders.length > 0);
-  assert.ok(steam.transactions.length > 0);
-  assert.notStrictEqual(steam.orders, demoOrders);
-  assert.notStrictEqual(steam.transactions, demoTransactions);
+  assert.deepEqual(steam, empty);
 });
 
 test("v3 state migrates account data only into the authenticated identity and keeps cart global", () => {
@@ -108,20 +158,18 @@ test("linked aliases preserve the same account data after logout and either re-l
     currentSnapshot: shared,
   });
 
-  assert.equal(linked.accounts[getSessionAccountKey(email)!]?.balanceCoins, 12_500);
-  assert.equal(linked.accounts[getSessionAccountKey(connectAuthAccount(null, createMockSteamUser()))!]?.balanceCoins, 12_500);
+  assert.equal(linked.accounts[getSessionAccountKey(email)!]?.balanceCoins, shared.balanceCoins);
+  assert.equal(linked.accounts[getSessionAccountKey(connectAuthAccount(null, createMockSteamUser()))!]?.balanceCoins, shared.balanceCoins);
   assert.equal(linked.accounts["email:linked@example.com"]?.steamTradeUrl, shared.steamTradeUrl);
 });
 
-test("seed balance equals the latest completed ledger balance and is marked as local verification data", () => {
+test("Steam seed snapshot is empty production state", () => {
   const seed = createSeedSteamAccountSnapshot();
-  const latestCompleted = [...seed.transactions]
-    .filter((transaction) => transaction.status === "completed")
-    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))[0];
-
-  assert.equal(seed.isSeedData, true);
-  assert.ok(latestCompleted);
-  assert.equal(seed.balanceCoins, latestCompleted.balanceAfterCoins);
+  assert.equal(seed.isSeedData, false);
+  assert.equal(seed.balanceCoins, 0);
+  assert.deepEqual(seed.orders, []);
+  assert.deepEqual(seed.transactions, []);
+  assert.deepEqual(seed.tradeEvents, []);
 });
 
 test("linked identity metadata restores the complete session after either alias signs in again", () => {
@@ -148,7 +196,7 @@ test("v4 migration preserves snapshots and safely derives only the authenticated
   });
 
   assert.equal(migrated.version, 5);
-  assert.equal(migrated.accounts[emailAccount.id]?.balanceCoins, 12_500);
+  assert.equal(migrated.accounts[emailAccount.id]?.balanceCoins, 9876);
   assert.deepEqual(restoreLinkedSession(migrated.identityLinks, emailAccount), linkedSession);
   assert.deepEqual(restoreLinkedSession(migrated.identityLinks, steamAccount), linkedSession);
 });
@@ -389,7 +437,7 @@ test("hydration rejects cross-record ledger and order inconsistencies", () => {
 
 test("hydration rejects a failed duplicate purchase linked to an already charged order", () => {
   const email = connectAuthAccount(null, createMockEmailUser("failed-duplicate@example.com"));
-  const seed = createSeedSteamAccountSnapshot();
+  const seed = createPurchasedSkinFixtureSnapshot();
   const chargedOrder = seed.orders.find((order) => order.status === "completed");
   assert.ok(chargedOrder);
   const chargedTransaction = seed.transactions.find((transaction) => (
@@ -766,7 +814,7 @@ test("successful local skin orders cannot bypass recipient and trade closure", (
   const email = createMockEmailUser("local-closure@example.com");
   const steam = createMockSteamUser();
   const linked = connectAuthAccount(connectAuthAccount(null, email), steam);
-  const seed = createSeedSteamAccountSnapshot();
+  const seed = createPurchasedSkinFixtureSnapshot();
   const successfulSkin = seed.orders.find((order) => order.status === "completed" && order.items.some((item) => item.kind === "skins"));
   assert.ok(successfulSkin);
   const invalidSnapshots = [
@@ -784,7 +832,7 @@ test("skin trades are linked one-to-one by immutable item id and lifecycle", () 
   const email = createMockEmailUser("item-link@example.com");
   const steam = createMockSteamUser();
   const linked = connectAuthAccount(connectAuthAccount(null, email), steam);
-  const seed = createSeedSteamAccountSnapshot();
+  const seed = createPurchasedSkinFixtureSnapshot();
   const source = seed.orders.find((order) => order.status === "completed" && order.items.some((item) => item.kind === "skins"));
   assert.ok(source);
   const first = source.items.find((item) => item.kind === "skins")!;
@@ -807,7 +855,7 @@ test("persisted v5 rejects forged sale and withdrawal trade events", () => {
   const email = createMockEmailUser("forged-trade@example.com");
   const steam = createMockSteamUser();
   const linked = connectAuthAccount(connectAuthAccount(null, email), steam);
-  const seed = createSeedSteamAccountSnapshot();
+  const seed = createPurchasedSkinFixtureSnapshot();
   const purchase = seed.tradeEvents.find((event) => event.direction === "purchase");
   assert.ok(purchase);
 
@@ -836,7 +884,7 @@ test("persisted v5 rejects an order dated after its debit or purchase trade", ()
   const email = createMockEmailUser("future-order@example.com");
   const steam = createMockSteamUser();
   const linked = connectAuthAccount(connectAuthAccount(null, email), steam);
-  const seed = createSeedSteamAccountSnapshot();
+  const seed = createPurchasedSkinFixtureSnapshot();
   const source = seed.orders.find((order) => order.status === "completed" && order.items.some((item) => item.kind === "skins"));
   assert.ok(source);
   const debit = seed.transactions.find((transaction) => transaction.orderNumber === source.number && transaction.reason === "purchase");

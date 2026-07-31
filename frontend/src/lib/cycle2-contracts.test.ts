@@ -15,11 +15,12 @@ test("missing Trade URL preserves checkout return and saved form returns safely"
   assert.match(source("src/features/account/SteamTradeUrlForm.tsx"), /router\.replace\(returnTo\)/);
 });
 
-test("checkout discloses local Coins order and unavailable external fulfillment before consent", () => {
+test("checkout discloses Coins order review before consent", () => {
   const checkout = source("src/features/checkout/CheckoutScreen.tsx");
-  assert.match(checkout, /локальн.*заказ/i);
-  assert.match(checkout, /внешн.*(?:выдач|исполн).*не подключ/i);
+  assert.match(checkout, /Проверьте товары, данные заказа и итоговую стоимость в Coins/);
+  assert.match(checkout, /После подтверждения Coins будут списаны, а заказ появится в истории аккаунта/);
   assert.match(checkout, /Я принимаю условия/);
+  assert.doesNotMatch(checkout, /локальн.*заказ|внешн.*(?:выдач|исполн).*не подключ/i);
 });
 
 test("visible product and catalog copy has no unsupported automatic fulfillment promises", () => {
@@ -68,10 +69,11 @@ test("FAQ tabs cancel native arrow, Home and End key behavior", () => {
   assert.match(faq, /event\.preventDefault\(\)/);
 });
 
-test("home and cart storefront copy does not promise unavailable external fulfillment", () => {
+test("home and cart storefront copy matches server-backed commerce scope", () => {
   const copy = `${source("src/features/home/Hero.tsx")}\n${source("src/features/home/SteamTopUp.tsx")}\n${source("src/data/home.ts")}\n${source("src/features/cart/CartScreen.tsx")}`;
   assert.doesNotMatch(copy, /Пополняйте баланс Steam|оплачивайте доступ к GPT|<h2>Пополнить баланс Steam<\/h2>|В наличии|После пополнения вы верн[её]тесь/iu);
-  assert.match(copy, /внешн.*не подключ/iu);
+  assert.match(copy, /Оформление через серверный заказ|Coins списываются только после подтверждения заказа/iu);
+  assert.doesNotMatch(copy, /локальн.*заказ|внешн.*не подключ/iu);
 });
 
 test("top-up page creates backend sessions without local payment confirmation", () => {

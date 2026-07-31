@@ -162,9 +162,9 @@ test("overview operations are newest-first and failed rows state that balance di
 });
 
 test("order and trade statuses avoid unsupported automatic fulfillment promises", () => {
-  assert.equal(getOrderItemDeliveryStatusLabel("delivered"), "Отмечено выполненным в локальной истории");
-  assert.equal(getOrderItemDeliveryStatusLabel("inventory-ready"), "Сохранено в локальном инвентаре");
-  assert.equal(getOrderItemDeliveryStatusLabel("pending"), "Внешняя выдача не подключена");
+  assert.equal(getOrderItemDeliveryStatusLabel("delivered"), "Выполнено");
+  assert.equal(getOrderItemDeliveryStatusLabel("inventory-ready"), "Доступно в инвентаре");
+  assert.equal(getOrderItemDeliveryStatusLabel("pending"), "Ожидает обработки");
   assert.equal(getTradeStatusLabel("completed"), "Завершено");
   assert.equal(getTradeStatusLabel("processing"), "В обработке");
   assert.equal(getTradeStatusLabel("pending"), "Ожидает обработки");
