@@ -49,6 +49,12 @@ function limitQuery(value: string | undefined): number {
   return Math.min(parsed, maxCatalogLimit);
 }
 
+function offsetQuery(value: string | undefined): number {
+  const parsed = numberQuery(value);
+  if (parsed === undefined || !Number.isSafeInteger(parsed)) return 0;
+  return Math.max(0, parsed);
+}
+
 function priceDto(amountMinor: number) {
   return {
     currency: "COINS" as const,
@@ -174,14 +180,20 @@ export class CatalogService {
     const sort = allowedSorts.has(query.sort as CatalogSort) ? query.sort as CatalogSort : "relevance";
     const search = query.q ?? "";
     const limit = limitQuery(query.limit);
-    const [products, catalogFacets] = await Promise.all([
+    const offset = offsetQuery(query.offset);
+    const [products, catalogFacets, total] = await Promise.all([
       this.loadProducts({
         ...(category === undefined ? {} : { category }),
         search,
-        limit: maxCatalogLimit * 4,
+        limit,
+        offset,
         sort,
       }),
       this.loadFacets(),
+      this.countProducts({
+        ...(category === undefined ? {} : { category }),
+        search,
+      }),
     ]);
 
     const items = products
@@ -205,6 +217,12 @@ export class CatalogService {
     return {
       items: quotedItems.map(productDto),
       facets: catalogFacets,
+      pagination: {
+        limit,
+        offset,
+        total,
+        hasMore: offset + items.length < total,
+      },
       pricing: {
         coinRate: {
           fiatCurrency: "RUB",
@@ -234,53 +252,18 @@ export class CatalogService {
   private async loadProducts(command: {
     category?: CatalogProductKind;
     limit?: number;
+    offset?: number;
     search?: string;
     slug?: string;
     sort?: CatalogSort;
   } = {}): Promise<LoadedCatalogProduct[]> {
-    const params: Array<number | string> = [];
-    const where = [
-      "catalog_products.public_enabled = true",
-      "catalog_products.kind IN ('skins', 'steam')",
-    ];
-    if (command.category !== undefined) {
-      params.push(command.category);
-      where.push(`catalog_products.kind = $${params.length}`);
-    }
-    if (command.slug !== undefined) {
-      params.push(command.slug);
-      where.push(`catalog_products.slug = $${params.length}`);
-    }
-    const search = normalize(command.search ?? "");
-    if (search) {
-      const exactGame = ["cs2"].find((game) => game === search);
-      if (exactGame !== undefined) {
-        params.push(exactGame);
-        where.push(`lower(coalesce(catalog_products.game, '')) = $${params.length}`);
-      } else {
-        for (const term of search.split(/\s+/).filter(Boolean)) {
-          if (term === "steam") {
-            where.push("catalog_products.kind = 'steam'");
-            continue;
-          }
-          if (["скин", "скины", "предмет", "предметы"].includes(term)) {
-            where.push("catalog_products.kind = 'skins'");
-            continue;
-          }
-          params.push(`%${term}%`);
-          where.push(`(
-            lower(catalog_products.title) LIKE $${params.length}
-            OR lower(catalog_products.description) LIKE $${params.length}
-            OR lower(catalog_products.category) LIKE $${params.length}
-            OR lower(coalesce(catalog_products.game, '')) LIKE $${params.length}
-            OR lower(catalog_products.product_type) LIKE $${params.length}
-            OR lower(array_to_string(catalog_products.meta || catalog_products.keywords, ' ')) LIKE $${params.length}
-          )`);
-        }
-      }
-    }
+    const { params, where } = this.catalogWhere(command);
     const limit = Math.min(command.limit ?? maxCatalogLimit, maxCatalogLimit * 4);
     params.push(limit);
+    const limitParam = params.length;
+    const offset = Math.max(0, command.offset ?? 0);
+    params.push(offset);
+    const offsetParam = params.length;
     const orderBy = command.sort === "newest"
       ? "catalog_products.created_at DESC, catalog_products.popularity DESC, catalog_products.id ASC"
       : "catalog_products.popularity DESC, catalog_products.created_at DESC, catalog_products.id ASC";
@@ -335,7 +318,8 @@ export class CatalogService {
           AND supplier_listings.active = true
         WHERE ${where.join("\n          AND ")}
         ORDER BY ${orderBy}
-        LIMIT $${params.length}
+        LIMIT $${limitParam}
+        OFFSET $${offsetParam}
       `,
       params,
     );
@@ -360,6 +344,72 @@ export class CatalogService {
       details: row.details,
       ...(row.supplier_price_microusd === null ? {} : { supplierPriceMicrousd: row.supplier_price_microusd }),
     }));
+  }
+
+  private catalogWhere(command: {
+    category?: CatalogProductKind;
+    search?: string;
+    slug?: string;
+  }) {
+    const params: Array<number | string> = [];
+    const where = [
+      "catalog_products.public_enabled = true",
+      "catalog_products.kind IN ('skins', 'steam')",
+    ];
+    if (command.category !== undefined) {
+      params.push(command.category);
+      where.push(`catalog_products.kind = $${params.length}`);
+    }
+    if (command.slug !== undefined) {
+      params.push(command.slug);
+      where.push(`catalog_products.slug = $${params.length}`);
+    }
+    const search = normalize(command.search ?? "");
+    if (search) {
+      const exactGame = ["cs2"].find((game) => game === search);
+      if (exactGame !== undefined) {
+        params.push(exactGame);
+        where.push(`lower(coalesce(catalog_products.game, '')) = $${params.length}`);
+      } else {
+        for (const term of search.split(/\s+/).filter(Boolean)) {
+          if (term === "steam") {
+            where.push("catalog_products.kind = 'steam'");
+            continue;
+          }
+          if (["скин", "скины", "предмет", "предметы"].includes(term)) {
+            where.push("catalog_products.kind = 'skins'");
+            continue;
+          }
+          params.push(`%${term}%`);
+          where.push(`(
+            lower(catalog_products.title) LIKE $${params.length}
+            OR lower(catalog_products.description) LIKE $${params.length}
+            OR lower(catalog_products.category) LIKE $${params.length}
+            OR lower(coalesce(catalog_products.game, '')) LIKE $${params.length}
+            OR lower(catalog_products.product_type) LIKE $${params.length}
+            OR lower(array_to_string(catalog_products.meta || catalog_products.keywords, ' ')) LIKE $${params.length}
+          )`);
+        }
+      }
+    }
+    return { params, where };
+  }
+
+  private async countProducts(command: {
+    category?: CatalogProductKind;
+    search?: string;
+    slug?: string;
+  }): Promise<number> {
+    const { params, where } = this.catalogWhere(command);
+    const result = await this.database.query<{ total: string }>(
+      `
+        SELECT count(*)::text AS total
+        FROM catalog_products
+        WHERE ${where.join("\n          AND ")}
+      `,
+      params,
+    );
+    return Number(result.rows[0]?.total ?? 0);
   }
 
   private async loadFacets(): Promise<CatalogFacetsDto> {

@@ -34,12 +34,22 @@ type ApiCatalogProduct = {
 
 export type CatalogApiList = {
   items: Product[];
+  pagination: CatalogPagination;
+};
+
+export type CatalogPagination = {
+  limit: number;
+  offset: number;
+  total: number;
+  hasMore: boolean;
 };
 
 export type CatalogFetchOptions = {
   baseUrl?: string;
   fetch?: ApiFetch;
   filters?: CatalogFilters;
+  limit?: number;
+  offset?: number;
 };
 
 export type CatalogProductFetchOptions = {
@@ -115,6 +125,22 @@ function isApiCatalogProduct(value: unknown): value is ApiCatalogProduct {
   );
 }
 
+function isCatalogPagination(value: unknown): value is CatalogPagination {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.limit === "number"
+    && Number.isSafeInteger(value.limit)
+    && value.limit > 0
+    && typeof value.offset === "number"
+    && Number.isSafeInteger(value.offset)
+    && value.offset >= 0
+    && typeof value.total === "number"
+    && Number.isSafeInteger(value.total)
+    && value.total >= 0
+    && typeof value.hasMore === "boolean"
+  );
+}
+
 async function parseJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return null;
@@ -167,9 +193,16 @@ export async function fetchCatalogList(options: CatalogFetchOptions = {}): Promi
     const serialized = serializeCatalogFilters(options.filters);
     serialized.forEach((value, key) => url.searchParams.append(key, value));
   }
+  if (options.limit !== undefined) url.searchParams.set("limit", String(options.limit));
+  if (options.offset !== undefined) url.searchParams.set("offset", String(options.offset));
   const body = await requestJson(url, options.fetch ?? fetch);
-  if (!isRecord(body) || !Array.isArray(body.items)) throw new Error("Catalog response is malformed.");
-  return { items: body.items.map(mapApiCatalogProduct) };
+  if (!isRecord(body) || !Array.isArray(body.items) || !isCatalogPagination(body.pagination)) {
+    throw new Error("Catalog response is malformed.");
+  }
+  return {
+    items: body.items.map(mapApiCatalogProduct),
+    pagination: body.pagination,
+  };
 }
 
 export async function fetchCatalogProductBySlug(slug: string, options: CatalogProductFetchOptions = {}): Promise<Product | null> {

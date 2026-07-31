@@ -67,6 +67,12 @@ export type CatalogFacetsDto = {
 export type CatalogListDto = {
   items: CatalogProductDto[];
   facets: CatalogFacetsDto;
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    hasMore: boolean;
+  };
   pricing: {
     coinRate: {
       fiatCurrency: "RUB";
@@ -88,4 +94,5 @@ export type CatalogListQuery = {
   max?: string;
   sort?: string;
   limit?: string;
+  offset?: string;
 };

@@ -135,4 +135,36 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
       display: "181 Coins",
     });
   });
+
+  it("returns catalog pagination metadata instead of making the first page look exhaustive", async () => {
+    await insertDeagleListing();
+    const promoted = await app.get(CatalogSupplierSyncService).promoteActiveSihListings("cs2");
+    expect(promoted.promotedProductCount).toBeGreaterThanOrEqual(1);
+
+    const firstPageResponse = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .query({ category: "skins", q: "CS2", limit: 1, offset: 0 })
+      .expect(200);
+    const firstPage = firstPageResponse.body as CatalogListDto;
+
+    expect(firstPage.items).toHaveLength(1);
+    expect(firstPage.pagination.limit).toBe(1);
+    expect(firstPage.pagination.offset).toBe(0);
+    expect(firstPage.pagination.total).toBeGreaterThanOrEqual(1);
+    expect(firstPage.pagination.hasMore).toBe(firstPage.pagination.total > 1);
+
+    if (firstPage.pagination.total > 1) {
+      const secondPageResponse = await request(app.getHttpServer() as Parameters<typeof request>[0])
+        .get("/catalog")
+        .query({ category: "skins", q: "CS2", limit: 1, offset: 1 })
+        .expect(200);
+      const secondPage = secondPageResponse.body as CatalogListDto;
+
+      expect(secondPage.items).toHaveLength(1);
+      expect(secondPage.pagination.limit).toBe(1);
+      expect(secondPage.pagination.offset).toBe(1);
+      expect(secondPage.pagination.total).toBe(firstPage.pagination.total);
+      expect(secondPage.items[0]?.slug).not.toBe(firstPage.items[0]?.slug);
+    }
+  });
 });

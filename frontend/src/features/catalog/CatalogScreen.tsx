@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { ProductCard } from "@/components/marketplace/ProductCard";
@@ -15,6 +15,7 @@ import {
   type CatalogFilters,
   type CatalogSort,
 } from "@/lib/catalog";
+import { fetchCatalogList, type CatalogPagination } from "@/lib/catalog-api";
 import {
   CATALOG_FEED_BATCH_SIZE,
   createCatalogFeedEntries,
@@ -64,6 +65,17 @@ const fulfillmentLabels = Object.fromEntries(
 const sortLabels = Object.fromEntries(
   sortOptions.map((sort) => [sort.value, sort.label]),
 ) as Record<CatalogSort, string>;
+
+function mergeProducts(current: Product[], next: Product[]) {
+  const seen = new Set(current.map((product) => product.id));
+  const merged = [...current];
+  next.forEach((product) => {
+    if (seen.has(product.id)) return;
+    seen.add(product.id);
+    merged.push(product);
+  });
+  return merged;
+}
 
 function toggleValue<T extends string>(values: T[], value: T) {
   return values.includes(value)
@@ -346,10 +358,14 @@ function getActiveChips(filters: CatalogFilters): ActiveChip[] {
   return chips;
 }
 
-export function CatalogScreen({ products }: { products: Product[] }) {
+export function CatalogScreen({ products, pagination }: { products: Product[]; pagination: CatalogPagination }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [loadedProducts, setLoadedProducts] = useState(products);
+  const [serverPagination, setServerPagination] = useState(pagination);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [feedState, setFeedState] = useState({ key: "", count: CATALOG_FEED_BATCH_SIZE });
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
@@ -359,8 +375,8 @@ export function CatalogScreen({ products }: { products: Product[] }) {
   const filters = useMemo(() => parseCatalogSearchParams(searchParams), [searchParams]);
   const [draftFilters, setDraftFilters] = useState<CatalogFilters>(() => createDefaultCatalogFilters());
   const visibleProducts = useMemo(
-    () => filterAndSortCatalog(products, filters),
-    [filters, products],
+    () => filterAndSortCatalog(loadedProducts, filters),
+    [filters, loadedProducts],
   );
   const filtersKey = useMemo(() => serializeCatalogFilters(filters).toString(), [filters]);
   const visibleCount = feedState.key === filtersKey
@@ -370,10 +386,52 @@ export function CatalogScreen({ products }: { products: Product[] }) {
     () => createCatalogFeedEntries(visibleProducts, visibleCount),
     [visibleCount, visibleProducts],
   );
-  const hasMoreProducts = feedEntries.length < visibleProducts.length;
+  const hasMoreLocalProducts = feedEntries.length < visibleProducts.length;
+  const hasMoreProducts = hasMoreLocalProducts || serverPagination.hasMore;
   const activeChips = useMemo(() => getActiveChips(filters), [filters]);
   const draftChips = useMemo(() => getActiveChips(draftFilters), [draftFilters]);
   const catalogReturnHref = filtersKey ? `${pathname}?${filtersKey}` : pathname;
+
+  const loadMoreProducts = useCallback(async () => {
+    if (hasMoreLocalProducts) {
+      setFeedState((current) => ({
+        key: filtersKey,
+        count: getNextCatalogFeedSize(
+          current.key === filtersKey ? current.count : CATALOG_FEED_BATCH_SIZE,
+          visibleProducts.length,
+        ),
+      }));
+      return;
+    }
+
+    if (!serverPagination.hasMore || loadingMore) return;
+
+    setLoadingMore(true);
+    setLoadMoreError("");
+    try {
+      const nextPage = await fetchCatalogList({
+        filters,
+        limit: serverPagination.limit,
+        offset: serverPagination.offset + serverPagination.limit,
+      });
+      setLoadedProducts((current) => mergeProducts(current, nextPage.items));
+      setServerPagination(nextPage.pagination);
+      setFeedState({ key: filtersKey, count: visibleProducts.length + nextPage.items.length });
+    } catch {
+      setLoadMoreError("Не удалось загрузить следующую страницу каталога. Повторите действие.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [
+    filters,
+    filtersKey,
+    hasMoreLocalProducts,
+    loadingMore,
+    serverPagination.hasMore,
+    serverPagination.limit,
+    serverPagination.offset,
+    visibleProducts.length,
+  ]);
 
   useEffect(() => {
     let savedPosition: number | null = null;
@@ -404,19 +462,13 @@ export function CatalogScreen({ products }: { products: Product[] }) {
       if (!entries.some((entry) => entry.isIntersecting)) return;
 
       observer.unobserve(sentinel);
-      setFeedState((current) => ({
-        key: filtersKey,
-        count: getNextCatalogFeedSize(
-          current.key === filtersKey ? current.count : CATALOG_FEED_BATCH_SIZE,
-          visibleProducts.length,
-        ),
-      }));
+      void loadMoreProducts();
     }, { rootMargin: "640px 0px" });
 
     observer.observe(sentinel);
 
     return () => observer.disconnect();
-  }, [filtersKey, hasMoreProducts, visibleCount, visibleProducts.length]);
+  }, [hasMoreProducts, loadMoreProducts, visibleCount]);
 
   useEffect(() => {
     if (!filtersOpen) return;
@@ -531,7 +583,7 @@ export function CatalogScreen({ products }: { products: Product[] }) {
             <strong>{filters.query ? `Результаты по запросу «${filters.query}»` : "Все товары"}</strong>
             <span className={styles.demoNote}>Тип оформления указан в каждой карточке</span>
             <span className={styles.srOnly} aria-live="polite">
-              Показано товаров: {visibleProducts.length}
+              Показано товаров: {feedEntries.length} из {serverPagination.total}
             </span>
           </div>
           <div className={styles.toolbarActions}>
@@ -599,7 +651,7 @@ export function CatalogScreen({ products }: { products: Product[] }) {
             hasActiveFilters={(filtersOpen ? draftChips : activeChips).length > 0}
             dialogRef={filterDialogRef}
             closeButtonRef={closeFilterButtonRef}
-            products={products}
+            products={loadedProducts}
           />
 
           <div className={styles.results}>
@@ -617,17 +669,13 @@ export function CatalogScreen({ products }: { products: Product[] }) {
                   ))}
                 </div>
                 <div ref={loadMoreRef} className={`${styles.loadMore} ${hasMoreProducts ? "" : styles.loadMoreEnd}`} aria-live="polite">
-                  <span>Показано карточек: {feedEntries.length}</span>
+                  <span>Показано карточек: {feedEntries.length} из {serverPagination.total.toLocaleString("ru-RU")}</span>
+                  {loadMoreError ? <span>{loadMoreError}</span> : null}
                   {hasMoreProducts ? <button
                     type="button"
-                    onClick={() => setFeedState((current) => ({
-                      key: filtersKey,
-                      count: getNextCatalogFeedSize(
-                        current.key === filtersKey ? current.count : CATALOG_FEED_BATCH_SIZE,
-                        visibleProducts.length,
-                      ),
-                    }))}
-                  >Показать ещё</button> : <strong>Вы посмотрели все товары в этой подборке</strong>}
+                    disabled={loadingMore}
+                    onClick={() => void loadMoreProducts()}
+                  >{loadingMore ? "Загружаем..." : "Показать ещё"}</button> : <strong>Вы посмотрели все товары в этой подборке</strong>}
                 </div>
               </>
             ) : (

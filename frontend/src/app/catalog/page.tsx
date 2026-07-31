@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { CatalogScreen } from "@/features/catalog/CatalogScreen";
-import { parseCatalogSearchParams } from "@/lib/catalog";
+import { parseCatalogSearchParams, serializeCatalogFilters } from "@/lib/catalog";
 import { fetchCatalogList } from "@/lib/catalog-api";
 
 import { CatalogLoading } from "./loading";
@@ -29,11 +29,12 @@ export const dynamic = "force-dynamic";
 
 export default async function CatalogPage({ searchParams }: CatalogPageProps) {
   const filters = parseCatalogSearchParams(toUrlSearchParams(await searchParams));
+  const filtersKey = serializeCatalogFilters(filters).toString();
   const catalog = await fetchCatalogList({ filters });
 
   return (
     <Suspense fallback={<CatalogLoading />}>
-      <CatalogScreen products={catalog.items} />
+      <CatalogScreen key={filtersKey} products={catalog.items} pagination={catalog.pagination} />
     </Suspense>
   );
 }

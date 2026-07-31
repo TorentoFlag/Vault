@@ -71,6 +71,12 @@ test("fetchCatalogList requests backend catalog with canonical filters and hides
       requested.push(String(input));
       return new Response(JSON.stringify({
         items: [apiProduct],
+        pagination: {
+          limit: 120,
+          offset: 0,
+          total: 1,
+          hasMore: false,
+        },
         facets: {},
         pricing: {
           coinRate: {
@@ -93,4 +99,52 @@ test("fetchCatalogList requests backend catalog with canonical filters and hides
   );
   assert.deepEqual(response.items.map((product) => product.kind), ["skins"]);
   assert.equal(response.items[0]?.priceCoins, 181);
+  assert.deepEqual(response.pagination, {
+    limit: 120,
+    offset: 0,
+    total: 1,
+    hasMore: false,
+  });
+});
+
+test("fetchCatalogList requests catalog pages with limit and offset", async () => {
+  const requested: string[] = [];
+  const response = await fetchCatalogList({
+    baseUrl: "https://api.vault.example",
+    limit: 120,
+    offset: 240,
+    fetch: async (input) => {
+      requested.push(String(input));
+      return new Response(JSON.stringify({
+        items: [apiProduct],
+        pagination: {
+          limit: 120,
+          offset: 240,
+          total: 17_574,
+          hasMore: true,
+        },
+        facets: {},
+        pricing: {
+          coinRate: {
+            fiatCurrency: "RUB",
+            fiatMinor: 100,
+            coinMinor: 150,
+            display: "1 RUB = 1.5 Coins",
+          },
+        },
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  assert.equal(requested[0], "https://api.vault.example/catalog?limit=120&offset=240");
+  assert.equal(response.items.length, 1);
+  assert.deepEqual(response.pagination, {
+    limit: 120,
+    offset: 240,
+    total: 17_574,
+    hasMore: true,
+  });
 });
