@@ -50,16 +50,37 @@ When deriving `/opt/vault/secrets/database-url` from `/opt/vault/secrets/postgre
 node -e 'const fs=require("node:fs"); const password=fs.readFileSync("/opt/vault/secrets/postgres-password","utf8").trim(); fs.writeFileSync("/opt/vault/secrets/database-url", `postgres://vault:${encodeURIComponent(password)}@postgres:5432/vault\n`, { mode: 0o600 });'
 ```
 
-## Commands
+## Automatic deploy on push
+
+Pushes to `main` run `.github/workflows/deploy.yml`.
+
+The workflow:
+
+1. runs backend verification, frontend tests/typecheck/build, and deploy-contract tests;
+2. uploads the exact GitHub Actions checkout to `/opt/vault/deploy-incoming/<sha>` by `rsync`;
+3. runs `deploy/production-remote-deploy.sh` on the server;
+4. backs up the current `/opt/vault/app` into `/opt/vault/backups/app-<timestamp>-<sha>`;
+5. keeps only the newest rollback backup and deletes older app backups;
+6. builds images, applies migrations, starts Compose with `--wait`, checks public health endpoints, and then prunes unused Docker artifacts/build cache.
+
+Required GitHub Secrets:
+
+- `VAULT_DEPLOY_HOST`: `38.180.243.42`
+- `VAULT_DEPLOY_USER`: SSH user used for deploy
+- `VAULT_DEPLOY_PORT`: optional, defaults to `22`
+- `VAULT_DEPLOY_SSH_KEY`: private deploy key authorized on the server
+- `VAULT_DEPLOY_KNOWN_HOSTS`: pinned `known_hosts` entry for the server
+
+The workflow does not store provider secrets. Runtime config stays outside git in `/opt/vault/env` and `/opt/vault/secrets`.
+
+Cleanup deliberately excludes Docker volumes. Postgres, Redis, Caddy data, `/opt/vault/env`, and `/opt/vault/secrets` must remain untouched.
+
+## Manual commands
 
 From `/opt/vault/app`:
 
 ```sh
-docker compose -f compose.prod.yaml build
-docker compose -f compose.prod.yaml up -d postgres redis
-docker compose -f compose.prod.yaml run --rm backend npm run db:migrate
-docker compose -f compose.prod.yaml up -d
-docker compose -f compose.prod.yaml ps
+VAULT_RELEASE_DIR=/opt/vault/app VAULT_DEPLOY_SHA=manual sh deploy/production-remote-deploy.sh
 ```
 
 Before building, `docker compose -f compose.prod.yaml config` must show `DATABASE_URL_FILE`, not a literal `DATABASE_URL` containing credentials.
@@ -82,13 +103,14 @@ Expected before SIH acceptance test data is configured: `sih-skin-test-order` an
 
 ## Rollback
 
-Keep the previous `/opt/vault/app` copy or Git commit hash before updating. To rollback:
+The deploy keeps exactly one previous app backup under `/opt/vault/backups`. To rollback code:
 
 ```sh
+latest_backup="$(find /opt/vault/backups -mindepth 1 -maxdepth 1 -type d -name 'app-*' | sort -r | head -n 1)"
+rsync -a --delete "$latest_backup"/ /opt/vault/app/
 cd /opt/vault/app
-git checkout <known-good-commit>
 docker compose -f compose.prod.yaml build
-docker compose -f compose.prod.yaml up -d
+docker compose -f compose.prod.yaml up -d --wait --wait-timeout 180
 ```
 
 Do not rollback database migrations without a written data plan.

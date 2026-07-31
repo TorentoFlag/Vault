@@ -1,4 +1,4 @@
-name: Validate Vault frontend
+name: Deploy Vault production
 
 on:
   push:
@@ -10,28 +10,106 @@ permissions:
   contents: read
 
 concurrency:
-  group: frontend-${{ github.ref }}
+  group: vault-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  frontend:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install backend dependencies
+        run: npm --prefix backend ci
+
+      - name: Verify backend
+        run: npm --prefix backend run verify
+
+      - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
-      - name: Run tests
+      - name: Run frontend tests
         run: npm --prefix frontend test
+
+      - name: Typecheck frontend
+        run: npm --prefix frontend run typecheck
 
       - name: Build frontend
         run: npm --prefix frontend run build
+
+      - name: Validate deploy contract
+        run: node --test deploy/**/*.test.mjs
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    environment: production
+    concurrency:
+      group: vault-production
+      cancel-in-progress: false
+    env:
+      VAULT_DEPLOY_HOST: ${{ secrets.VAULT_DEPLOY_HOST }}
+      VAULT_DEPLOY_USER: ${{ secrets.VAULT_DEPLOY_USER }}
+      VAULT_DEPLOY_PORT: ${{ secrets.VAULT_DEPLOY_PORT }}
+      VAULT_DEPLOY_SSH_KEY: ${{ secrets.VAULT_DEPLOY_SSH_KEY }}
+      VAULT_DEPLOY_KNOWN_HOSTS: ${{ secrets.VAULT_DEPLOY_KNOWN_HOSTS }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${VAULT_DEPLOY_HOST:?Missing VAULT_DEPLOY_HOST}"
+          : "${VAULT_DEPLOY_USER:?Missing VAULT_DEPLOY_USER}"
+          : "${VAULT_DEPLOY_SSH_KEY:?Missing VAULT_DEPLOY_SSH_KEY}"
+          : "${VAULT_DEPLOY_KNOWN_HOSTS:?Missing VAULT_DEPLOY_KNOWN_HOSTS}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VAULT_DEPLOY_SSH_KEY" > ~/.ssh/vault_deploy_key
+          chmod 600 ~/.ssh/vault_deploy_key
+          printf '%s\n' "$VAULT_DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy_port="${VAULT_DEPLOY_PORT:-22}"
+          release_dir="/opt/vault/deploy-incoming/${GITHUB_SHA}"
+          ssh_cmd=(ssh -i ~/.ssh/vault_deploy_key -p "$deploy_port" -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts)
+          "${ssh_cmd[@]}" "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}" "rm -rf '$release_dir' && mkdir -p '$release_dir'"
+          rsync -az --delete \
+            --exclude='.git/' \
+            --exclude='.secrets/' \
+            --exclude='node_modules/' \
+            --exclude='frontend/.next/' \
+            --exclude='backend/dist/' \
+            --exclude='.DS_Store' \
+            -e "ssh -i ~/.ssh/vault_deploy_key -p $deploy_port -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts" \
+            ./ "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}:${release_dir}/"
+
+      - name: Deploy on server
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy_port="${VAULT_DEPLOY_PORT:-22}"
+          release_dir="/opt/vault/deploy-incoming/${GITHUB_SHA}"
+          ssh -i ~/.ssh/vault_deploy_key \
+            -p "$deploy_port" \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}" \
+            "VAULT_RELEASE_DIR='$release_dir' VAULT_DEPLOY_SHA='${GITHUB_SHA}' sh '$release_dir/deploy/production-remote-deploy.sh'"
