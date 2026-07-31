@@ -8,7 +8,7 @@ ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY next.config.ts tsconfig.json eslint.config.mjs next-env.d.ts ./
+COPY next.config.ts tsconfig.json eslint.config.mjs ./
 COPY public ./public
 COPY src ./src
 

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const workflow = readFileSync(new URL("../.github/workflows/deploy.yml", import.meta.url), "utf8");
+const frontendDockerfile = readFileSync(new URL("../frontend/Dockerfile", import.meta.url), "utf8");
 
 test("workflow deploys production only after validation through SSH secrets", () => {
   assert.match(workflow, /^name:\s+Deploy Vault production/m);
@@ -45,4 +46,8 @@ test("remote deploy script gates deployment with migrations, compose wait, and p
   assert.match(remoteScript, /https:\/\/api\.vaultapp24\.com\/health\/live/);
   assert.match(remoteScript, /https:\/\/api\.vaultapp24\.com\/health\/ready/);
   assert.match(remoteScript, /https:\/\/vaultapp24\.com\//);
+});
+
+test("frontend Dockerfile does not require generated gitignored Next.js files", () => {
+  assert.doesNotMatch(frontendDockerfile, /COPY[^\n]*next-env\.d\.ts/);
 });
