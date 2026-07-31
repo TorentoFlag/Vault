@@ -187,7 +187,7 @@ function Overview() {
         <div className={styles.balanceHero}><span>Доступно</span><strong>{formatCoins(balanceCoins)} <small>Coins</small></strong><Link href="/balance/top-up">Пополнить</Link></div>
         <dl>
           <div><dt>Заказов</dt><dd>{orders.length}</dd></div>
-          <div><dt>Без внешней выдачи</dt><dd>{activeOrders}</dd></div>
+          <div><dt>В обработке</dt><dd>{activeOrders}</dd></div>
           <div><dt>В инвентаре</dt><dd>{inventory.length}</dd></div>
         </dl>
         <div className={styles.accountReadiness}><span>Настройки аккаунта</span><strong>{hasSteam && hasSteamTradeUrl ? "Данные Steam настроены" : "Нужна настройка Steam"}</strong><small>Email {session?.emailAccount ? "подтверждён" : "не подключён"} · Steam {hasSteam ? "подключён" : "не подключён"}</small><Link href="/account/steam">Проверить Steam</Link></div>
@@ -231,8 +231,8 @@ function Inventory() {
   return (
     <div className={styles.sectionStack}>
       <section className={styles.readinessPanel}>
-        <div><span>Настройки Steam</span><h2>{isSteamDataConfigured ? "Данные Steam настроены" : "Завершите настройку Steam"}</h2><p>Профиль и Trade URL сохраняются для заказов игровых предметов. Внешняя передача предметов не подключена.</p></div>
-        <dl><div><dt>Steam</dt><dd>{hasSteam ? "Подключён" : "Не подключён"}</dd></div><div><dt>Trade URL</dt><dd>{hasSteamTradeUrl ? "Сохранён" : "Не добавлен"}</dd></div><div><dt>Передача</dt><dd>Не подключена</dd></div></dl>
+        <div><span>Настройки Steam</span><h2>{isSteamDataConfigured ? "Данные Steam настроены" : "Завершите настройку Steam"}</h2><p>Профиль и Trade URL сохраняются для заказов игровых предметов и provider-действий.</p></div>
+        <dl><div><dt>Steam</dt><dd>{hasSteam ? "Подключён" : "Не подключён"}</dd></div><div><dt>Trade URL</dt><dd>{hasSteamTradeUrl ? "Сохранён" : "Не добавлен"}</dd></div><div><dt>Вывод</dt><dd>{isSteamDataConfigured ? "Доступен по статусу предмета" : "Нужны данные Steam"}</dd></div></dl>
         <Link className={styles.primaryLink} href="/account/steam">Профиль Steam</Link>
       </section>
 
@@ -314,7 +314,7 @@ function Settings() {
       <section className={styles.panel}>
         <SectionHeading label="Доступ" title="Способы входа" description="Email и Steam подключаются к одному аккаунту Vault." />
         <div className={styles.connectionList}>
-          <article><span>@</span><div><strong>Email</strong><p>{session?.emailAccount?.email ?? "Не подключён"}</p></div>{session?.emailAccount ? <StatusBadge>Подтверждён</StatusBadge> : <Link href="/auth?method=email&returnTo=%2Faccount%2Fsettings">Подключить</Link>}</article>
+          <article><span>@</span><div><strong>Email</strong><p>{session?.emailAccount?.email ?? "Не подключён"}</p></div>{session?.emailAccount ? <StatusBadge>Подтверждён</StatusBadge> : <StatusBadge tone="neutral">Недоступен</StatusBadge>}</article>
           <article><span>ST</span><div><strong>Steam</strong><p>{session?.steamAccount?.displayName ?? "Не подключён"}</p></div>{session?.steamAccount ? <StatusBadge>Подключён</StatusBadge> : <Link href="/auth?method=steam&returnTo=%2Faccount%2Fsettings">Подключить</Link>}</article>
         </div>
       </section>

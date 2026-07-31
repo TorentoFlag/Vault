@@ -2,7 +2,6 @@ import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 
 import { DatabaseService } from "../../common/database/database.service";
 import { CatalogPricingService } from "./catalog-pricing.service";
-import { firstReleaseCatalogProducts } from "./catalog.seed";
 import type {
   CatalogFacetOption,
   CatalogFacetsDto,
@@ -16,13 +15,16 @@ import type {
 
 const allowedKinds = new Set<CatalogProductKind>(["skins", "steam"]);
 const allowedSorts = new Set<CatalogSort>(["relevance", "price-asc", "price-desc", "newest"]);
+const defaultCatalogLimit = 120;
+const maxCatalogLimit = 240;
 const relatedTerms: Record<CatalogProductKind, string[]> = {
   steam: ["steam", "стим", "пополнение", "баланс", "кошелек"],
-  skins: ["скин", "скины", "предмет", "предметы", "cs2", "dota"],
+  skins: ["скин", "скины", "предмет", "предметы", "cs2"],
 };
 
 type LoadedCatalogProduct = CatalogProduct & {
   priceCoinMinor?: number;
+  supplierPriceMicrousd?: string;
 };
 
 function normalize(value: string): string {
@@ -38,6 +40,13 @@ function numberQuery(value: string | undefined): number | undefined {
   if (value === undefined || value.trim() === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function limitQuery(value: string | undefined): number {
+  const parsed = numberQuery(value);
+  if (parsed === undefined) return defaultCatalogLimit;
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return defaultCatalogLimit;
+  return Math.min(parsed, maxCatalogLimit);
 }
 
 function priceDto(amountMinor: number) {
@@ -97,7 +106,7 @@ function searchableText(product: CatalogProduct): string {
 function matchesQuery(product: CatalogProduct, query: string): boolean {
   const normalizedQuery = normalize(query);
   if (!normalizedQuery) return true;
-  const exactGame = ["cs2", "dota 2", "rust"].find((game) => game === normalizedQuery);
+  const exactGame = ["cs2"].find((game) => game === normalizedQuery);
   if (exactGame) return normalize(product.game ?? "") === exactGame;
   const haystack = searchableText(product);
   return normalizedQuery.split(/\s+/).filter(Boolean).every((term) => {
@@ -151,7 +160,6 @@ export class CatalogService {
   ) {}
 
   async list(query: CatalogListQuery): Promise<CatalogListDto> {
-    const products = await this.loadProducts();
     const category = allowedKinds.has(query.category as CatalogProductKind) ? query.category as CatalogProductKind : undefined;
     const statuses = new Set(arrayQuery(query.status));
     const types = arrayQuery(query.type).map(normalize);
@@ -165,9 +173,18 @@ export class CatalogService {
     const maxPriceCoinMinor = maxPrice === undefined ? undefined : maxPrice * 100;
     const sort = allowedSorts.has(query.sort as CatalogSort) ? query.sort as CatalogSort : "relevance";
     const search = query.q ?? "";
+    const limit = limitQuery(query.limit);
+    const [products, catalogFacets] = await Promise.all([
+      this.loadProducts({
+        ...(category === undefined ? {} : { category }),
+        search,
+        limit: maxCatalogLimit * 4,
+        sort,
+      }),
+      this.loadFacets(),
+    ]);
 
     const items = products
-      .filter((product) => category === undefined || product.kind === category)
       .filter((product) => statuses.size === 0 || statuses.has(product.availability))
       .filter((product) => types.length === 0 || types.some((type) => normalize(product.productType).includes(type)))
       .filter((product) => fulfillmentModes.size === 0 || fulfillmentModes.has(product.fulfillmentMode))
@@ -180,11 +197,14 @@ export class CatalogService {
         if (sort === "price-desc") return priceCoinMinor(right) - priceCoinMinor(left);
         if (sort === "newest") return Date.parse(right.createdAt) - Date.parse(left.createdAt);
         return relevance(right, search) - relevance(left, search) || left.id.localeCompare(right.id);
-      });
+      })
+      .slice(0, limit);
+
+    const quotedItems = await Promise.all(items.map((product) => this.withLivePrice(product)));
 
     return {
-      items: items.map(productDto),
-      facets: facets(products),
+      items: quotedItems.map(productDto),
+      facets: catalogFacets,
       pricing: {
         coinRate: {
           fiatCurrency: "RUB",
@@ -197,13 +217,73 @@ export class CatalogService {
   }
 
   async getBySlug(slug: string): Promise<CatalogProductDto> {
-    const product = (await this.loadProducts()).find((item) => item.slug === slug);
+    const product = (await this.loadProducts({ slug, limit: 1 }))[0];
     if (!product) throw new NotFoundException("Product not found");
-    return productDto(product);
+    return productDto(await this.withLivePrice(product));
   }
 
-  private async loadProducts(): Promise<LoadedCatalogProduct[]> {
-    if (!this.database.isConfigured()) return firstReleaseCatalogProducts;
+  private async withLivePrice(product: LoadedCatalogProduct): Promise<LoadedCatalogProduct> {
+    if (product.supplierPriceMicrousd === undefined) return product;
+    const livePrice = await this.pricing.quoteSupplierPrice({
+      scope: "sih-skins",
+      supplierAmountMicrounit: BigInt(product.supplierPriceMicrousd),
+    });
+    return { ...product, priceCoinMinor: livePrice.amountMinor };
+  }
+
+  private async loadProducts(command: {
+    category?: CatalogProductKind;
+    limit?: number;
+    search?: string;
+    slug?: string;
+    sort?: CatalogSort;
+  } = {}): Promise<LoadedCatalogProduct[]> {
+    const params: Array<number | string> = [];
+    const where = [
+      "catalog_products.public_enabled = true",
+      "catalog_products.kind IN ('skins', 'steam')",
+    ];
+    if (command.category !== undefined) {
+      params.push(command.category);
+      where.push(`catalog_products.kind = $${params.length}`);
+    }
+    if (command.slug !== undefined) {
+      params.push(command.slug);
+      where.push(`catalog_products.slug = $${params.length}`);
+    }
+    const search = normalize(command.search ?? "");
+    if (search) {
+      const exactGame = ["cs2"].find((game) => game === search);
+      if (exactGame !== undefined) {
+        params.push(exactGame);
+        where.push(`lower(coalesce(catalog_products.game, '')) = $${params.length}`);
+      } else {
+        for (const term of search.split(/\s+/).filter(Boolean)) {
+          if (term === "steam") {
+            where.push("catalog_products.kind = 'steam'");
+            continue;
+          }
+          if (["скин", "скины", "предмет", "предметы"].includes(term)) {
+            where.push("catalog_products.kind = 'skins'");
+            continue;
+          }
+          params.push(`%${term}%`);
+          where.push(`(
+            lower(catalog_products.title) LIKE $${params.length}
+            OR lower(catalog_products.description) LIKE $${params.length}
+            OR lower(catalog_products.category) LIKE $${params.length}
+            OR lower(coalesce(catalog_products.game, '')) LIKE $${params.length}
+            OR lower(catalog_products.product_type) LIKE $${params.length}
+            OR lower(array_to_string(catalog_products.meta || catalog_products.keywords, ' ')) LIKE $${params.length}
+          )`);
+        }
+      }
+    }
+    const limit = Math.min(command.limit ?? maxCatalogLimit, maxCatalogLimit * 4);
+    params.push(limit);
+    const orderBy = command.sort === "newest"
+      ? "catalog_products.created_at DESC, catalog_products.popularity DESC, catalog_products.id ASC"
+      : "catalog_products.popularity DESC, catalog_products.created_at DESC, catalog_products.id ASC";
     const result = await this.database.query<{
       id: string;
       slug: string;
@@ -253,39 +333,66 @@ export class CatalogService {
           AND supplier_listings.game = lower(catalog_products.game)
           AND supplier_listings.market_hash_name = catalog_products.supplier_item_id
           AND supplier_listings.active = true
-        WHERE catalog_products.public_enabled = true
-          AND catalog_products.kind IN ('skins', 'steam')
-        ORDER BY catalog_products.popularity DESC, catalog_products.created_at DESC, catalog_products.id ASC
+        WHERE ${where.join("\n          AND ")}
+        ORDER BY ${orderBy}
+        LIMIT $${params.length}
+      `,
+      params,
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      kind: row.kind,
+      category: row.category,
+      ...(row.game === null ? {} : { game: row.game }),
+      productType: row.product_type,
+      title: row.title,
+      description: row.description,
+      priceCoins: Math.floor(row.price_coin_minor / 100),
+      availability: row.availability,
+      fulfillmentMode: row.fulfillment_mode,
+      createdAt: row.created_at.toISOString(),
+      popularity: row.popularity,
+      ...(row.image === null ? {} : { image: row.image }),
+      ...(row.image_alt === null ? {} : { imageAlt: row.image_alt }),
+      meta: row.meta,
+      keywords: row.keywords,
+      details: row.details,
+      ...(row.supplier_price_microusd === null ? {} : { supplierPriceMicrousd: row.supplier_price_microusd }),
+    }));
+  }
+
+  private async loadFacets(): Promise<CatalogFacetsDto> {
+    const result = await this.database.query<{
+      game: string | null;
+      product_type: string | null;
+    }>(
+      `
+        SELECT DISTINCT game, product_type
+        FROM catalog_products
+        WHERE public_enabled = true
+          AND kind IN ('skins', 'steam')
+        ORDER BY game ASC, product_type ASC
       `,
     );
-    return Promise.all(result.rows.map(async (row) => {
-      const livePrice = row.supplier_price_microusd === null
-        ? undefined
-        : await this.pricing.quoteSupplierPrice({
-          scope: "sih-skins",
-          supplierAmountMicrounit: BigInt(row.supplier_price_microusd),
-        });
-      return {
-        id: row.id,
-        slug: row.slug,
-        kind: row.kind,
-        category: row.category,
-        ...(row.game === null ? {} : { game: row.game }),
-        productType: row.product_type,
-        title: row.title,
-        description: row.description,
-        priceCoins: Math.floor(row.price_coin_minor / 100),
-        ...(livePrice === undefined ? {} : { priceCoinMinor: livePrice.amountMinor }),
-        availability: row.availability,
-        fulfillmentMode: row.fulfillment_mode,
-        createdAt: row.created_at.toISOString(),
-        popularity: row.popularity,
-        ...(row.image === null ? {} : { image: row.image }),
-        ...(row.image_alt === null ? {} : { imageAlt: row.image_alt }),
-        meta: row.meta,
-        keywords: row.keywords,
-        details: row.details,
-      };
+    const facetRows = result.rows.map((row) => ({
+      id: "facet",
+      slug: "facet",
+      kind: "skins" as const,
+      category: "",
+      ...(row.game === null ? {} : { game: row.game }),
+      productType: row.product_type ?? "",
+      title: "",
+      description: "",
+      priceCoins: 0,
+      availability: "available" as const,
+      fulfillmentMode: "steam-trade" as const,
+      createdAt: new Date(0).toISOString(),
+      popularity: 0,
+      meta: [],
+      keywords: [],
+      details: { specifications: [], fulfillment: { title: "", description: "", requirements: [] } },
     }));
+    return facets(facetRows);
   }
 }

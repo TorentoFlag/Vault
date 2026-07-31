@@ -77,6 +77,7 @@ describe.skipIf(!databaseUrl)("catalog supplier sync persistence", () => {
 
     expect(firstRun).toMatchObject({
       game: "cs2",
+      promotedProductCount: 2,
       source: "sih",
       status: "promoted",
       rowCount: 2,
@@ -122,6 +123,38 @@ describe.skipIf(!databaseUrl)("catalog supplier sync persistence", () => {
         available_quantity: 1,
         market_hash_name: "Desert Eagle | Printstream (Minimal Wear)",
         price_microusd: "2050000",
+      },
+    ]);
+
+    const products = await pool.query<{
+      game: string;
+      public_enabled: boolean;
+      slug: string;
+      supplier_item_id: string;
+      supplier_provider: string;
+    }>(
+      `
+        SELECT slug, game, supplier_provider, supplier_item_id, public_enabled
+        FROM catalog_products
+        WHERE supplier_provider = 'sih'
+          AND supplier_item_id IN ('AK-47 | Redline (Field-Tested)', 'Desert Eagle | Printstream (Minimal Wear)')
+        ORDER BY supplier_item_id ASC
+      `,
+    );
+    expect(products.rows).toEqual([
+      {
+        game: "CS2",
+        public_enabled: true,
+        slug: "ak-47-redline",
+        supplier_item_id: "AK-47 | Redline (Field-Tested)",
+        supplier_provider: "sih",
+      },
+      {
+        game: "CS2",
+        public_enabled: false,
+        slug: "desert-eagle-printstream-minimal-wear-b26c34c3",
+        supplier_item_id: "Desert Eagle | Printstream (Minimal Wear)",
+        supplier_provider: "sih",
       },
     ]);
   });

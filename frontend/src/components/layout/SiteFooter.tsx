@@ -41,7 +41,7 @@ export function SiteFooter() {
               </span>
             ))}
           </div>
-          <p>Проведение оплаты пока не подключено. Цены каталога указаны в Coins.</p>
+          <p>Пополнение Coins проходит через Arc Pay. Цены каталога указаны в Coins.</p>
         </div>
         <div className={styles.footerColumn}>
           <h2>Реквизиты</h2>

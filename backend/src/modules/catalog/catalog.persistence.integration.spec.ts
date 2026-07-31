@@ -6,9 +6,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AppModule } from "../../app.module";
 import type { CatalogListDto } from "./catalog.types";
+import { CatalogSupplierSyncService } from "./catalog-supplier-sync.service";
 
 const databaseUrl = process.env.VAULT_TEST_DATABASE_URL;
 const deagleMarketHashName = "Desert Eagle | Printstream (Minimal Wear)";
+const deagleProjectedSlug = "desert-eagle-printstream-minimal-wear-b26c34c3";
 
 async function createApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
@@ -23,47 +25,7 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
   let app: INestApplication;
   let pool: Pool;
 
-  beforeAll(() => {
-    process.env.DATABASE_URL = databaseUrl;
-    pool = new Pool({ connectionString: databaseUrl });
-  });
-
-  afterAll(async () => {
-    await pool.query("DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
-    await pool.query("DELETE FROM catalog_sync_runs WHERE source = 'sih' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
-    delete process.env.DATABASE_URL;
-    await app.close();
-    await pool.end();
-  });
-
-  beforeEach(async () => {
-    app = await createApp();
-    await pool.query("DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
-    await pool.query("DELETE FROM catalog_sync_runs WHERE source = 'sih' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
-  });
-
-  it("serves first-release catalog rows from PostgreSQL seed data", async () => {
-    const seeded = await pool.query<{ total: string; gpt_total: string }>(
-      "SELECT count(*) AS total, count(*) FILTER (WHERE kind = 'gpt') AS gpt_total FROM catalog_products",
-    );
-    expect(Number(seeded.rows[0]?.total)).toBeGreaterThan(0);
-    expect(Number(seeded.rows[0]?.gpt_total)).toBe(0);
-
-    const response = await request(app.getHttpServer() as Parameters<typeof request>[0])
-      .get("/catalog")
-      .query({ q: "Пистолет" })
-      .expect(200);
-    const body = response.body as CatalogListDto;
-
-    expect(body.items.map((item) => item.slug)).toEqual(["desert-eagle-printstream"]);
-    expect(body.items[0]?.price).toMatchObject({
-      currency: "COINS",
-      amountMinor: 318000,
-      scale: 2,
-    });
-  });
-
-  it("quotes supplier-linked skin products from the latest active SIH listing", async () => {
+  async function insertDeagleListing() {
     const run = await pool.query<{ id: string }>(
       `
         INSERT INTO catalog_sync_runs (source, game, status, observed_at, finished_at, row_count, metadata)
@@ -92,6 +54,38 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
       `,
       [deagleMarketHashName, runId],
     );
+  }
+
+  beforeAll(() => {
+    process.env.DATABASE_URL = databaseUrl;
+    pool = new Pool({ connectionString: databaseUrl });
+  });
+
+  afterAll(async () => {
+    await pool.query("DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
+    await pool.query("DELETE FROM catalog_sync_runs WHERE source = 'sih' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
+    await pool.query("DELETE FROM catalog_products WHERE supplier_provider = 'sih' AND supplier_item_id = $1", [deagleMarketHashName]);
+    delete process.env.DATABASE_URL;
+    await app.close();
+    await pool.end();
+  });
+
+  beforeEach(async () => {
+    app = await createApp();
+    await pool.query("DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
+    await pool.query("DELETE FROM catalog_sync_runs WHERE source = 'sih' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
+    await pool.query("DELETE FROM catalog_products WHERE supplier_provider = 'sih' AND supplier_item_id = $1", [deagleMarketHashName]);
+  });
+
+  it("serves provider-backed CS2 catalog rows promoted from active SIH listings", async () => {
+    const seeded = await pool.query<{ total: string; gpt_total: string }>(
+      "SELECT count(*) AS total, count(*) FILTER (WHERE kind = 'gpt') AS gpt_total FROM catalog_products",
+    );
+    expect(Number(seeded.rows[0]?.total)).toBeGreaterThan(0);
+    expect(Number(seeded.rows[0]?.gpt_total)).toBe(0);
+    await insertDeagleListing();
+    const promoted = await app.get(CatalogSupplierSyncService).promoteActiveSihListings("cs2");
+    expect(promoted.promotedProductCount).toBeGreaterThanOrEqual(1);
 
     const response = await request(app.getHttpServer() as Parameters<typeof request>[0])
       .get("/catalog")
@@ -99,7 +93,41 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
       .expect(200);
     const body = response.body as CatalogListDto;
 
-    expect(body.items.map((item) => item.slug)).toEqual(["desert-eagle-printstream"]);
+    expect(body.items.map((item) => item.slug)).toEqual([deagleProjectedSlug]);
+    expect(body.items[0]?.price).toEqual({
+      currency: "COINS",
+      amountMinor: 18100,
+      scale: 2,
+      display: "181 Coins",
+    });
+    expect(body.items[0]?.game).toBe("CS2");
+  });
+
+  it("does not publish non-CS2 seeded skin categories", async () => {
+    await pool.query("UPDATE catalog_products SET public_enabled = false WHERE kind = 'skins' AND game <> 'CS2'");
+
+    const response = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .expect(200);
+    const body = response.body as CatalogListDto;
+
+    expect(body.facets.games.map((item) => item.id)).not.toContain("Dota 2");
+    expect(body.facets.games.map((item) => item.id)).not.toContain("Rust");
+    expect(body.items.filter((item) => item.kind === "skins").every((item) => item.game === "CS2")).toBe(true);
+  });
+
+  it("quotes supplier-linked skin products from the latest active SIH listing", async () => {
+    await insertDeagleListing();
+    const promoted = await app.get(CatalogSupplierSyncService).promoteActiveSihListings("cs2");
+    expect(promoted.promotedProductCount).toBeGreaterThanOrEqual(1);
+
+    const response = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .query({ q: "Пистолет" })
+      .expect(200);
+    const body = response.body as CatalogListDto;
+
+    expect(body.items.map((item) => item.slug)).toEqual([deagleProjectedSlug]);
     expect(body.items[0]?.price).toEqual({
       currency: "COINS",
       amountMinor: 18100,

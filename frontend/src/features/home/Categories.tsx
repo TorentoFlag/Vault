@@ -15,7 +15,7 @@ export function Categories() {
             <Link key={category.id} href={category.href} className={`${styles.categoryCard} ${styles[category.id]}`}>
               <div className={styles.categoryCopy}>
                 <span className={styles.categoryType}>
-                  {category.id === "steam" ? "STEAM WALLET" : category.id === "skins" ? "CS2 / DOTA 2" : "DIGITAL ACCESS"}
+                  {category.id === "steam" ? "STEAM WALLET" : category.id === "skins" ? "CS2" : "DIGITAL ACCESS"}
                 </span>
                 <h3>{category.title}</h3>
                 <p>{category.description}</p>

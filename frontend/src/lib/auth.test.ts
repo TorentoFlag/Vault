@@ -11,20 +11,12 @@ import {
   isMarketplaceUser,
   sanitizeAuthReturnPath,
   validateEmail,
-  validateMockCode,
 } from "./auth.ts";
 
 test("email проходит обязательную и форматную валидацию", () => {
   assert.equal(validateEmail(""), "Укажите email.");
   assert.equal(validateEmail("vault"), "Введите email в формате name@example.com.");
   assert.equal(validateEmail("user@example.com"), "");
-});
-
-test("одноразовый email-код проходит обязательную и форматную проверку", () => {
-  assert.equal(validateMockCode(""), "Введите код из письма.");
-  assert.equal(validateMockCode("123"), "Код должен содержать 6 цифр.");
-  assert.equal(validateMockCode("123456"), "Неверный код. Проверьте письмо и повторите попытку.");
-  assert.equal(validateMockCode("482913"), "");
 });
 
 test("mock Steam-сессия отмечена как подключённый Steam", () => {

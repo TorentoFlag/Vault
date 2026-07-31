@@ -87,4 +87,5 @@ export type CatalogListQuery = {
   min?: string;
   max?: string;
   sort?: string;
+  limit?: string;
 };

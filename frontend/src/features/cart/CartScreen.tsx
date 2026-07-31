@@ -173,7 +173,7 @@ export function CartScreen() {
               {!isAuthenticated ? (
                 <div className={styles.authNotice} id="auth-required-note">
                   <strong>Войдите для работы с заказом</strong>
-                  <span>После авторизации можно проверить баланс и продолжить локальное оформление.</span>
+                  <span>После авторизации можно проверить баланс и продолжить оформление.</span>
                 </div>
               ) : requiresSteam && !hasSteam ? (
                 <div className={styles.authNotice} id="steam-required-note">
@@ -188,12 +188,12 @@ export function CartScreen() {
               ) : !hasSufficientBalance ? (
                 <div className={styles.shortfallNotice} id="insufficient-coins-note">
                   <strong>Не хватает {formatCoins(cartShortfallCoins)} Coins</strong>
-                  <span>Рассчитайте необходимое пополнение. Платёжный провайдер пока не подключён; товары останутся в корзине.</span>
+                  <span>Пополните недостающую сумму через Arc Pay; товары останутся в корзине.</span>
                 </div>
               ) : (
                 <div className={styles.readyNotice}>
-                  <strong>Можно создать локальный заказ</strong>
-                  <span>После подтверждения останется {formatCoins(balanceCoins - cartTotalCoins)} Coins; внешняя выдача не запускается.</span>
+                  <strong>Можно оформить заказ</strong>
+                  <span>После подтверждения останется {formatCoins(balanceCoins - cartTotalCoins)} Coins.</span>
                 </div>
               )}
 
@@ -214,9 +214,9 @@ export function CartScreen() {
                       className={styles.primaryLink}
                       type="button"
                       aria-describedby="auth-required-note"
-                      onClick={() => router.push(`/auth?method=${requiresSteam ? "steam" : "email"}&returnTo=%2Fcart${requiresSteam ? "&required=steam" : ""}`)}
+                      onClick={() => router.push(`/auth?method=steam&returnTo=%2Fcart${requiresSteam ? "&required=steam" : ""}`)}
                     >
-                      {requiresSteam ? "Войти через Steam" : "Войти в аккаунт"}
+                      Войти через Steam
                     </Button>
                   ) : requiresSteam && !hasSteam ? (
                     <Button
@@ -241,13 +241,13 @@ export function CartScreen() {
                       className={styles.primaryLink}
                       type="button"
                       aria-describedby={requiresSteam ? "steam-required-note" : "auth-required-note"}
-                      onClick={() => router.push(`/auth?method=${requiresSteam ? "steam" : "email"}&returnTo=%2Fcart${requiresSteam ? "&required=steam" : ""}`)}
+                      onClick={() => router.push(`/auth?method=steam&returnTo=%2Fcart${requiresSteam ? "&required=steam" : ""}`)}
                     >
-                      {requiresSteam ? "Подключить Steam" : "Войти в аккаунт"}
+                      Войти через Steam
                     </Button>
                   )}
               </div>
-              <p className={styles.summaryFootnote}>Подтверждение создаёт локальную запись заказа и списание Coins.</p>
+              <p className={styles.summaryFootnote}>Подтверждение создаёт серверный заказ и списание Coins.</p>
             </aside>
           </div>
         )}

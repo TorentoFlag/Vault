@@ -35,7 +35,7 @@ export function CoinConverter() {
           <div className={styles.converterFields}>
             <label>
               <span>{isRubles ? "Рубли" : "Coins"}</span>
-              <input type="number" min="0" step="1" value={amount} aria-invalid={amountInvalid} aria-describedby={amountInvalid ? "coin-converter-error" : undefined} onChange={(event) => setAmount(event.target.value)} />
+              <input id="coin-converter-amount" name="coin-converter-amount" type="number" min="0" step="1" value={amount} aria-invalid={amountInvalid} aria-describedby={amountInvalid ? "coin-converter-error" : undefined} onChange={(event) => setAmount(event.target.value)} />
               {amountInvalid ? <small id="coin-converter-error" role="alert">Введите целое неотрицательное значение.</small> : null}
             </label>
             <span className={styles.convertArrow}>→</span>

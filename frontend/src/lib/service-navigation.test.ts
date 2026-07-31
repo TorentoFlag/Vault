@@ -2,9 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { catalogProducts } from "../data/products.ts";
-import { createDefaultCatalogFilters, filterAndSortCatalog } from "./catalog.ts";
-
 const headerSource = readFileSync(
   new URL("../components/layout/SiteHeader.tsx", import.meta.url),
   "utf8",
@@ -26,8 +23,6 @@ test("под поиском отображается навигация по у�
     "Все товары",
     "Пополнение Steam",
     "Скины CS2",
-    "Скины Dota 2",
-    "Скины Rust",
     "Пополнить Coins",
   ]) {
     assert.match(headerSource, new RegExp(label));
@@ -35,6 +30,8 @@ test("под поиском отображается навигация по у�
 
   assert.doesNotMatch(headerSource, /GPT Plus/);
   assert.doesNotMatch(headerSource, /GPT API/);
+  assert.doesNotMatch(headerSource, /Скины Dota 2/);
+  assert.doesNotMatch(headerSource, /Скины Rust/);
 });
 
 test("ссылки меню ведут в существующие разделы и фильтры каталога", () => {
@@ -42,26 +39,18 @@ test("ссылки меню ведут в существующие раздел�
     "/catalog",
     "/catalog?category=steam",
     "/catalog?category=skins&q=CS2",
-    "/catalog?category=skins&q=Dota%202",
-    "/catalog?category=skins&q=Rust",
     "/balance/top-up",
   ]) {
     assert.match(headerSource, new RegExp(href.replace(/[?]/g, "\\?")));
   }
   assert.doesNotMatch(headerSource, /category=gpt/);
+  assert.doesNotMatch(headerSource, /q=Dota%202/);
+  assert.doesNotMatch(headerSource, /q=Rust/);
 });
 
-test("пункты Dota 2 и Rust открывают непустую выдачу игровых предметов", () => {
-  for (const query of ["Dota 2", "Rust"]) {
-    const filters = createDefaultCatalogFilters();
-    filters.category = "skins";
-    filters.query = query;
-
-    const products = filterAndSortCatalog(catalogProducts, filters);
-
-    assert.ok(products.length > 0, `Для ${query} должен быть хотя бы один товар`);
-    assert.ok(products.every((product) => product.kind === "skins"));
-  }
+test("поиск в шапке не питается локальным seed catalog", () => {
+  assert.doesNotMatch(headerSource, /catalogProducts/);
+  assert.match(headerSource, /<MarketplaceSearch key=\{`\$\{query}:\$\{currentSearch}`} products=\{\[]}/);
 });
 
 test("карточки скинов без изображения показывают название игры, а не GPT", () => {

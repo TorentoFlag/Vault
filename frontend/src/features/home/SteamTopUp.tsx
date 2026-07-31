@@ -28,7 +28,7 @@ export function SteamTopUp() {
           <p>Сравните номинал и стоимость в Coins, затем откройте предложения Steam.</p>
           <div className={styles.steamFacts}>
             <span><Icon name="check" width="17" height="17" /> Расчёт по фиксированному курсу</span>
-            <span><Icon name="shield" width="17" height="17" /> Внешнее зачисление не подключено</span>
+            <span><Icon name="shield" width="17" height="17" /> Оформление через серверный заказ</span>
           </div>
         </div>
         <div className={styles.steamForm}>
@@ -59,7 +59,7 @@ export function SteamTopUp() {
             ))}
           </div>
           <p id="steam-helper" className={styles.helper}>
-            Калькулятор не запрашивает данные аккаунта и не выполняет платёж.
+            Калькулятор не запрашивает пароль Steam и помогает выбрать подходящий номинал.
           </p>
           {error ? <p id="steam-error" className={styles.formError} role="alert">{error}</p> : null}
           <div className={styles.steamSummary}>

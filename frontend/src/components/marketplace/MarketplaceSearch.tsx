@@ -112,7 +112,7 @@ export function MarketplaceSearch({
         />
         <button type="submit">Найти</button>
       </form>
-      {open && query.trim() ? (
+      {open && query.trim() && products.length > 0 ? (
         <div id={listId} className={styles.searchResults} role="listbox">
           {results.length ? (
             results.map((product, index) => (

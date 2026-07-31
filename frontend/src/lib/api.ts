@@ -518,6 +518,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
   async function requestJson(path: string, init: RequestInit = {}): Promise<unknown> {
     const method = init.method?.toUpperCase() ?? "GET";
     const headers: Record<string, string> = {
+      accept: "application/json",
       ...(init.body ? { "content-type": "application/json" } : {}),
       ...(init.headers as Record<string, string> | undefined),
     };

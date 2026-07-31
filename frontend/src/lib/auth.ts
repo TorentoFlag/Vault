@@ -29,7 +29,6 @@ export type AuthReturnPath =
   | "/account/steam?returnTo=%2Fcheckout"
   | "/account/steam?returnTo=%2Fcart"
   | `/balance/top-up?${string}`;
-export const MOCK_EMAIL_CODE = "482913";
 const STEAM_OPENID_RETURN_PATHS = new Set(["/", "/cart", "/checkout", "/balance/top-up", "/account", "/account/steam"]);
 
 export function validateEmail(value: string) {
@@ -38,13 +37,6 @@ export function validateEmail(value: string) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
     return "Введите email в формате name@example.com.";
   }
-  return "";
-}
-
-export function validateMockCode(value: string) {
-  if (!value.trim()) return "Введите код из письма.";
-  if (!/^\d{6}$/.test(value.trim())) return "Код должен содержать 6 цифр.";
-  if (value.trim() !== MOCK_EMAIL_CODE) return "Неверный код. Проверьте письмо и повторите попытку.";
   return "";
 }
 

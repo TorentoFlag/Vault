@@ -22,7 +22,7 @@ const accountNav = [
 ] satisfies ReadonlyArray<{ href: string; label: string; icon: IconName }>;
 
 const pageTitles: Record<string, { title: string; description: string }> = {
-  "/account": { title: "Личный кабинет", description: "Локальные покупки, баланс Coins и настройки Steam в одном месте." },
+  "/account": { title: "Личный кабинет", description: "Покупки, баланс Coins и настройки Steam в одном месте." },
   "/account/purchases": { title: "Мои покупки", description: "Все заказы, их статусы и доступные действия." },
   "/account/payments": { title: "История Coins", description: "Зачисления и списания внутреннего баланса Vault." },
   "/account/inventory": { title: "Инвентарь", description: "Предметы из выполненных заказов и настройка данных Steam." },
@@ -85,7 +85,7 @@ export function AccountShell({ children }: { children: ReactNode }) {
         {isHydrated && isAuthenticated && hasSeedData ? (
           <p className={styles.demoDisclosure} role="note">
             <strong>Данные профиля</strong>
-            История и баланс этого профиля сохранены только в текущем браузере. Внешние платежи и выдача не подключены.
+            История этого профиля перенесена из старого локального состояния. Новые покупки оформляются через серверный аккаунт.
           </p>
         ) : null}
 

@@ -4,7 +4,6 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
-import { catalogProducts } from "@/data/products";
 import { siteConfig } from "@/config/site";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { MarketplaceSearch } from "@/components/marketplace/MarketplaceSearch";
@@ -14,14 +13,10 @@ import { formatCoinRate } from "@/lib/marketplace";
 
 import styles from "./layout.module.css";
 
-const firstReleaseSearchProducts = catalogProducts.filter((product) => product.kind !== "gpt");
-
 const serviceNavigation: { label: string; href: string; icon: IconName }[] = [
   { label: "Все товары", href: "/catalog", icon: "bag" },
   { label: "Пополнение Steam", href: "/catalog?category=steam", icon: "steam" },
   { label: "Скины CS2", href: "/catalog?category=skins&q=CS2", icon: "shield" },
-  { label: "Скины Dota 2", href: "/catalog?category=skins&q=Dota%202", icon: "shield" },
-  { label: "Скины Rust", href: "/catalog?category=skins&q=Rust", icon: "shield" },
   { label: "Пополнить Coins", href: "/balance/top-up", icon: "coin" },
 ];
 
@@ -29,12 +24,12 @@ function SyncedHeaderSearch() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") ?? "";
   const currentSearch = searchParams.toString();
-  return <MarketplaceSearch key={`${query}:${currentSearch}`} products={firstReleaseSearchProducts} initialQuery={query} currentSearch={currentSearch} />;
+  return <MarketplaceSearch key={`${query}:${currentSearch}`} products={[]} initialQuery={query} currentSearch={currentSearch} />;
 }
 
 function HeaderSearch() {
   return (
-    <Suspense fallback={<MarketplaceSearch products={firstReleaseSearchProducts} />}>
+    <Suspense fallback={<MarketplaceSearch products={[]} />}>
       <SyncedHeaderSearch />
     </Suspense>
   );

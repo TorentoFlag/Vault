@@ -14,7 +14,7 @@ export const siteConfig = {
   } satisfies CoinConfig,
   notice: "Все товары и операции оплачиваются в Coins. Для игровых предметов требуется Steam.",
   support: {
-    email: "support@vault.market",
+    email: "support@vaultapp24.com",
     hours: "Ежедневно, 10:00–22:00 (МСК)",
   },
   paymentMethods: [

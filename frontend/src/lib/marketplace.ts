@@ -21,7 +21,6 @@ const relatedTerms: Record<ProductKind, string[]> = {
     "предмет",
     "предметы",
     "cs2",
-    "dota",
   ],
   gpt: ["gpt", "chatgpt", "чат", "подписка", "сервис"],
 };
@@ -37,7 +36,7 @@ export function searchProducts<T extends SearchableProduct>(products: T[], query
     return products;
   }
 
-  const exactGame = ["cs2", "dota 2", "rust"].find((game) => game === normalizedQuery);
+  const exactGame = ["cs2"].find((game) => game === normalizedQuery);
   if (exactGame) {
     return products.filter((product) => normalize(product.game ?? "") === exactGame);
   }

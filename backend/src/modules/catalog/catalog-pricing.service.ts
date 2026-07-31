@@ -100,10 +100,14 @@ function calculateQuote(setting: PricingSettingRow, supplierAmountMicrounit: big
 
 @Injectable()
 export class CatalogPricingService {
+  private readonly activeSettingCache = new Map<string, Promise<PricingSettingRow>>();
+
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
 
-  async quoteSupplierPrice(command: SupplierPriceQuoteCommand): Promise<SupplierPriceQuote> {
-    const result = await this.database.query<PricingSettingRow>(
+  private async activeSetting(scope: string): Promise<PricingSettingRow> {
+    const cached = this.activeSettingCache.get(scope);
+    if (cached !== undefined) return cached;
+    const lookup = this.database.query<PricingSettingRow>(
       `
         SELECT
           id,
@@ -121,10 +125,20 @@ export class CatalogPricingService {
         ORDER BY valid_from DESC, created_at DESC, id DESC
         LIMIT 1
       `,
-      [command.scope],
-    );
-    const setting = result.rows[0];
-    if (setting === undefined) throw new NotFoundException("Pricing setting not found");
-    return calculateQuote(setting, command.supplierAmountMicrounit);
+      [scope],
+    ).then((result) => {
+      const setting = result.rows[0];
+      if (setting === undefined) throw new NotFoundException("Pricing setting not found");
+      return setting;
+    }).catch((error: unknown) => {
+      this.activeSettingCache.delete(scope);
+      throw error;
+    });
+    this.activeSettingCache.set(scope, lookup);
+    return lookup;
+  }
+
+  async quoteSupplierPrice(command: SupplierPriceQuoteCommand): Promise<SupplierPriceQuote> {
+    return calculateQuote(await this.activeSetting(command.scope), command.supplierAmountMicrounit);
   }
 }

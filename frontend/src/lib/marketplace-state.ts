@@ -1,4 +1,3 @@
-import { demoOrders, demoTransactions } from "../data/account.ts";
 import { normalizeOrders, normalizeSteamTradeUrl, normalizeTransactions } from "./account.ts";
 import { connectAuthAccount, isMarketplaceSession, validateEmail, type MarketplaceSession, type MarketplaceUser } from "./auth.ts";
 import type { CoinTransaction, MarketplaceOrder, TradeEvent } from "../types/account.ts";
@@ -112,24 +111,7 @@ export function createEmptyAccountSnapshot(): AccountSnapshot {
 }
 
 export function createSeedSteamAccountSnapshot(): AccountSnapshot {
-  return {
-    balanceCoins: 12_500,
-    orders: cloneOrders(demoOrders),
-    transactions: cloneTransactions(demoTransactions),
-    tradeEvents: demoOrders.flatMap((order) => order.items
-      .filter((item) => item.kind === "skins")
-      .map((item) => ({
-        id: `${order.id}-trade-${item.id}`,
-        createdAt: order.createdAt,
-        direction: "purchase" as const,
-        title: item.title,
-        itemId: item.id,
-        orderNumber: order.number,
-        status: order.status === "completed" ? "completed" as const : "pending" as const,
-      }))),
-    steamTradeUrl: "",
-    isSeedData: true,
-  };
+  return createEmptyAccountSnapshot();
 }
 
 export function getSessionAccountKeys(session: MarketplaceSession | null) {

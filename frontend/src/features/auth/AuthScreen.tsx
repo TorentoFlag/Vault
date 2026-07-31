@@ -2,25 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { useMarketplace } from "@/components/marketplace/MarketplaceProvider";
 import { Breadcrumbs, Button, Container, Skeleton } from "@/components/ui/UI";
 import { Icon } from "@/components/ui/Icon";
 import {
-  MOCK_EMAIL_CODE,
   buildSteamAuthStartUrl,
   type AuthMethod,
   type AuthReturnPath,
-  type MarketplaceSession,
-  validateEmail,
-  validateMockCode,
 } from "@/lib/auth";
 
 import styles from "./auth.module.css";
 
 type AuthStatus = "idle" | "loading" | "success" | "error";
-type EmailStep = "email" | "code";
 
 function gameItemsLabel(count: number) {
   const lastTwo = count % 100;
@@ -51,23 +46,14 @@ export function AuthScreen({
     isHydrated,
     isAuthenticated,
     hasSteam,
-    signInWithEmail,
     signOut,
     notify,
   } = useMarketplace();
   const router = useRouter();
   const [method, setMethod] = useState<AuthMethod>(initialMethod);
   const [status, setStatus] = useState<AuthStatus>("idle");
-  const [emailStep, setEmailStep] = useState<EmailStep>("email");
-  const [email, setEmail] = useState("");
-  const [emailTouched, setEmailTouched] = useState(false);
-  const [code, setCode] = useState("");
-  const [codeTouched, setCodeTouched] = useState(false);
   const [formError, setFormError] = useState("");
-  const localEmailCheckAvailable = true;
   const submitLock = useRef(false);
-  const emailRef = useRef<HTMLInputElement>(null);
-  const codeRef = useRef<HTMLInputElement>(null);
   const steamTabRef = useRef<HTMLButtonElement>(null);
   const emailTabRef = useRef<HTMLButtonElement>(null);
   const successRef = useRef<HTMLHeadingElement>(null);
@@ -76,8 +62,6 @@ export function AuthScreen({
   const requiresSteamNow = steamRequired || ((returnTo === "/cart" || returnTo === "/checkout") && skinItems.length > 0);
   const requestedProviderPresent = (initialMethod === "steam" && hasSteam)
     || (initialMethod === "email" && Boolean(session?.emailAccount));
-  const emailError = validateEmail(email);
-  const codeError = validateMockCode(code);
   const isLoading = status === "loading";
   const steamAuthUrl = buildSteamAuthStartUrl(returnTo);
 
@@ -115,91 +99,6 @@ export function AuthScreen({
     });
   }
 
-  function changeEmail() {
-    submitLock.current = false;
-    setEmailStep("email");
-    setCode("");
-    setCodeTouched(false);
-    setStatus("idle");
-    setFormError("");
-    window.requestAnimationFrame(() => emailRef.current?.focus());
-  }
-
-  function finishAndReturn(committedSession: MarketplaceSession) {
-    const requestedProviderCommitted = initialMethod === "steam"
-      ? Boolean(committedSession.steamAccount)
-      : Boolean(committedSession.emailAccount);
-    if (!requestedProviderCommitted) {
-      submitLock.current = false;
-      setMethod(initialMethod);
-      setStatus("idle");
-      setFormError(initialMethod === "steam"
-        ? "Email подключён. Для продолжения подключите запрошенный Steam-профиль."
-        : "Steam подключён. Для продолжения подтвердите запрошенный Email.");
-      return;
-    }
-    setStatus("success");
-    if (returnTo && requestedProviderCommitted && (!requiresSteamNow || Boolean(committedSession.steamAccount))) {
-      router.replace(returnTo);
-      return;
-    }
-    submitLock.current = false;
-  }
-
-  async function submitEmail(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFormError("");
-
-    if (emailStep === "email") {
-      setEmailTouched(true);
-      if (emailError) {
-        emailRef.current?.focus();
-        return;
-      }
-      if (submitLock.current) return;
-      submitLock.current = true;
-      submitLock.current = false;
-      setEmailStep("code");
-      setCode("");
-      setStatus("idle");
-      window.requestAnimationFrame(() => codeRef.current?.focus());
-      return;
-    }
-
-    setCodeTouched(true);
-    if (codeError) {
-      codeRef.current?.focus();
-      return;
-    }
-    if (submitLock.current) return;
-    submitLock.current = true;
-    setStatus("loading");
-
-    try {
-      const result = await signInWithEmail(email);
-      if (!result.ok) {
-        submitLock.current = false;
-        setStatus("error");
-        setFormError(result.message);
-        return;
-      }
-      notify("Email-сессия подтверждена.");
-
-      if (requiresSteamNow && !result.session.steamAccount) {
-        submitLock.current = false;
-        setMethod("steam");
-        setStatus("idle");
-        notify("Email-сессия подтверждена. Для игровых предметов подключите Steam-профиль.");
-      } else {
-        finishAndReturn(result.session);
-      }
-    } catch {
-      submitLock.current = false;
-      setStatus("error");
-      setFormError("Не удалось выполнить вход. Повторите ещё раз.");
-    }
-  }
-
   async function resetSession() {
     if (isLoading) return;
     if (!await signOut()) {
@@ -208,9 +107,6 @@ export function AuthScreen({
     }
     submitLock.current = false;
     setStatus("idle");
-    setEmailStep("email");
-    setEmail("");
-    setCode("");
     setFormError("");
     notify("Вы вышли из аккаунта Vault.");
   }
@@ -283,7 +179,7 @@ export function AuthScreen({
                   <div>
                     <span>Аккаунт активен</span>
                     <h2 ref={successRef} tabIndex={-1}>Вход выполнен</h2>
-                    <p>{method === "steam" ? "Steam-профиль активирован." : `Email ${email.toLocaleLowerCase()} подтверждён кодом.`}</p>
+                    <p>{method === "steam" ? "Steam-профиль активирован." : "Аккаунт активирован."}</p>
                     {returnTo ? (
                       <p className={styles.returnNote}>Возвращаем в предыдущий раздел…</p>
                     ) : (
@@ -328,10 +224,10 @@ export function AuthScreen({
                   <p className={styles.panelFootnote}>Подключение сохраняет Steam-профиль для настройки заказов игровых предметов.</p>
                 </div>
               ) : (
-                <form id="auth-panel-email" role="tabpanel" aria-labelledby="auth-tab-email" className={styles.panel} aria-busy={isLoading} noValidate onSubmit={submitEmail}>
+                <div id="auth-panel-email" role="tabpanel" aria-labelledby="auth-tab-email" className={styles.panel}>
                   <div className={styles.panelHeading}>
                     <span className={styles.emailMark}>@</span>
-                    <div><h3>Проверить вход по Email</h3><p>Подтвердите email кодом, чтобы сохранить покупки и настройки аккаунта.</p></div>
+                    <div><h3>Email-вход недоступен</h3><p>Серверная email-авторизация не подключена в текущем релизе.</p></div>
                   </div>
                   {session?.emailAccount ? (
                     <>
@@ -348,61 +244,14 @@ export function AuthScreen({
                     </>
                   ) : (
                     <>
-                      <div className={styles.field} data-step={emailStep}>
-                        <label htmlFor="auth-email">Email</label>
-                        <input
-                          ref={emailRef}
-                          id="auth-email"
-                          name="email"
-                          type="email"
-                          autoComplete="email"
-                          placeholder="Введите email"
-                          value={email}
-                          disabled={isLoading || emailStep === "code"}
-                          aria-invalid={emailTouched && !!emailError}
-                          aria-describedby={`email-helper${emailTouched && emailError ? " email-error" : ""}`}
-                          onBlur={() => setEmailTouched(true)}
-                          onChange={(event) => setEmail(event.target.value)}
-                        />
-                        <p id="email-helper">Код подтверждения будет отправлен на указанный адрес.</p>
-                        {emailTouched && emailError ? <p id="email-error" className={styles.fieldError} role="alert">{emailError}</p> : null}
-                      </div>
-                      {emailStep === "code" ? (
-                        <>
-                          <div className={styles.demoCode}><span>Код подтверждения</span><strong>{MOCK_EMAIL_CODE}</strong></div>
-                          <button className={styles.changeEmailButton} type="button" disabled={isLoading} onClick={changeEmail}>
-                            Изменить email
-                          </button>
-                          <div className={styles.field}>
-                            <label htmlFor="auth-code">Код подтверждения</label>
-                            <input
-                              ref={codeRef}
-                              id="auth-code"
-                              name="code"
-                              type="text"
-                              inputMode="numeric"
-                              autoComplete="one-time-code"
-                              maxLength={6}
-                              value={code}
-                              disabled={isLoading}
-                              aria-invalid={codeTouched && !!codeError}
-                              aria-describedby={`code-helper${codeTouched && codeError ? " code-error" : ""}`}
-                              onBlur={() => setCodeTouched(true)}
-                              onChange={(event) => setCode(event.target.value)}
-                            />
-                            <p id="code-helper">Введите шесть цифр из сообщения.</p>
-                            {codeTouched && codeError ? <p id="code-error" className={styles.fieldError} role="alert">{codeError}</p> : null}
-                          </div>
-                        </>
-                      ) : null}
                       {formError ? <p className={styles.formError} role="alert">{formError}</p> : null}
-                      <Button className={styles.mainButton} type="submit" disabled={isLoading || !localEmailCheckAvailable}>
-                        {isLoading ? "Отправляем…" : emailStep === "email" ? "Отправить код" : "Подтвердить и войти"}
+                      <Button className={styles.mainButton} type="button" disabled>
+                        Email-вход скоро появится
                       </Button>
-                      <p className={styles.panelFootnote}>Код действует только для подтверждения этого входа.</p>
+                      <p className={styles.panelFootnote}>Для покупок игровых предметов используйте Steam-вход.</p>
                     </>
                   )}
-                </form>
+                </div>
               )}
             </section>
 

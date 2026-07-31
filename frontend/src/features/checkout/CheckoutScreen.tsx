@@ -35,7 +35,7 @@ const resultMessage: Record<Exclude<CheckoutResult["status"], "success" | "busy"
   "trade-url-required": "Сохраните Steam Trade URL и повторите оформление.",
   "fulfillment-invalid": "Состав корзины изменился. Проверьте данные получателя и повторите оформление.",
   "price-changed": "Стоимость заказа изменилась. Проверьте обновлённую сумму и снова примите условия.",
-  "storage-error": "Заказ не оформлен: браузер не сохранил изменение. Разрешите локальное хранилище сайта и повторите попытку.",
+  "storage-error": "Заказ не оформлен: не удалось сохранить состояние checkout. Обновите страницу и повторите попытку.",
   "lock-unavailable": "Безопасное оформление недоступно в этом браузере. Откройте сайт в актуальной версии браузера.",
 };
 
@@ -66,14 +66,14 @@ function GuardState({ gate, shortfall, requiresSteam }: { gate: Exclude<Checkout
     insufficient: {
       eyebrow: "Баланс Coins",
       title: `Не хватает ${formatCoins(shortfall)} Coins`,
-      description: "Корзина сохранена. Калькулятор покажет требуемую сумму; платёжный провайдер пока не подключён.",
+      description: "Корзина сохранена. Пополните недостающую сумму через Arc Pay и вернитесь к оформлению.",
       action: <Link className={styles.primaryLink} href={`/balance/top-up?returnTo=%2Fcart&requiredCoins=${shortfall}`}>Рассчитать пополнение</Link>,
     },
     "auth-required": {
       eyebrow: "Аккаунт",
       title: "Войдите для оформления",
       description: requiresSteam ? "Для игрового предмета требуется вход через Steam." : "После входа вы вернётесь к оформлению заказа.",
-      action: <Link className={styles.primaryLink} href={`/auth?method=${requiresSteam ? "steam" : "email"}&returnTo=%2Fcheckout${requiresSteam ? "&required=steam" : ""}`}>{requiresSteam ? "Подключить Steam" : "Войти в аккаунт"}</Link>,
+      action: <Link className={styles.primaryLink} href={`/auth?method=steam&returnTo=%2Fcheckout${requiresSteam ? "&required=steam" : ""}`}>{requiresSteam ? "Подключить Steam" : "Войти через Steam"}</Link>,
     },
     "steam-required": {
       eyebrow: "Steam",
@@ -220,7 +220,7 @@ export function CheckoutScreen() {
         {!isHydrated ? <CheckoutSkeleton /> : receipt ? (
           <section className={styles.successPanel} aria-labelledby="checkout-success-title">
             <span className={styles.successMark} aria-hidden="true">✓</span>
-            <div><span>Заказ {receipt.orderNumber}</span><h2 id="checkout-success-title" ref={successHeadingRef} tabIndex={-1}>Заказ сохранён</h2><p>{formatCoins(receipt.totalCoins)} Coins списаны в локальном профиле. Внешняя выдача не запущена и не меняет этот статус.</p><dl><div><dt>Товаров</dt><dd>{receipt.itemCount}</dd></div><div><dt>Остаток</dt><dd>{formatCoins(receipt.remainingCoins)} Coins</dd></div></dl><div className={styles.successActions}><Link className={styles.primaryLink} href="/account/purchases">Мои покупки</Link><Link href="/catalog">Продолжить покупки</Link></div></div>
+            <div><span>Заказ {receipt.orderNumber}</span><h2 id="checkout-success-title" ref={successHeadingRef} tabIndex={-1}>Заказ оформлен</h2><p>{formatCoins(receipt.totalCoins)} Coins списаны с баланса. Статус заказа доступен в личном кабинете.</p><dl><div><dt>Товаров</dt><dd>{receipt.itemCount}</dd></div><div><dt>Остаток</dt><dd>{formatCoins(receipt.remainingCoins)} Coins</dd></div></dl><div className={styles.successActions}><Link className={styles.primaryLink} href="/account/purchases">Мои покупки</Link><Link href="/catalog">Продолжить покупки</Link></div></div>
           </section>
         ) : gate !== "ready" ? <GuardState gate={gate} shortfall={cartShortfallCoins} requiresSteam={requiresSteam} /> : (
           <form className={styles.checkoutLayout} noValidate aria-busy={status === "submitting"} onSubmit={submit}>
@@ -245,7 +245,7 @@ export function CheckoutScreen() {
                 {cart.some((product) => product.kind === "steam" || product.kind === "gpt") ? (
                   <div className={styles.recipientFields}>
                     {cart.some((product) => product.kind === "steam") ? <label><span>Логин получателя Steam *</span><input value={fulfillment.steamLogin} aria-invalid={fulfillmentTouched && !!fulfillmentErrors.steamLogin} onChange={(event) => updateFulfillment("steamLogin", event.target.value)} />{fulfillmentTouched && fulfillmentErrors.steamLogin ? <small role="alert">{fulfillmentErrors.steamLogin}</small> : <small>Проверьте написание до оформления.</small>}</label> : null}
-                    {cart.some((product) => product.kind === "gpt") ? <label><span>Email получателя GPT *</span><input type="email" value={fulfillment.gptEmail} aria-invalid={fulfillmentTouched && !!fulfillmentErrors.gptEmail} onChange={(event) => updateFulfillment("gptEmail", event.target.value)} />{fulfillmentTouched && fulfillmentErrors.gptEmail ? <small role="alert">{fulfillmentErrors.gptEmail}</small> : <small>Адрес сохранится в локальной записи заказа.</small>}</label> : null}
+                    {cart.some((product) => product.kind === "gpt") ? <label><span>Email получателя GPT *</span><input type="email" value={fulfillment.gptEmail} aria-invalid={fulfillmentTouched && !!fulfillmentErrors.gptEmail} onChange={(event) => updateFulfillment("gptEmail", event.target.value)} />{fulfillmentTouched && fulfillmentErrors.gptEmail ? <small role="alert">{fulfillmentErrors.gptEmail}</small> : <small>GPT-пополнение недоступно в текущем релизе.</small>}</label> : null}
                   </div>
                 ) : null}
               </section>
@@ -256,7 +256,7 @@ export function CheckoutScreen() {
               <dl className={styles.summaryFacts}><div><dt>Товаров</dt><dd>{cart.length}</dd></div><div><dt>Баланс</dt><dd>{formatCoins(balanceCoins)} Coins</dd></div><div><dt>После покупки</dt><dd>{formatCoins(balanceCoins - cartTotalCoins)} Coins</dd></div></dl>
               <div className={styles.totalRow}><span>Итого</span><p><strong>{formatCoins(cartTotalCoins)}</strong> Coins</p></div>
               <div className={styles.readyState}><strong>Можно оформить</strong><span>{requiresSteam ? "Steam подключён, Coins достаточно." : "Coins достаточно, данные заказа проверены."}</span></div>
-              <p className={styles.localOrderNotice}><strong>Локальный заказ в Coins.</strong> После подтверждения Coins будут списаны и заказ появится в истории. Внешняя выдача и исполнение не подключены.</p>
+              <p className={styles.localOrderNotice}><strong>Заказ в Coins.</strong> После подтверждения Coins будут списаны, а заказ появится в истории аккаунта.</p>
               <div className={styles.consentBox} id="checkout-consent-helper">
                 <Checkbox checked={accepted && acceptedReviewKey === consentReviewKey} disabled={status === "submitting"} onChange={(event) => { setAccepted(event.target.checked); setAcceptedReviewKey(event.target.checked ? consentReviewKey : null); if (event.target.checked) { setReviewNotice(""); setErrorMessage(""); } }} label={<>Я принимаю условия <Link href="/legal/terms" target="_blank" rel="noopener noreferrer">Пользовательского соглашения (Оферты)</Link> и даю согласие на обработку персональных данных в соответствии с <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer">Политикой конфиденциальности</Link>.</>} />
               </div>

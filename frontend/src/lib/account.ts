@@ -242,11 +242,11 @@ export function getTransactionStatusLabel(transaction: Pick<CoinTransaction, "st
 }
 
 export function getOrderItemDeliveryStatusLabel(status: OrderItemSnapshot["deliveryStatus"]) {
-  if (status === "delivered") return "Отмечено выполненным в локальной истории";
+  if (status === "delivered") return "Выполнено";
   if (status === "failed") return "Выдача не выполнена";
-  if (status === "inventory-ready") return "Сохранено в локальном инвентаре";
+  if (status === "inventory-ready") return "Доступно в инвентаре";
   if (status === "needs-review") return "Требуется проверка поддержки";
-  return "Внешняя выдача не подключена";
+  return "Ожидает обработки";
 }
 
 export function getTradeStatusLabel(status: TradeEvent["status"]) {

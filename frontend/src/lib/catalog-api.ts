@@ -123,6 +123,7 @@ async function parseJson(response: Response): Promise<unknown> {
 
 async function requestJson(url: URL, fetchImpl: ApiFetch): Promise<unknown> {
   const response = await fetchImpl(url, {
+    headers: { accept: "application/json" },
     credentials: "include",
     cache: "no-store",
   });
@@ -176,6 +177,7 @@ export async function fetchCatalogProductBySlug(slug: string, options: CatalogPr
   const url = buildApiUrl(`/catalog/${encodeURIComponent(slug)}`, options.baseUrl);
   const fetchImpl = options.fetch ?? fetch;
   const response = await fetchImpl(url, {
+    headers: { accept: "application/json" },
     credentials: "include",
     cache: "no-store",
   });

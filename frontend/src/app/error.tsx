@@ -10,7 +10,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
         <section className="global-state-card">
           <span>Не удалось открыть раздел</span>
           <h1>Произошла ошибка</h1>
-          <p>Повторите загрузку. Корзина и данные локального аккаунта останутся в браузере.</p>
+          <p>Повторите загрузку. Серверная сессия и данные аккаунта сохранятся.</p>
           <div><button className="global-state-primary" type="button" onClick={reset}>Попробовать снова</button><Link href="/catalog">В каталог</Link></div>
         </section>
       </Container>
