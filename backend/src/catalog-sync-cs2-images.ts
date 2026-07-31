@@ -25,6 +25,8 @@ export type Cs2MetadataImage = {
 
 type SyncCs2ImagesResult = {
   activeSihListingCount: number;
+  blockedProductImageCount: number;
+  blockedSupplierImageCount: number;
   matchedActiveCount: number;
   productUpdatedCount: number;
   sourceContentHash: string;
@@ -147,6 +149,7 @@ async function syncCs2Images(database: DatabaseService, images: readonly Cs2Meta
     const products = await tx.query(`
       UPDATE catalog_products
       SET image = tmp_cs2_metadata_images.image_url,
+          public_enabled = true,
           updated_at = clock_timestamp()
       FROM tmp_cs2_metadata_images
       WHERE catalog_products.supplier_provider = 'sih'
@@ -155,8 +158,35 @@ async function syncCs2Images(database: DatabaseService, images: readonly Cs2Meta
         AND catalog_products.supplier_item_id = tmp_cs2_metadata_images.market_hash_name
         AND catalog_products.image IS DISTINCT FROM tmp_cs2_metadata_images.image_url
     `);
+    const blockedSupplier = await tx.query(`
+      UPDATE supplier_listings
+      SET image_url = NULL
+      WHERE supplier = 'sih'
+        AND game = 'cs2'
+        AND image_url LIKE 'https://steaminventoryhelper.com/%'
+    `);
+    const blockedProducts = await tx.query(`
+      UPDATE catalog_products
+      SET image = NULL,
+          public_enabled = false,
+          updated_at = clock_timestamp()
+      WHERE supplier_provider = 'sih'
+        AND kind = 'skins'
+        AND image LIKE 'https://steaminventoryhelper.com/%'
+    `);
+    await tx.query(`
+      UPDATE catalog_products
+      SET public_enabled = false,
+          updated_at = clock_timestamp()
+      WHERE supplier_provider = 'sih'
+        AND kind = 'skins'
+        AND image IS NULL
+        AND public_enabled = true
+    `);
 
     return {
+      blockedProductImageCount: blockedProducts.rowCount ?? 0,
+      blockedSupplierImageCount: blockedSupplier.rowCount ?? 0,
       productUpdatedCount: products.rowCount ?? 0,
       supplierUpdatedCount: supplier.rowCount ?? 0,
     };
@@ -164,6 +194,8 @@ async function syncCs2Images(database: DatabaseService, images: readonly Cs2Meta
 
   return {
     activeSihListingCount: active.rows.length,
+    blockedProductImageCount: result.blockedProductImageCount,
+    blockedSupplierImageCount: result.blockedSupplierImageCount,
     matchedActiveCount: matched.length,
     productUpdatedCount: result.productUpdatedCount,
     sourceContentHash,

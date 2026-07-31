@@ -240,7 +240,7 @@ export class CatalogSupplierSyncService {
               supplier_item_id = $13,
               supplier_snapshot = $14::jsonb,
               supplier_fresh_at = $15,
-              public_enabled = true,
+              public_enabled = COALESCE($8, catalog_products.image) IS NOT NULL,
               updated_at = clock_timestamp()
           WHERE supplier_provider = 'sih'
             AND supplier_item_id = $1
@@ -293,7 +293,7 @@ export class CatalogSupplierSyncService {
               created_at,
               updated_at
             )
-            VALUES ($1, $2, 'skins', $3, $4, $5, $6, $7, 1, 'available', 'steam-trade', $8, $9, $10, $11, $12, $13::jsonb, 'sih', $14, $15::jsonb, $16, true, clock_timestamp(), clock_timestamp())
+            VALUES ($1, $2, 'skins', $3, $4, $5, $6, $7, 1, 'available', 'steam-trade', $8, $9, $10, $11, $12, $13::jsonb, 'sih', $14, $15::jsonb, $16, $17, clock_timestamp(), clock_timestamp())
             ON CONFLICT (id) DO UPDATE
             SET category = EXCLUDED.category,
                 game = EXCLUDED.game,
@@ -310,7 +310,7 @@ export class CatalogSupplierSyncService {
                 supplier_item_id = EXCLUDED.supplier_item_id,
                 supplier_snapshot = EXCLUDED.supplier_snapshot,
                 supplier_fresh_at = EXCLUDED.supplier_fresh_at,
-                public_enabled = true,
+                public_enabled = EXCLUDED.public_enabled,
                 updated_at = clock_timestamp()
           `,
           [
@@ -330,6 +330,7 @@ export class CatalogSupplierSyncService {
             listing.market_hash_name,
             JSON.stringify(listing.snapshot),
             listing.last_seen_at,
+            projection.image !== null,
           ],
         );
       }
