@@ -143,6 +143,7 @@ export const catalogProducts = pgTable(
     index("catalog_products_kind_public_idx").on(table.kind, table.publicEnabled),
     index("catalog_products_game_idx").on(table.game),
     index("catalog_products_product_type_idx").on(table.productType),
+    index("catalog_products_supplier_item_idx").on(table.supplierProvider, table.supplierItemId),
   ],
 );
 

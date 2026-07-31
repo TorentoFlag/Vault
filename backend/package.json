@@ -15,6 +15,8 @@
     "acceptance:readiness": "tsx src/provider-acceptance-readiness.ts",
     "acceptance:sih-catalog": "VAULT_TEST_DATABASE_URL=${VAULT_TEST_DATABASE_URL:-postgres://vault_test:vault_test_password@localhost:55433/vault_test} vitest run --config vitest.integration.config.ts src/modules/providers/sih/sih.sandbox.integration.spec.ts",
     "catalog:promote-sih": "tsx src/catalog-promote-sih.ts",
+    "catalog:sync-sih": "tsx src/catalog-sync-sih.ts",
+    "catalog:sync-cs2-images": "tsx src/catalog-sync-cs2-images.ts",
     "payments:reconcile": "tsx src/payments-reconcile.ts",
     "wallet:reconcile": "tsx src/wallet-reconcile.ts",
     "openapi:generate": "tsx src/openapi.ts",

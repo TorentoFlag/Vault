@@ -92,6 +92,13 @@
       "when": 1785488569000,
       "tag": "0012_disable_non_cs2_seed_skins",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1785494081489,
+      "tag": "0013_catalog_supplier_item_index",
+      "breakpoints": true
     }
   ]
 }

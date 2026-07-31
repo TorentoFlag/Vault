@@ -78,7 +78,7 @@ describe("SihClient", () => {
       {
         availableQuantity: 2,
         game: "cs2",
-        imageUrl: "https://steaminventoryhelper.com/cdn-cgi/imagedelivery/MvHeJSvDbl13NYkuyvKbPw/weapons/dd9f12f736ff63da9566/public",
+        imageUrl: null,
         marketHashName: "AWP | Asiimov (Field-Tested)",
         priceMicrousd: 15_790_000n,
       },
