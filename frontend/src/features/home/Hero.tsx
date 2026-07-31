@@ -34,8 +34,8 @@ export function Hero({ products }: { products: Product[] }) {
           <nav className={styles.quickSearches} aria-label="Популярные категории">
             <Link href="/catalog?category=steam">Steam</Link>
             <Link href="/catalog?category=skins&game=cs2">CS2</Link>
-            <Link href="/catalog?q=Пистолет">Пистолет</Link>
-            <Link href="/catalog?q=Автомат">Автомат</Link>
+            <Link href="/catalog?category=skins&game=rust">Rust</Link>
+            <Link href="/catalog?category=skins&game=tf2">Team Fortress 2</Link>
           </nav>
         </div>
         <div className={styles.inventory} aria-label="Товары из каталога">

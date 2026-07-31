@@ -377,65 +377,6 @@
   border-block: 1px solid #181e27;
 }
 
-.filterGroups {
-  display: flex;
-  min-width: 0;
-  max-width: 100%;
-  align-items: stretch;
-  gap: 14px;
-}
-
-.filterGroup {
-  display: grid;
-  gap: 4px;
-}
-
-.filterGroup + .filterGroup {
-  border-left: 1px solid var(--border);
-  padding-left: 14px;
-}
-
-.filterGroupLabel {
-  padding-left: 4px;
-  color: #73809a;
-  font-family: var(--font-rajdhani), var(--font-inter), sans-serif;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.filterButtons {
-  display: flex;
-  gap: 4px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #0b0f15;
-}
-
-.filterButtons button {
-  min-height: 44px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  padding: 0 12px;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: 650;
-  cursor: pointer;
-  transition: background var(--transition), color var(--transition);
-}
-
-.filterButtons button:hover {
-  color: var(--text);
-}
-
-.filterButtons .activeFilter {
-  background: var(--accent);
-  color: #fff;
-}
-
 .productGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1252,16 +1193,6 @@
   .productGrid > article {
     width: min(78vw, 310px);
     flex: 0 0 auto;
-  }
-
-  .filterGroups {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
-  }
-
-  .filterButtons button {
-    white-space: nowrap;
   }
 
   .steamIntro {
