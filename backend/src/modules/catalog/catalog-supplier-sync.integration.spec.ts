@@ -144,7 +144,7 @@ describe.skipIf(!databaseUrl)("catalog supplier sync persistence", () => {
     expect(products.rows).toEqual([
       {
         game: "CS2",
-        public_enabled: true,
+        public_enabled: false,
         slug: "ak-47-redline",
         supplier_item_id: "AK-47 | Redline (Field-Tested)",
         supplier_provider: "sih",

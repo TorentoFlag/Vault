@@ -380,6 +380,15 @@ export class CatalogService {
             where.push("catalog_products.kind = 'skins'");
             continue;
           }
+          if (["автомат", "пистолет", "нож", "перчатки", "наклейка"].includes(term)) {
+            params.push(`%${term}%`);
+            where.push(`(
+              lower(catalog_products.category) LIKE $${params.length}
+              OR lower(catalog_products.product_type) LIKE $${params.length}
+              OR lower(array_to_string(catalog_products.keywords, ' ')) LIKE $${params.length}
+            )`);
+            continue;
+          }
           params.push(`%${term}%`);
           where.push(`(
             lower(catalog_products.title) LIKE $${params.length}
