@@ -531,7 +531,7 @@ export function CatalogScreen({ products }: { products: Product[] }) {
             <strong>{filters.query ? `Результаты по запросу «${filters.query}»` : "Все товары"}</strong>
             <span className={styles.demoNote}>Тип оформления указан в каждой карточке</span>
             <span className={styles.srOnly} aria-live="polite">
-              Найдено товаров: {visibleProducts.length}
+              Показано товаров: {visibleProducts.length}
             </span>
           </div>
           <div className={styles.toolbarActions}>
