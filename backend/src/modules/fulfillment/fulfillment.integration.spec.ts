@@ -1206,4 +1206,66 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
       statuses: ["succeeded", "failed", "succeeded"],
     });
   });
+
+  it("moves Steam refill to manual review after permanent SIH authentication failure", async () => {
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 500_000,
+      idempotencyKey: "topup-credit-steam-refill-auth-failure",
+      reason: "test-credit",
+    });
+    const order = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-steam-refill-auth-failure",
+      acceptedTotalCoinMinor: 75_000,
+      items: [{ productSlug: "steam-top-up-500-rub", quantity: 1, recipient: { steamLogin: "vault_sandbox_user" } }],
+    });
+
+    globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify({ error: "unauthorized" }), {
+      headers: { "content-type": "application/json" },
+      status: 401,
+    }));
+
+    await expect(fulfillment.processNextPendingCommand({ skinTestMode: true })).rejects.toMatchObject({
+      code: "SIH_AUTHENTICATION_INVALID",
+    });
+
+    const persisted = await pool.query<{
+      attempt_statuses: string[];
+      command_status: string;
+      hold_status: string;
+      last_error_code: string | null;
+      line_status: string;
+      order_status: string;
+      operations: string[];
+    }>(
+      `
+        SELECT
+          fulfillment_commands.status AS command_status,
+          fulfillment_commands.last_error_code,
+          wallet_holds.status AS hold_status,
+          order_lines.status AS line_status,
+          orders.status AS order_status,
+          array_agg(fulfillment_provider_attempts.operation ORDER BY fulfillment_provider_attempts.created_at) AS operations,
+          array_agg(fulfillment_provider_attempts.status ORDER BY fulfillment_provider_attempts.created_at) AS attempt_statuses
+        FROM orders
+        JOIN order_lines ON order_lines.order_id = orders.id
+        JOIN fulfillment_commands ON fulfillment_commands.order_line_id = order_lines.id
+        JOIN fulfillment_provider_attempts ON fulfillment_provider_attempts.command_id = fulfillment_commands.id
+        JOIN wallet_holds ON wallet_holds.order_id = orders.id
+        WHERE orders.id = $1
+        GROUP BY fulfillment_commands.status, fulfillment_commands.last_error_code, wallet_holds.status, order_lines.status, orders.status
+      `,
+      [order.id],
+    );
+    expect(persisted.rows[0]).toEqual({
+      attempt_statuses: ["failed"],
+      command_status: "manual_review",
+      hold_status: "active",
+      last_error_code: "SIH_AUTHENTICATION_INVALID",
+      line_status: "held",
+      operations: ["steam_check"],
+      order_status: "manual_review",
+    });
+  });
 });

@@ -6,7 +6,7 @@ import { parseSteamRefillAmountRub } from "../catalog/steam-refill-product";
 import type { CatalogProductDto } from "../catalog/catalog.types";
 import type { CheckoutRecipientSnapshot } from "../checkout/checkout.service";
 import { SihClient, SihProviderError } from "../providers/sih/sih.client";
-import type { SihCatalogGame, SihCreateSkinOrderResult, SihSkinOrder, SihSkinOrderStatus, SihSteamCheckResult, SihSteamPayResult } from "../providers/sih/sih.types";
+import type { SihCatalogGame, SihCreateSkinOrderResult, SihFailureDisposition, SihSkinOrder, SihSkinOrderStatus, SihSteamCheckResult, SihSteamPayResult } from "../providers/sih/sih.types";
 import { UsersService } from "../users/users.service";
 import { WalletService } from "../wallet/wallet.service";
 
@@ -215,7 +215,7 @@ export class FulfillmentService {
         tradeToken: credential.token,
       });
     } catch (error) {
-      await this.markAttemptFailed(pending, this.errorCode(error));
+      await this.markAttemptFailed(pending, this.errorCode(error), this.errorDisposition(error));
       throw error;
     }
 
@@ -236,7 +236,7 @@ export class FulfillmentService {
     try {
       order = await this.sih.getSkinOrder({ customId: pending.customId });
     } catch (error) {
-      await this.markReconciliationFailed(pending, this.errorCode(error));
+      await this.markReconciliationFailed(pending, this.errorCode(error), this.errorDisposition(error));
       throw error;
     }
 
@@ -528,7 +528,7 @@ export class FulfillmentService {
       try {
         check = await this.sih.checkSteamAccount({ steamUsername: pending.steamUsername });
       } catch (error) {
-        await this.markAttemptFailed(pending, this.errorCode(error));
+        await this.markAttemptFailed(pending, this.errorCode(error), this.errorDisposition(error));
         throw error;
       }
       pay = await this.markSteamCheckSucceededAndCreatePayAttempt(pending, check);
@@ -544,7 +544,7 @@ export class FulfillmentService {
         transactionId: pay.transactionId,
       });
     } catch (error) {
-      await this.markAttemptFailed(pay, this.errorCode(error));
+      await this.markAttemptFailed(pay, this.errorCode(error), this.errorDisposition(error));
       throw error;
     }
 
@@ -942,7 +942,7 @@ export class FulfillmentService {
     );
   }
 
-  private async markReconciliationFailed(pending: PendingSkinReconciliation, errorCode: string): Promise<void> {
+  private async markReconciliationFailed(pending: PendingSkinReconciliation, errorCode: string, disposition: SihFailureDisposition): Promise<void> {
     await this.database.transaction(async (client) => {
       await client.query(
         `
@@ -957,17 +957,29 @@ export class FulfillmentService {
       await client.query(
         `
           UPDATE fulfillment_commands
-          SET locked_at = NULL,
+          SET status = CASE WHEN $3 = 'permanent' THEN 'manual_review' ELSE status END,
+              locked_at = NULL,
               last_error_code = $2,
               updated_at = clock_timestamp()
           WHERE id = $1
         `,
-        [pending.commandId, errorCode],
+        [pending.commandId, errorCode, disposition],
       );
+      if (disposition === "permanent") {
+        await client.query(
+          `
+            UPDATE orders
+            SET status = 'manual_review',
+                updated_at = clock_timestamp()
+            WHERE id = $1
+          `,
+          [pending.orderId],
+        );
+      }
     });
   }
 
-  private async markAttemptFailed(pending: { attemptId: string; commandId: string }, errorCode: string): Promise<void> {
+  private async markAttemptFailed(pending: { attemptId: string; commandId: string; orderId: string }, errorCode: string, disposition: SihFailureDisposition): Promise<void> {
     await this.database.transaction(async (client) => {
       await client.query(
         `
@@ -982,14 +994,25 @@ export class FulfillmentService {
       await client.query(
         `
           UPDATE fulfillment_commands
-          SET status = 'pending',
+          SET status = CASE WHEN $3 = 'permanent' THEN 'manual_review' ELSE 'pending' END,
               last_error_code = $2,
               updated_at = clock_timestamp(),
               locked_at = NULL
           WHERE id = $1
         `,
-        [pending.commandId, errorCode],
+        [pending.commandId, errorCode, disposition],
       );
+      if (disposition === "permanent") {
+        await client.query(
+          `
+            UPDATE orders
+            SET status = 'manual_review',
+                updated_at = clock_timestamp()
+            WHERE id = $1
+          `,
+          [pending.orderId],
+        );
+      }
     });
   }
 
@@ -997,6 +1020,11 @@ export class FulfillmentService {
     if (error instanceof SihProviderError) return error.code;
     if (error instanceof Error && /^[A-Z0-9_]{3,80}$/.test(error.message)) return error.message;
     return "FULFILLMENT_PROVIDER_ERROR";
+  }
+
+  private errorDisposition(error: unknown): SihFailureDisposition {
+    if (error instanceof SihProviderError) return error.disposition;
+    return "retryable";
   }
 
   private sihGame(value: string | null): SihCatalogGame {
