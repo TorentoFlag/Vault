@@ -32,6 +32,8 @@ The frontend container uses two API origins:
 
 The backend `PUBLIC_BASE_URL` should also be `https://vaultapp24.com` so Steam OpenID callback cookies are issued on the same host the browser uses for frontend API requests. Keep `api.vaultapp24.com` available for direct provider webhooks and health checks.
 
+The production Compose stack runs a dedicated `fulfillment-worker` service from the backend image. It claims pending SIH fulfillment commands, executes Steam refill and skin submission commands, and reconciles submitted skin commands. Do not scale it manually without confirming provider rate limits and database lock behavior.
+
 Runtime config lives outside git:
 
 - `/opt/vault/env/backend.env`
@@ -100,6 +102,12 @@ docker compose -f compose.prod.yaml exec backend npm run acceptance:readiness
 ```
 
 Expected before SIH acceptance test data is configured: `sih-skin-test-order` and `sih-steam-refill` may remain blocked by missing test recipient variables. `arc-pay-hosted-checkout`, `arc-pay-webhook`, `sih-catalog`, and `steam-openid-browser` must be ready before release acceptance.
+
+Manual one-cycle fulfillment processing, for incident recovery after checking the affected order and provider risk:
+
+```sh
+docker compose -f compose.prod.yaml exec backend npm run fulfillment:worker -- --once
+```
 
 ## Rollback
 
