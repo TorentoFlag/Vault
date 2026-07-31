@@ -201,10 +201,8 @@ export class CatalogService {
 
   async list(query: CatalogListQuery): Promise<CatalogListDto> {
     const category = allowedKinds.has(query.category as CatalogProductKind) ? query.category as CatalogProductKind : undefined;
-    const statuses = new Set(arrayQuery(query.status));
     const types = arrayQuery(query.type).map(normalize);
-    const fulfillmentModes = new Set(arrayQuery(query.fulfillment));
-    const weaponTerms = arrayQuery(query.weapon).map(normalize);
+    const conditions = arrayQuery(query.condition).map(normalize);
     const min = numberQuery(query.min);
     const max = numberQuery(query.max);
     const minPrice = min !== undefined && max !== undefined && min > max ? max : min;
@@ -220,7 +218,9 @@ export class CatalogService {
       this.loadProducts({
         ...(category === undefined ? {} : { category }),
         ...(game === undefined ? {} : { game }),
+        conditions,
         search,
+        types,
         limit,
         offset,
         sort,
@@ -229,15 +229,13 @@ export class CatalogService {
       this.countProducts({
         ...(category === undefined ? {} : { category }),
         ...(game === undefined ? {} : { game }),
+        conditions,
         search,
+        types,
       }),
     ]);
 
     const items = products
-      .filter((product) => statuses.size === 0 || statuses.has(product.availability))
-      .filter((product) => types.length === 0 || types.some((type) => normalize(product.productType).includes(type)))
-      .filter((product) => fulfillmentModes.size === 0 || fulfillmentModes.has(product.fulfillmentMode))
-      .filter((product) => weaponTerms.length === 0 || weaponTerms.some((term) => searchableText(product).includes(term)))
       .filter((product) => minPriceCoinMinor === undefined || priceCoinMinor(product) >= minPriceCoinMinor)
       .filter((product) => maxPriceCoinMinor === undefined || priceCoinMinor(product) <= maxPriceCoinMinor)
       .filter((product) => matchesQuery(product, search))
@@ -290,12 +288,14 @@ export class CatalogService {
 
   private async loadProducts(command: {
     category?: CatalogProductKind;
+    conditions?: string[];
     game?: CatalogGame;
     limit?: number;
     offset?: number;
     search?: string;
     slug?: string;
     sort?: CatalogSort;
+    types?: string[];
   } = {}): Promise<LoadedCatalogProduct[]> {
     const { params, where } = this.catalogWhere(command);
     const limit = Math.min(command.limit ?? maxCatalogLimit, maxCatalogLimit * 4);
@@ -304,9 +304,24 @@ export class CatalogService {
     const offset = Math.max(0, command.offset ?? 0);
     params.push(offset);
     const offsetParam = params.length;
-    const orderBy = command.sort === "newest"
-      ? "catalog_products.created_at DESC, catalog_products.popularity DESC, catalog_products.id ASC"
-      : "catalog_products.popularity DESC, catalog_products.created_at DESC, catalog_products.id ASC";
+    const orderBy = (() => {
+      if (command.sort === "price_asc") {
+        return "COALESCE(supplier_listings.price_microusd, catalog_products.price_coin_minor::bigint) ASC, catalog_products.id ASC";
+      }
+      if (command.sort === "price_desc") {
+        return "COALESCE(supplier_listings.price_microusd, catalog_products.price_coin_minor::bigint) DESC, catalog_products.id ASC";
+      }
+      if (command.sort === "name_asc") {
+        return "lower(catalog_products.title) ASC, catalog_products.id ASC";
+      }
+      if (command.sort === "name_desc") {
+        return "lower(catalog_products.title) DESC, catalog_products.id ASC";
+      }
+      if (command.sort === "newest") {
+        return "catalog_products.created_at DESC, catalog_products.popularity DESC, catalog_products.id ASC";
+      }
+      return "catalog_products.popularity DESC, catalog_products.created_at DESC, catalog_products.id ASC";
+    })();
     const result = await this.database.query<{
       id: string;
       slug: string;
@@ -388,9 +403,11 @@ export class CatalogService {
 
   private catalogWhere(command: {
     category?: CatalogProductKind;
+    conditions?: string[];
     game?: CatalogGame;
     search?: string;
     slug?: string;
+    types?: string[];
   }) {
     const params: Array<number | string> = [];
     const where = [
@@ -408,6 +425,30 @@ export class CatalogService {
     if (command.slug !== undefined) {
       params.push(command.slug);
       where.push(`catalog_products.slug = $${params.length}`);
+    }
+    const typeFilters = command.types ?? [];
+    if (typeFilters.length > 0) {
+      const conditions = typeFilters.map((type) => {
+        params.push(`%${type}%`);
+        return `lower(catalog_products.product_type) LIKE $${params.length}`;
+      });
+      where.push(`(${conditions.join(" OR ")})`);
+    }
+    const conditionFilters = command.conditions ?? [];
+    if (conditionFilters.length > 0) {
+      const conditions = conditionFilters.map((condition) => {
+        params.push(`%${condition}%`);
+        return `(
+          EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(catalog_products.details -> 'specifications') AS specification(value)
+            WHERE lower(specification.value ->> 'label') = 'состояние'
+              AND lower(specification.value ->> 'value') LIKE $${params.length}
+          )
+          OR lower(array_to_string(catalog_products.meta, ' ')) LIKE $${params.length}
+        )`;
+      });
+      where.push(`(${conditions.join(" OR ")})`);
     }
     const search = normalize(command.search ?? "");
     if (search) {
@@ -451,9 +492,11 @@ export class CatalogService {
 
   private async countProducts(command: {
     category?: CatalogProductKind;
+    conditions?: string[];
     game?: CatalogGame;
     search?: string;
     slug?: string;
+    types?: string[];
   }): Promise<number> {
     const { params, where } = this.catalogWhere(command);
     const result = await this.database.query<{ total: string }>(

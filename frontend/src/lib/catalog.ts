@@ -1,8 +1,4 @@
-import type {
-  Product,
-  ProductAvailability,
-  ProductFulfillmentMode,
-} from "../types/commerce.ts";
+import type { Product } from "../types/commerce.ts";
 import type { ProductFilter } from "./marketplace.ts";
 import { searchProducts } from "./marketplace.ts";
 import { CATALOG_GAMES, parseCatalogGame, type CatalogGame } from "./catalog-games.ts";
@@ -19,10 +15,8 @@ export type CatalogFilters = {
   query: string;
   category: ProductFilter;
   game?: CatalogGame;
-  statuses: ProductAvailability[];
   types: string[];
-  fulfillmentModes: ProductFulfillmentMode[];
-  weaponTerms: string[];
+  conditions: string[];
   minPrice?: number;
   maxPrice?: number;
   sort: CatalogSort;
@@ -32,17 +26,13 @@ export function createDefaultCatalogFilters(): CatalogFilters {
   return {
     query: "",
     category: "all",
-    statuses: [],
     types: [],
-    fulfillmentModes: [],
-    weaponTerms: [],
+    conditions: [],
     sort: "relevance",
   };
 }
 
 const productFilters: ProductFilter[] = ["all", "steam", "skins"];
-const availabilityStatuses: ProductAvailability[] = ["available", "on-request"];
-const fulfillmentModes: ProductFulfillmentMode[] = ["automatic", "steam-trade", "manual"];
 const catalogSorts: CatalogSort[] = ["relevance", "price_asc", "price_desc", "newest", "name_asc", "name_desc"];
 type CatalogSearchParams = Pick<URLSearchParams, "get" | "getAll">;
 
@@ -84,16 +74,8 @@ export function parseCatalogSearchParams(searchParams: CatalogSearchParams): Cat
       ? category as ProductFilter
       : defaults.category,
     ...(game === undefined ? {} : { game }),
-    statuses: uniqueValues(searchParams.getAll("status"))
-      .filter((value): value is ProductAvailability => (
-        availabilityStatuses.includes(value as ProductAvailability)
-      )),
     types: uniqueValues(searchParams.getAll("type")),
-    fulfillmentModes: uniqueValues(searchParams.getAll("fulfillment"))
-      .filter((value): value is ProductFulfillmentMode => (
-        fulfillmentModes.includes(value as ProductFulfillmentMode)
-      )),
-    weaponTerms: uniqueValues(searchParams.getAll("weapon")),
+    conditions: uniqueValues(searchParams.getAll("condition")),
     ...(minPrice === undefined ? {} : { minPrice }),
     ...(maxPrice === undefined ? {} : { maxPrice }),
     sort: catalogSorts.includes(sort as CatalogSort)
@@ -116,10 +98,8 @@ export function serializeCatalogFilters(filters: CatalogFilters) {
   if (query) searchParams.set("q", query);
   if (filters.category !== "all") searchParams.set("category", filters.category);
   if (filters.game !== undefined) searchParams.set("game", filters.game);
-  filters.statuses.forEach((status) => searchParams.append("status", status));
   filters.types.forEach((type) => searchParams.append("type", type));
-  filters.fulfillmentModes.forEach((mode) => searchParams.append("fulfillment", mode));
-  filters.weaponTerms.forEach((term) => searchParams.append("weapon", term));
+  filters.conditions.forEach((condition) => searchParams.append("condition", condition));
   if (minPrice !== undefined) searchParams.set("min", String(minPrice));
   if (maxPrice !== undefined) searchParams.set("max", String(maxPrice));
   if (filters.sort !== "relevance") searchParams.set("sort", filters.sort);
@@ -194,14 +174,16 @@ export function hasActiveCatalogFilters(filters: CatalogFilters) {
     normalize(filters.query)
     || filters.category !== "all"
     || filters.game !== undefined
-    || filters.statuses.length
     || filters.types.length
-    || filters.fulfillmentModes.length
-    || filters.weaponTerms.length
+    || filters.conditions.length
     || minPrice !== undefined
     || maxPrice !== undefined
     || filters.sort !== "relevance",
   );
+}
+
+function productCondition(product: Product) {
+  return product.details.specifications.find((item) => normalize(item.label) === "состояние")?.value;
 }
 
 export function filterAndSortCatalog(
@@ -221,14 +203,10 @@ export function filterAndSortCatalog(
       || product.kind === filters.category;
     const matchesGame = filters.game === undefined
       || (product.kind === "skins" && normalize(product.game ?? "") === filters.game);
-    const matchesStatus = filters.statuses.length === 0
-      || filters.statuses.includes(product.availability);
     const matchesType = matchesAnyTerm([product.productType], filters.types);
-    const matchesFulfillment = filters.fulfillmentModes.length === 0
-      || filters.fulfillmentModes.includes(product.fulfillmentMode);
-    const matchesWeapon = matchesAnyTerm(
-      [product.title, product.productType, ...product.meta, ...(product.keywords ?? [])],
-      filters.weaponTerms,
+    const matchesCondition = matchesAnyTerm(
+      [productCondition(product) ?? "", ...product.meta],
+      filters.conditions,
     );
     const matchesMin = minPrice === undefined
       || product.priceCoins >= minPrice;
@@ -238,10 +216,8 @@ export function filterAndSortCatalog(
     return matchesQuery
       && matchesCategory
       && matchesGame
-      && matchesStatus
       && matchesType
-      && matchesFulfillment
-      && matchesWeapon
+      && matchesCondition
       && matchesMin
       && matchesMax;
   });

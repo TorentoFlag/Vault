@@ -27,7 +27,7 @@ import {
   getNextCatalogFeedSize,
 } from "@/lib/catalog-feed";
 import type { ProductFilter } from "@/lib/marketplace";
-import type { Product, ProductAvailability, ProductFulfillmentMode } from "@/types/commerce";
+import type { Product } from "@/types/commerce";
 
 import styles from "./catalog.module.css";
 
@@ -35,17 +35,6 @@ const categories: { value: ProductFilter; label: string }[] = [
   { value: "all", label: "Все" },
   { value: "steam", label: "Steam" },
   { value: "skins", label: "Игровые предметы" },
-];
-
-const statuses: { value: ProductAvailability; label: string }[] = [
-  { value: "available", label: "В наличии" },
-  { value: "on-request", label: "Под заказ" },
-];
-
-const fulfillmentOptions: { value: ProductFulfillmentMode; label: string }[] = [
-  { value: "automatic", label: "Цифровой заказ" },
-  { value: "steam-trade", label: "Данные Steam Trade" },
-  { value: "manual", label: "Заказ с проверкой" },
 ];
 
 const sortOptions: { value: CatalogSort; label: string }[] = [
@@ -58,14 +47,6 @@ const sortOptions: { value: CatalogSort; label: string }[] = [
 const categoryLabels = Object.fromEntries(
   categories.map((category) => [category.value, category.label]),
 ) as Record<ProductFilter, string>;
-
-const statusLabels = Object.fromEntries(
-  statuses.map((status) => [status.value, status.label]),
-) as Record<ProductAvailability, string>;
-
-const fulfillmentLabels = Object.fromEntries(
-  fulfillmentOptions.map((mode) => [mode.value, mode.label]),
-) as Record<ProductFulfillmentMode, string>;
 
 const sortLabels = Object.fromEntries(
   sortOptions.map((sort) => [sort.value, sort.label]),
@@ -94,6 +75,15 @@ function numberFromInput(value: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
+function productCondition(product: Product) {
+  return product.details.specifications.find((item) => item.label.toLocaleLowerCase("ru-RU") === "состояние")?.value;
+}
+
+function uniqueSorted(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, "ru-RU"));
+}
+
 function FilterPanel({
   filters,
   onChange,
@@ -117,29 +107,35 @@ function FilterPanel({
   closeButtonRef: RefObject<HTMLButtonElement | null>;
   products: Product[];
 }) {
-  const typeOptions = [...new Set(
-    products
-      .filter((product) => product.kind !== "skins")
+  const relevantProducts = products.filter((product) => (
+    (filters.category === "all" || product.kind === filters.category)
+    && (filters.game === undefined || (product.kind === "skins" && product.game?.toLocaleLowerCase("en-US") === filters.game))
+  ));
+  const typeOptions = uniqueSorted(
+    relevantProducts
       .map((product) => product.productType),
-  )];
-  const weaponOptions = [...new Set(
-    products
+  );
+  const conditionOptions = uniqueSorted(
+    relevantProducts
       .filter((product) => product.kind === "skins")
-      .map((product) => product.productType),
-  )];
-  const relevantStatuses = statuses.filter((status) => products.some((product) => (
-    (filters.category === "all" || product.kind === filters.category)
-    && product.availability === status.value
-  )));
-  const relevantFulfillmentOptions = fulfillmentOptions.filter((mode) => products.some((product) => (
-    (filters.category === "all" || product.kind === filters.category)
-    && product.fulfillmentMode === mode.value
-  )));
-  const relevantTypeOptions = typeOptions.filter((type) => products.some((product) => (
-    product.kind !== "skins"
-    && (filters.category === "all" || product.kind === filters.category)
-    && product.productType === type
-  )));
+      .map((product) => productCondition(product) ?? ""),
+  );
+  const typeLegend = filters.category === "skins" && filters.game === "cs2"
+    ? "Оружие"
+    : "Тип предмета";
+  const filteredTypeOptions = filters.category === "steam"
+    ? typeOptions.filter((type) => typeOptions.length > 1 || type !== "Пополнение баланса")
+    : typeOptions;
+  const limitedTypeOptions = filteredTypeOptions.slice(0, 18);
+  const limitedConditionOptions = conditionOptions.slice(0, 12);
+  const hiddenTypeCount = Math.max(0, filteredTypeOptions.length - limitedTypeOptions.length);
+  const hiddenConditionCount = Math.max(0, conditionOptions.length - limitedConditionOptions.length);
+  const typeHint = hiddenTypeCount > 0
+    ? `Ещё ${hiddenTypeCount.toLocaleString("ru-RU")} типов доступны через поиск.`
+    : "";
+  const conditionHint = hiddenConditionCount > 0
+    ? `Ещё ${hiddenConditionCount.toLocaleString("ru-RU")} состояний доступны через поиск.`
+    : "";
 
   return (
     <aside
@@ -161,40 +157,10 @@ function FilterPanel({
         </button>
       </div>
 
-      <fieldset className={styles.filterGroup}>
-        <legend>Наличие</legend>
-        {relevantStatuses.map((status) => (
-          <Checkbox
-            key={status.value}
-            label={status.label}
-            checked={filters.statuses.includes(status.value)}
-            onChange={() => onChange({
-              ...filters,
-              statuses: toggleValue(filters.statuses, status.value),
-            })}
-          />
-        ))}
-      </fieldset>
-
-      <fieldset className={styles.filterGroup}>
-        <legend>Получение</legend>
-        {relevantFulfillmentOptions.map((mode) => (
-          <Checkbox
-            key={mode.value}
-            label={mode.label}
-            checked={filters.fulfillmentModes.includes(mode.value)}
-            onChange={() => onChange({
-              ...filters,
-              fulfillmentModes: toggleValue(filters.fulfillmentModes, mode.value),
-            })}
-          />
-        ))}
-      </fieldset>
-
-      {filters.category !== "skins" ? (
+      {limitedTypeOptions.length ? (
         <fieldset className={styles.filterGroup}>
-          <legend>Тип товара</legend>
-          {relevantTypeOptions.map((type) => (
+          <legend>{typeLegend}</legend>
+          {limitedTypeOptions.map((type) => (
             <Checkbox
               key={type}
               label={type}
@@ -205,23 +171,25 @@ function FilterPanel({
               })}
             />
           ))}
+          {typeHint ? <span className={styles.filterHint}>{typeHint}</span> : null}
         </fieldset>
       ) : null}
 
-      {filters.category === "all" || filters.category === "skins" ? (
+      {limitedConditionOptions.length ? (
         <fieldset className={styles.filterGroup}>
-          <legend>Оружие</legend>
-          {weaponOptions.map((weapon) => (
+          <legend>Состояние</legend>
+          {limitedConditionOptions.map((condition) => (
             <Checkbox
-              key={weapon}
-              label={weapon}
-              checked={filters.weaponTerms.includes(weapon)}
+              key={condition}
+              label={condition}
+              checked={filters.conditions.includes(condition)}
               onChange={() => onChange({
                 ...filters,
-                weaponTerms: toggleValue(filters.weaponTerms, weapon),
+                conditions: toggleValue(filters.conditions, condition),
               })}
             />
           ))}
+          {conditionHint ? <span className={styles.filterHint}>{conditionHint}</span> : null}
         </fieldset>
       ) : null}
 
@@ -308,15 +276,6 @@ function getActiveChips(filters: CatalogFilters): ActiveChip[] {
     });
   }
 
-  filters.statuses.forEach((status) => chips.push({
-    id: `status-${status}`,
-    label: statusLabels[status],
-    remove: (current) => ({
-      ...current,
-      statuses: current.statuses.filter((item) => item !== status),
-    }),
-  }));
-
   filters.types.forEach((type) => chips.push({
     id: `type-${type}`,
     label: type,
@@ -326,21 +285,12 @@ function getActiveChips(filters: CatalogFilters): ActiveChip[] {
     }),
   }));
 
-  filters.fulfillmentModes.forEach((mode) => chips.push({
-    id: `fulfillment-${mode}`,
-    label: fulfillmentLabels[mode],
+  filters.conditions.forEach((condition) => chips.push({
+    id: `condition-${condition}`,
+    label: condition,
     remove: (current) => ({
       ...current,
-      fulfillmentModes: current.fulfillmentModes.filter((item) => item !== mode),
-    }),
-  }));
-
-  filters.weaponTerms.forEach((weapon) => chips.push({
-    id: `weapon-${weapon}`,
-    label: weapon,
-    remove: (current) => ({
-      ...current,
-      weaponTerms: current.weaponTerms.filter((item) => item !== weapon),
+      conditions: current.conditions.filter((item) => item !== condition),
     }),
   }));
 
@@ -381,6 +331,7 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
   const [loadMoreError, setLoadMoreError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [feedState, setFeedState] = useState({ key: "", count: CATALOG_FEED_BATCH_SIZE });
+  const [loadedFiltersKey, setLoadedFiltersKey] = useState("");
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const filterDialogRef = useRef<HTMLElement>(null);
   const closeFilterButtonRef = useRef<HTMLButtonElement>(null);
@@ -404,6 +355,42 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
   const activeChips = useMemo(() => getActiveChips(filters), [filters]);
   const draftChips = useMemo(() => getActiveChips(draftFilters), [draftFilters]);
   const catalogReturnHref = filtersKey ? `${pathname}?${filtersKey}` : pathname;
+
+  useEffect(() => {
+    setLoadedFiltersKey((current) => current || filtersKey);
+  }, [filtersKey]);
+
+  useEffect(() => {
+    if (loadedFiltersKey === "" || loadedFiltersKey === filtersKey) return;
+    let cancelled = false;
+    setLoadingMore(true);
+    setLoadMoreError("");
+
+    void fetchCatalogList({
+      filters,
+      limit: serverPagination.limit,
+      offset: 0,
+    })
+      .then((nextPage) => {
+        if (cancelled) return;
+        setLoadedProducts(nextPage.items);
+        setServerPagination(nextPage.pagination);
+        setFeedState({ key: filtersKey, count: CATALOG_FEED_BATCH_SIZE });
+        setLoadedFiltersKey(filtersKey);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadMoreError("Не удалось обновить каталог по выбранным фильтрам. Повторите действие.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMore(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filters, filtersKey, loadedFiltersKey, serverPagination.limit]);
 
   const loadMoreProducts = useCallback(async () => {
     if (hasMoreLocalProducts) {
@@ -430,6 +417,7 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
       setLoadedProducts((current) => mergeProducts(current, nextPage.items));
       setServerPagination(nextPage.pagination);
       setFeedState({ key: filtersKey, count: visibleProducts.length + nextPage.items.length });
+      setLoadedFiltersKey(filtersKey);
     } catch {
       setLoadMoreError("Не удалось загрузить следующую страницу каталога. Повторите действие.");
     } finally {
@@ -581,10 +569,8 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
                 ...filters,
                 category: category.value,
                 ...(category.value === "skins" ? {} : { game: undefined }),
-                statuses: [],
-                fulfillmentModes: [],
                 types: [],
-                ...(category.value !== "all" && category.value !== "skins" ? { weaponTerms: [] } : {}),
+                conditions: [],
               })}
             >
               {category.label}
@@ -604,9 +590,8 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
                   ...filters,
                   category: "skins",
                   game,
-                  statuses: [],
-                  fulfillmentModes: [],
                   types: [],
+                  conditions: [],
                 })}
               >
                 {getCatalogGameLabel(game)}

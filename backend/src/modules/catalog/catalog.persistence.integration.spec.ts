@@ -322,4 +322,110 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
       .query({ category: "skins", game: "dota2" })
       .expect(400);
   });
+
+  it("filters catalog totals and pages by product type and item condition before pagination", async () => {
+    await pool.query(
+      `
+        INSERT INTO catalog_products (
+          id,
+          slug,
+          kind,
+          category,
+          game,
+          product_type,
+          title,
+          description,
+          price_coin_minor,
+          availability,
+          fulfillment_mode,
+          popularity,
+          image,
+          image_alt,
+          meta,
+          keywords,
+          details,
+          public_enabled
+        )
+        VALUES
+          (
+            'test-api-game-filter-cs2-field-tested-ak',
+            'test-api-game-filter-cs2-field-tested-ak',
+            'skins',
+            'Игровые предметы',
+            'cs2',
+            'Автомат',
+            'AK-47 | Test',
+            'CS2 rifle item.',
+            30000,
+            'available',
+            'steam-trade',
+            20,
+            'https://cdn.example/cs2/ak.png',
+            'AK-47 Test',
+            ARRAY['CS2','Field-Tested'],
+            ARRAY['cs2','ak-47','автомат'],
+            '{"specifications":[{"label":"Состояние","value":"Field-Tested"}],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          ),
+          (
+            'test-api-game-filter-cs2-field-tested-m4',
+            'test-api-game-filter-cs2-field-tested-m4',
+            'skins',
+            'Игровые предметы',
+            'cs2',
+            'Автомат',
+            'M4A1-S | Test',
+            'CS2 rifle item.',
+            20000,
+            'available',
+            'steam-trade',
+            10,
+            'https://cdn.example/cs2/m4.png',
+            'M4 Test',
+            ARRAY['CS2','Field-Tested'],
+            ARRAY['cs2','m4','автомат'],
+            '{"specifications":[{"label":"Состояние","value":"Field-Tested"}],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          ),
+          (
+            'test-api-game-filter-cs2-factory-new-awp',
+            'test-api-game-filter-cs2-factory-new-awp',
+            'skins',
+            'Игровые предметы',
+            'cs2',
+            'Снайперская винтовка',
+            'AWP | Test',
+            'CS2 sniper item.',
+            10000,
+            'available',
+            'steam-trade',
+            30,
+            'https://cdn.example/cs2/awp.png',
+            'AWP Test',
+            ARRAY['CS2','Factory New'],
+            ARRAY['cs2','awp','снайперская'],
+            '{"specifications":[{"label":"Состояние","value":"Factory New"}],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          )
+      `,
+    );
+
+    const response = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .query({
+        category: "skins",
+        game: "cs2",
+        type: "Автомат",
+        condition: "Field-Tested",
+        sort: "price_asc",
+        limit: 1,
+      })
+      .expect(200);
+    const body = response.body as CatalogListDto;
+
+    expect(body.pagination.total).toBe(2);
+    expect(body.pagination.hasMore).toBe(true);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.slug).toBe("test-api-game-filter-cs2-field-tested-m4");
+  });
 });

@@ -34,6 +34,7 @@ test("URL-параметры каталога разбираются в безо
     ["status", "unknown"],
     ["type", "Пополнение баланса"],
     ["type", "Пополнение баланса"],
+    ["condition", "Field-Tested"],
     ["weapon", "Автомат"],
     ["min", "750"],
     ["max", "5000"],
@@ -44,14 +45,22 @@ test("URL-параметры каталога разбираются в безо
     query: "Steam",
     category: "steam",
     game: "rust",
-    statuses: ["available"],
     types: ["Пополнение баланса"],
-    fulfillmentModes: [],
-    weaponTerms: ["Автомат"],
+    conditions: ["Field-Tested"],
     minPrice: 750,
     maxPrice: 5000,
     sort: "price_desc",
   });
+});
+
+test("легаси-фильтры наличия, выдачи и weapon игнорируются", () => {
+  const filters = parseCatalogSearchParams(new URLSearchParams([
+    ["status", "available"],
+    ["fulfillment", "steam-trade"],
+    ["weapon", "Автомат"],
+  ]));
+
+  assert.deepEqual(filters, createDefaultCatalogFilters());
 });
 
 test("невалидные URL-параметры сбрасываются без NaN и отрицательных цен", () => {
@@ -70,9 +79,8 @@ test("активные фильтры сериализуются без знач
     ...createDefaultCatalogFilters(),
     query: "AK-47",
     category: "skins",
-    statuses: ["available", "on-request"],
     types: ["Автомат"],
-    weaponTerms: ["винтовка"],
+    conditions: ["Field-Tested"],
     minPrice: 1000,
     maxPrice: 8000,
     sort: "price_asc",
@@ -81,7 +89,7 @@ test("активные фильтры сериализуются без знач
 
   assert.equal(
     serialized.toString(),
-    "q=AK-47&category=skins&game=rust&status=available&status=on-request&type=%D0%90%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82&weapon=%D0%B2%D0%B8%D0%BD%D1%82%D0%BE%D0%B2%D0%BA%D0%B0&min=1000&max=8000&sort=price_asc",
+    "q=AK-47&category=skins&game=rust&type=%D0%90%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82&condition=Field-Tested&min=1000&max=8000&sort=price_asc",
   );
   assert.equal(serializeCatalogFilters(createDefaultCatalogFilters()).toString(), "");
 });
@@ -181,9 +189,7 @@ test("поиск, фасеты, цена и сортировка работаю�
     ...createDefaultCatalogFilters(),
     query: "пополнение",
     category: "steam",
-    statuses: ["available"],
     types: ["Пополнение баланса"],
-    fulfillmentModes: ["automatic"],
     minPrice: 1000,
     maxPrice: 5000,
     sort: "price_desc",
@@ -195,14 +201,27 @@ test("поиск, фасеты, цена и сортировка работаю�
   ]);
 });
 
-test("фильтр по оружейному термину работает отдельно от текстового поиска", () => {
+test("фильтр по типу предмета работает отдельно от текстового поиска", () => {
   const result = filterAndSortCatalog(catalogProducts, {
     ...createDefaultCatalogFilters(),
     category: "skins",
-    weaponTerms: ["снайперская"],
+    types: ["снайперская"],
   });
 
   assert.deepEqual(result.map((product) => product.id), ["awp-asiimov"]);
+});
+
+test("фильтр по состоянию работает отдельно от текстового поиска", () => {
+  const result = filterAndSortCatalog(catalogProducts, {
+    ...createDefaultCatalogFilters(),
+    category: "skins",
+    conditions: ["После полевых испытаний"],
+  });
+
+  assert.deepEqual(result.map((product) => product.id), [
+    "ak-redline",
+    "m4-printstream",
+  ]);
 });
 
 test("несовместимые условия возвращают пустой результат", () => {
@@ -220,10 +239,8 @@ test("сброс возвращает независимое начальное 
   const secondDefaults = createDefaultCatalogFilters();
 
   assert.equal(hasActiveCatalogFilters(defaults), false);
-  assert.notEqual(defaults.statuses, secondDefaults.statuses);
   assert.notEqual(defaults.types, secondDefaults.types);
-  assert.notEqual(defaults.weaponTerms, secondDefaults.weaponTerms);
-  assert.notEqual(defaults.fulfillmentModes, secondDefaults.fulfillmentModes);
+  assert.notEqual(defaults.conditions, secondDefaults.conditions);
   assert.equal(filterAndSortCatalog(catalogProducts, defaults).length, catalogProducts.length);
 });
 

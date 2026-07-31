@@ -87,6 +87,7 @@ export type CatalogListQuery = {
   q?: string;
   category?: string;
   game?: string;
+  condition?: string | string[];
   status?: string | string[];
   type?: string | string[];
   fulfillment?: string | string[];

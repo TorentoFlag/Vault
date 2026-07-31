@@ -61,10 +61,8 @@ test("fetchCatalogList requests backend catalog with canonical filters and hides
     filters: {
       query: "Пистолет",
       category: "skins",
-      statuses: ["available"],
       types: [],
-      fulfillmentModes: [],
-      weaponTerms: [],
+      conditions: [],
       sort: "price_asc",
       game: "rust",
     },
@@ -96,7 +94,7 @@ test("fetchCatalogList requests backend catalog with canonical filters and hides
 
   assert.equal(
     requested[0],
-    "https://api.vault.example/catalog?q=%D0%9F%D0%B8%D1%81%D1%82%D0%BE%D0%BB%D0%B5%D1%82&category=skins&game=rust&status=available&sort=price_asc",
+    "https://api.vault.example/catalog?q=%D0%9F%D0%B8%D1%81%D1%82%D0%BE%D0%BB%D0%B5%D1%82&category=skins&game=rust&sort=price_asc",
   );
   assert.deepEqual(response.items.map((product) => product.kind), ["skins"]);
   assert.equal(response.items[0]?.priceCoins, 181);
