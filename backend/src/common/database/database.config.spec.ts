@@ -15,6 +15,9 @@ const baseConfig: AppConfig = {
     requestTimeoutMs: 60_000,
     steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
   },
+  catalog: {
+    publicGames: ["cs2"],
+  },
   corsOrigins: [],
 };
 

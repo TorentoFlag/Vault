@@ -1,4 +1,5 @@
 import { optionalString, optionalStringFromFile } from "./secret-file";
+import { parseCatalogPublicGames, type CatalogGame } from "../modules/catalog/catalog-game";
 
 export type AppNodeEnv = "development" | "test" | "production";
 export type ArcPayEnvironment = "sandbox" | "live";
@@ -29,6 +30,9 @@ export type AppConfig = {
     maximumBodyBytes: number;
     requestTimeoutMs: number;
     steamRefillBaseUrl: string;
+  };
+  catalog: {
+    publicGames: CatalogGame[];
   };
   corsOrigins: string[];
 };
@@ -171,6 +175,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       maximumBodyBytes: parseBoundedInteger("SIH_RESPONSE_MAX_BYTES", env.SIH_RESPONSE_MAX_BYTES, 16_777_216, 1_024, 16_777_216),
       requestTimeoutMs: parseBoundedInteger("SIH_REQUEST_TIMEOUT_MS", env.SIH_REQUEST_TIMEOUT_MS, 60_000, 500, 120_000),
       steamRefillBaseUrl: parseHttpsUrl("SIH_STEAM_REFILL_BASE_URL", env.SIH_STEAM_REFILL_BASE_URL, "https://core.steaminventoryhelper.com"),
+    },
+    catalog: {
+      publicGames: parseCatalogPublicGames(env.CATALOG_PUBLIC_GAMES),
     },
     corsOrigins: parseCorsOrigins(env.CORS_ORIGINS),
   };

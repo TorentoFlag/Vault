@@ -16,7 +16,9 @@ import styles from "./layout.module.css";
 const serviceNavigation: { label: string; href: string; icon: IconName }[] = [
   { label: "Все товары", href: "/catalog", icon: "bag" },
   { label: "Пополнение Steam", href: "/catalog?category=steam", icon: "steam" },
-  { label: "Скины CS2", href: "/catalog?category=skins&q=CS2", icon: "shield" },
+  { label: "Скины CS2", href: "/catalog?category=skins&game=cs2", icon: "shield" },
+  { label: "Скины Rust", href: "/catalog?category=skins&game=rust", icon: "shield" },
+  { label: "Скины TF2", href: "/catalog?category=skins&game=tf2", icon: "shield" },
   { label: "Пополнить Coins", href: "/balance/top-up", icon: "coin" },
 ];
 
@@ -177,7 +179,9 @@ export function SiteHeader() {
           <div className={styles.headerContainer}>
             <Link href="/catalog" onClick={() => setMenuOpen(false)}>Все товары</Link>
             <Link href="/catalog?category=steam" onClick={() => setMenuOpen(false)}>Пополнение Steam</Link>
-            <Link href="/catalog?category=skins" onClick={() => setMenuOpen(false)}>Игровые предметы</Link>
+            <Link href="/catalog?category=skins&game=cs2" onClick={() => setMenuOpen(false)}>CS2</Link>
+            <Link href="/catalog?category=skins&game=rust" onClick={() => setMenuOpen(false)}>Rust</Link>
+            <Link href="/catalog?category=skins&game=tf2" onClick={() => setMenuOpen(false)}>Team Fortress 2</Link>
             {isHydrated && session ? (
               <Link className={styles.mobileAccountLink} href="/balance/top-up" onClick={() => setMenuOpen(false)}>
                 Баланс: {balanceCoins.toLocaleString("ru-RU")} Coins

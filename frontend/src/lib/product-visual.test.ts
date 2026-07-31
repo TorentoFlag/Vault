@@ -3,9 +3,8 @@ import test from "node:test";
 
 import { getProductVisualLabel } from "./product-visual.ts";
 
-test("uses the game name for image-free skin products", () => {
-  assert.equal(getProductVisualLabel({ kind: "skins", game: "Dota 2" }), "Dota 2");
-  assert.equal(getProductVisualLabel({ kind: "skins", game: "Rust" }), "Rust");
+test("does not create image-free artwork labels for skin products", () => {
+  assert.equal(getProductVisualLabel({ kind: "skins", game: "rust" }), null);
 });
 
 test("keeps service labels for Steam and GPT products", () => {

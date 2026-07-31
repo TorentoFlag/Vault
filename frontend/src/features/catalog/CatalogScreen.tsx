@@ -6,6 +6,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ProductCard } from "@/components/marketplace/ProductCard";
 import { Breadcrumbs, Button, Checkbox, Container, EmptyState } from "@/components/ui/UI";
 import {
+  CATALOG_GAMES,
+  getCatalogGameLabel,
+  type CatalogGame,
+} from "@/lib/catalog-games";
+import {
   createDefaultCatalogFilters,
   filterAndSortCatalog,
   getCatalogScrollStorageKey,
@@ -45,8 +50,8 @@ const fulfillmentOptions: { value: ProductFulfillmentMode; label: string }[] = [
 
 const sortOptions: { value: CatalogSort; label: string }[] = [
   { value: "relevance", label: "По релевантности" },
-  { value: "price-asc", label: "Сначала дешевле" },
-  { value: "price-desc", label: "Сначала дороже" },
+  { value: "price_asc", label: "Сначала дешевле" },
+  { value: "price_desc", label: "Сначала дороже" },
   { value: "newest", label: "Сначала новые" },
 ];
 
@@ -292,6 +297,14 @@ function getActiveChips(filters: CatalogFilters): ActiveChip[] {
       id: "category",
       label: categoryLabels[filters.category],
       remove: (current) => ({ ...current, category: "all" }),
+    });
+  }
+
+  if (filters.game !== undefined) {
+    chips.push({
+      id: "game",
+      label: getCatalogGameLabel(filters.game),
+      remove: (current) => ({ ...current, game: undefined }),
     });
   }
 
@@ -567,6 +580,7 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
               onClick={() => updateFilters({
                 ...filters,
                 category: category.value,
+                ...(category.value === "skins" ? {} : { game: undefined }),
                 statuses: [],
                 fulfillmentModes: [],
                 types: [],
@@ -577,6 +591,29 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
             </button>
           ))}
         </div>
+
+        {(filters.category === "skins" || filters.game !== undefined) ? (
+          <div className={styles.categoryTabs} role="group" aria-label="Игры каталога">
+            {CATALOG_GAMES.map((game: CatalogGame) => (
+              <button
+                key={game}
+                type="button"
+                className={filters.game === game ? styles.activeTab : ""}
+                aria-pressed={filters.game === game}
+                onClick={() => updateFilters({
+                  ...filters,
+                  category: "skins",
+                  game,
+                  statuses: [],
+                  fulfillmentModes: [],
+                  types: [],
+                })}
+              >
+                {getCatalogGameLabel(game)}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className={styles.toolbar}>
           <div className={styles.resultSummary}>

@@ -1,7 +1,7 @@
 export type CatalogProductKind = "steam" | "skins";
 export type CatalogAvailability = "available" | "on-request";
 export type CatalogFulfillmentMode = "automatic" | "steam-trade" | "manual";
-export type CatalogSort = "relevance" | "price-asc" | "price-desc" | "newest";
+export type CatalogSort = "relevance" | "price_asc" | "price_desc" | "newest" | "name_asc" | "name_desc";
 
 export type CatalogProductSpecification = {
   label: string;
@@ -86,6 +86,7 @@ export type CatalogListDto = {
 export type CatalogListQuery = {
   q?: string;
   category?: string;
+  game?: string;
   status?: string | string[];
   type?: string | string[];
   fulfillment?: string | string[];

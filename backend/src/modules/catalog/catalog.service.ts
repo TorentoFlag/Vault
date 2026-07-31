@@ -1,6 +1,7 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { CATALOG_GAMES, getCatalogGameDefinition, parseCatalogGame, type CatalogGame } from "./catalog-game";
 import { CatalogPricingService } from "./catalog-pricing.service";
 import type {
   CatalogFacetOption,
@@ -14,12 +15,16 @@ import type {
 } from "./catalog.types";
 
 const allowedKinds = new Set<CatalogProductKind>(["skins", "steam"]);
-const allowedSorts = new Set<CatalogSort>(["relevance", "price-asc", "price-desc", "newest"]);
 const defaultCatalogLimit = 120;
 const maxCatalogLimit = 240;
 const relatedTerms: Record<CatalogProductKind, string[]> = {
   steam: ["steam", "стим", "пополнение", "баланс", "кошелек"],
-  skins: ["скин", "скины", "предмет", "предметы", "cs2"],
+  skins: ["скин", "скины", "предмет", "предметы", "cs2", "rust", "раст", "tf2", "team fortress"],
+};
+const gameSearchTerms: Record<CatalogGame, string[]> = {
+  cs2: ["cs2", "кс", "counter-strike", "counter strike"],
+  rust: ["rust", "раст"],
+  tf2: ["tf2", "team fortress", "team fortress 2"],
 };
 
 type LoadedCatalogProduct = CatalogProduct & {
@@ -53,6 +58,35 @@ function offsetQuery(value: string | undefined): number {
   const parsed = numberQuery(value);
   if (parsed === undefined || !Number.isSafeInteger(parsed)) return 0;
   return Math.max(0, parsed);
+}
+
+function sortQuery(value: string | undefined): CatalogSort {
+  switch (value) {
+    case undefined:
+    case "":
+    case "relevance":
+      return "relevance";
+    case "price_asc":
+    case "price-asc":
+      return "price_asc";
+    case "price_desc":
+    case "price-desc":
+      return "price_desc";
+    case "newest":
+      return "newest";
+    case "name_asc":
+      return "name_asc";
+    case "name_desc":
+      return "name_desc";
+    default:
+      return "relevance";
+  }
+}
+
+function gameFromSearch(query: string): CatalogGame | undefined {
+  const normalizedQuery = normalize(query);
+  if (!normalizedQuery) return undefined;
+  return CATALOG_GAMES.find((game) => gameSearchTerms[game].some((term) => normalize(term) === normalizedQuery));
 }
 
 function priceDto(amountMinor: number) {
@@ -112,7 +146,7 @@ function searchableText(product: CatalogProduct): string {
 function matchesQuery(product: CatalogProduct, query: string): boolean {
   const normalizedQuery = normalize(query);
   if (!normalizedQuery) return true;
-  const exactGame = ["cs2"].find((game) => game === normalizedQuery);
+  const exactGame = gameFromSearch(normalizedQuery);
   if (exactGame) return normalize(product.game ?? "") === exactGame;
   const haystack = searchableText(product);
   return normalizedQuery.split(/\s+/).filter(Boolean).every((term) => {
@@ -177,13 +211,15 @@ export class CatalogService {
     const maxPrice = min !== undefined && max !== undefined && min > max ? min : max;
     const minPriceCoinMinor = minPrice === undefined ? undefined : minPrice * 100;
     const maxPriceCoinMinor = maxPrice === undefined ? undefined : maxPrice * 100;
-    const sort = allowedSorts.has(query.sort as CatalogSort) ? query.sort as CatalogSort : "relevance";
+    const sort = sortQuery(query.sort);
     const search = query.q ?? "";
+    const game = this.gameFilter(query);
     const limit = limitQuery(query.limit);
     const offset = offsetQuery(query.offset);
     const [products, catalogFacets, total] = await Promise.all([
       this.loadProducts({
         ...(category === undefined ? {} : { category }),
+        ...(game === undefined ? {} : { game }),
         search,
         limit,
         offset,
@@ -192,6 +228,7 @@ export class CatalogService {
       this.loadFacets(),
       this.countProducts({
         ...(category === undefined ? {} : { category }),
+        ...(game === undefined ? {} : { game }),
         search,
       }),
     ]);
@@ -205,9 +242,11 @@ export class CatalogService {
       .filter((product) => maxPriceCoinMinor === undefined || priceCoinMinor(product) <= maxPriceCoinMinor)
       .filter((product) => matchesQuery(product, search))
       .sort((left, right) => {
-        if (sort === "price-asc") return priceCoinMinor(left) - priceCoinMinor(right);
-        if (sort === "price-desc") return priceCoinMinor(right) - priceCoinMinor(left);
+        if (sort === "price_asc") return priceCoinMinor(left) - priceCoinMinor(right);
+        if (sort === "price_desc") return priceCoinMinor(right) - priceCoinMinor(left);
         if (sort === "newest") return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+        if (sort === "name_asc") return left.title.localeCompare(right.title, "ru-RU");
+        if (sort === "name_desc") return right.title.localeCompare(left.title, "ru-RU");
         return relevance(right, search) - relevance(left, search) || left.id.localeCompare(right.id);
       })
       .slice(0, limit);
@@ -251,6 +290,7 @@ export class CatalogService {
 
   private async loadProducts(command: {
     category?: CatalogProductKind;
+    game?: CatalogGame;
     limit?: number;
     offset?: number;
     search?: string;
@@ -348,6 +388,7 @@ export class CatalogService {
 
   private catalogWhere(command: {
     category?: CatalogProductKind;
+    game?: CatalogGame;
     search?: string;
     slug?: string;
   }) {
@@ -360,13 +401,17 @@ export class CatalogService {
       params.push(command.category);
       where.push(`catalog_products.kind = $${params.length}`);
     }
+    if (command.game !== undefined) {
+      params.push(command.game);
+      where.push(`lower(coalesce(catalog_products.game, '')) = $${params.length}`);
+    }
     if (command.slug !== undefined) {
       params.push(command.slug);
       where.push(`catalog_products.slug = $${params.length}`);
     }
     const search = normalize(command.search ?? "");
     if (search) {
-      const exactGame = ["cs2"].find((game) => game === search);
+      const exactGame = gameFromSearch(search);
       if (exactGame !== undefined) {
         params.push(exactGame);
         where.push(`lower(coalesce(catalog_products.game, '')) = $${params.length}`);
@@ -406,6 +451,7 @@ export class CatalogService {
 
   private async countProducts(command: {
     category?: CatalogProductKind;
+    game?: CatalogGame;
     search?: string;
     slug?: string;
   }): Promise<number> {
@@ -419,6 +465,18 @@ export class CatalogService {
       params,
     );
     return Number(result.rows[0]?.total ?? 0);
+  }
+
+  private gameFilter(query: CatalogListQuery): CatalogGame | undefined {
+    const rawGame = query.game;
+    if (rawGame === undefined || rawGame.trim() === "") return undefined;
+    const game = parseCatalogGame(rawGame);
+    if (game === null) throw new BadRequestException("Unsupported catalog game");
+    const category = allowedKinds.has(query.category as CatalogProductKind) ? query.category as CatalogProductKind : undefined;
+    if (category !== undefined && category !== "skins") {
+      throw new BadRequestException("Catalog game filter is available only for skins");
+    }
+    return game;
   }
 
   private async loadFacets(): Promise<CatalogFacetsDto> {
@@ -452,6 +510,13 @@ export class CatalogService {
       keywords: [],
       details: { specifications: [], fulfillment: { title: "", description: "", requirements: [] } },
     }));
-    return facets(facetRows);
+    const rawFacets = facets(facetRows);
+    return {
+      ...rawFacets,
+      games: rawFacets.games.map((game) => ({
+        id: normalize(game.id),
+        title: getCatalogGameDefinition(parseCatalogGame(game.id) ?? "cs2").label,
+      })),
+    };
   }
 }

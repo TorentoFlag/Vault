@@ -37,6 +37,10 @@ Run from `/Users/anton/Finext/Vault`.
 | Backend integration tests | `npm --prefix backend run test:integration` |
 | Commerce smoke | `npm --prefix backend run smoke:commerce` |
 | Provider acceptance readiness | `npm --prefix backend run acceptance:readiness` |
+| Sync SIH supplier listings | `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run catalog:sync-sih -- --game=cs2` |
+| Sync catalog metadata | `npm --prefix backend run catalog:sync-metadata -- --game=cs2` |
+| Sync all public catalog games | `SIH_API_KEY_FILE=/absolute/restricted/sih-key CATALOG_PUBLIC_GAMES=cs2,rust,tf2 npm --prefix backend run catalog:sync-all-games` |
+| Promote covered SIH listings | `npm --prefix backend run catalog:promote-sih -- --game=cs2` |
 | Reconcile pending Arc Pay top-ups | `npm --prefix backend run payments:reconcile -- --limit=20` |
 | Check wallet invariants | `npm --prefix backend run wallet:reconcile -- --limit=100` |
 | SIH sandbox catalog acceptance | `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run acceptance:sih-catalog` |

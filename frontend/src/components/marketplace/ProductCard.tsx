@@ -28,14 +28,16 @@ function ProductVisual({ product, priority = false }: { product: Product; priori
     );
   }
 
+  if (product.kind === "skins") {
+    return <div className={`${styles.serviceVisual} ${styles.skins}`} aria-hidden="true" />;
+  }
+
   const isSteam = product.kind === "steam";
-  const visualLabel = product.kind === "skins" ? product.game ?? "SKIN" : "GPT";
-  const visualCaption = product.kind === "skins" ? "Steam item" : "Digital access";
 
   return (
     <div className={`${styles.serviceVisual} ${styles[product.kind]}`} aria-hidden="true">
-      {isSteam ? <Icon name="steam" width="54" height="54" /> : <span>{visualLabel}</span>}
-      <small>{isSteam ? "Steam Wallet" : visualCaption}</small>
+      {isSteam ? <Icon name="steam" width="54" height="54" /> : <span>GPT</span>}
+      <small>{isSteam ? "Steam Wallet" : "Digital access"}</small>
     </div>
   );
 }

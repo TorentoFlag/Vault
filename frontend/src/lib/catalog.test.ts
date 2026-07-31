@@ -20,7 +20,7 @@ import {
 test("автодополнение канонизирует returnTo тем же порядком, что и каталог", () => {
   assert.equal(
     createCanonicalCatalogReturnPath("/catalog", "sort=price-desc&category=skins&q=old", "AWP"),
-    "/catalog?q=AWP&category=skins&sort=price-desc",
+    "/catalog?q=AWP&category=skins&sort=price_desc",
   );
 });
 import { searchProducts } from "./marketplace.ts";
@@ -29,6 +29,7 @@ test("URL-параметры каталога разбираются в безо
   const filters = parseCatalogSearchParams(new URLSearchParams([
     ["q", "  Steam  "],
     ["category", "steam"],
+    ["game", "rust"],
     ["status", "available"],
     ["status", "unknown"],
     ["type", "Пополнение баланса"],
@@ -42,13 +43,14 @@ test("URL-параметры каталога разбираются в безо
   assert.deepEqual(filters, {
     query: "Steam",
     category: "steam",
+    game: "rust",
     statuses: ["available"],
     types: ["Пополнение баланса"],
     fulfillmentModes: [],
     weaponTerms: ["Автомат"],
     minPrice: 750,
     maxPrice: 5000,
-    sort: "price-desc",
+    sort: "price_desc",
   });
 });
 
@@ -73,12 +75,13 @@ test("активные фильтры сериализуются без знач
     weaponTerms: ["винтовка"],
     minPrice: 1000,
     maxPrice: 8000,
-    sort: "price-asc",
+    sort: "price_asc",
+    game: "rust",
   });
 
   assert.equal(
     serialized.toString(),
-    "q=AK-47&category=skins&status=available&status=on-request&type=%D0%90%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82&weapon=%D0%B2%D0%B8%D0%BD%D1%82%D0%BE%D0%B2%D0%BA%D0%B0&min=1000&max=8000&sort=price-asc",
+    "q=AK-47&category=skins&game=rust&status=available&status=on-request&type=%D0%90%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82&weapon=%D0%B2%D0%B8%D0%BD%D1%82%D0%BE%D0%B2%D0%BA%D0%B0&min=1000&max=8000&sort=price_asc",
   );
   assert.equal(serializeCatalogFilters(createDefaultCatalogFilters()).toString(), "");
 });
@@ -164,8 +167,8 @@ test("поиск Автомат возвращает только AK-47 и M4A1-
 test("точный поиск по игре не смешивает игровые каталоги", () => {
   const expected = {
     CS2: ["ak-redline", "awp-asiimov", "m4-printstream", "deagle-printstream"],
-    "Dota 2": ["dota-pa-manifold-paradox", "dota-pudge-feast-of-abscession"],
     Rust: ["rust-tempered-ak47", "rust-alien-red-ak"],
+    tf2: [],
   } as const;
   for (const [query, ids] of Object.entries(expected)) {
     const result = filterAndSortCatalog(catalogProducts, { ...createDefaultCatalogFilters(), query });
@@ -183,7 +186,7 @@ test("поиск, фасеты, цена и сортировка работаю�
     fulfillmentModes: ["automatic"],
     minPrice: 1000,
     maxPrice: 5000,
-    sort: "price-desc",
+    sort: "price_desc",
   });
 
   assert.deepEqual(result.map((product) => product.id), [
@@ -227,7 +230,7 @@ test("сброс возвращает независимое начальное 
 test("сортировки по цене и новизне дают предсказуемый порядок", () => {
   const priceAscending = filterAndSortCatalog(catalogProducts, {
     ...createDefaultCatalogFilters(),
-    sort: "price-asc",
+    sort: "price_asc",
   });
   const newest = filterAndSortCatalog(catalogProducts, {
     ...createDefaultCatalogFilters(),
@@ -281,15 +284,15 @@ test("статус под заказ имеет приоритет над спо
 });
 
 test("возврат из карточки сохраняет только безопасный URL каталога", () => {
-  assert.equal(sanitizeCatalogReturnPath("/catalog?category=skins&q=CS2"), "/catalog?category=skins&q=CS2");
+  assert.equal(sanitizeCatalogReturnPath("/catalog?category=skins&game=cs2"), "/catalog?category=skins&game=cs2");
   assert.equal(sanitizeCatalogReturnPath("/account"), "/catalog");
   assert.equal(sanitizeCatalogReturnPath("https://example.com/catalog"), "/catalog");
 });
 
 test("позиция каталога привязана к безопасному контексту и проходит валидацию", () => {
   assert.equal(
-    getCatalogScrollStorageKey("/catalog?category=skins&q=CS2"),
-    "vault:catalog-scroll:/catalog?category=skins&q=CS2",
+    getCatalogScrollStorageKey("/catalog?category=skins&game=cs2"),
+    "vault:catalog-scroll:/catalog?category=skins&game=cs2",
   );
   assert.equal(getCatalogScrollStorageKey("https://example.com"), "vault:catalog-scroll:/catalog");
   assert.equal(parseCatalogScrollPosition("1240"), 1240);

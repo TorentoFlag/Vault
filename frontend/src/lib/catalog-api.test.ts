@@ -8,7 +8,7 @@ const apiProduct = {
   slug: "desert-eagle-printstream",
   kind: "skins",
   category: "Игровые предметы",
-  game: "CS2",
+  game: "cs2",
   productType: "Пистолет",
   title: "Desert Eagle | Printstream",
   description: "Backend-owned catalog product with a SIH-backed quote in Coins.",
@@ -65,7 +65,8 @@ test("fetchCatalogList requests backend catalog with canonical filters and hides
       types: [],
       fulfillmentModes: [],
       weaponTerms: [],
-      sort: "price-asc",
+      sort: "price_asc",
+      game: "rust",
     },
     fetch: async (input) => {
       requested.push(String(input));
@@ -95,7 +96,7 @@ test("fetchCatalogList requests backend catalog with canonical filters and hides
 
   assert.equal(
     requested[0],
-    "https://api.vault.example/catalog?q=%D0%9F%D0%B8%D1%81%D1%82%D0%BE%D0%BB%D0%B5%D1%82&category=skins&status=available&sort=price-asc",
+    "https://api.vault.example/catalog?q=%D0%9F%D0%B8%D1%81%D1%82%D0%BE%D0%BB%D0%B5%D1%82&category=skins&game=rust&status=available&sort=price_asc",
   );
   assert.deepEqual(response.items.map((product) => product.kind), ["skins"]);
   assert.equal(response.items[0]?.priceCoins, 181);

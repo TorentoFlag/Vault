@@ -12,9 +12,9 @@ export const categories: Category[] = [
   {
     id: "skins",
     title: "Игровые предметы",
-    description: "Скины CS2 из активного SIH-каталога.",
+    description: "Скины CS2, Rust и Team Fortress 2 из активного SIH-каталога.",
     action: "Открыть каталог",
-    href: "/catalog?category=skins&q=CS2",
+    href: "/catalog?category=skins&game=cs2",
   },
 ] satisfies Category[];
 

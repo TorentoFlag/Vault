@@ -63,7 +63,7 @@ npm --prefix backend run acceptance:sih-catalog
 Optional game list:
 
 ```sh
-SIH_ACCEPT_GAMES=cs2,dota2 npm --prefix backend run acceptance:sih-catalog
+SIH_ACCEPT_GAMES=cs2,rust,tf2 npm --prefix backend run acceptance:sih-catalog
 ```
 
 Accepted evidence may include:

@@ -23,6 +23,8 @@ test("под поиском отображается навигация по у�
     "Все товары",
     "Пополнение Steam",
     "Скины CS2",
+    "Скины Rust",
+    "Скины TF2",
     "Пополнить Coins",
   ]) {
     assert.match(headerSource, new RegExp(label));
@@ -31,14 +33,15 @@ test("под поиском отображается навигация по у�
   assert.doesNotMatch(headerSource, /GPT Plus/);
   assert.doesNotMatch(headerSource, /GPT API/);
   assert.doesNotMatch(headerSource, /Скины Dota 2/);
-  assert.doesNotMatch(headerSource, /Скины Rust/);
 });
 
 test("ссылки меню ведут в существующие разделы и фильтры каталога", () => {
   for (const href of [
     "/catalog",
     "/catalog?category=steam",
-    "/catalog?category=skins&q=CS2",
+    "/catalog?category=skins&game=cs2",
+    "/catalog?category=skins&game=rust",
+    "/catalog?category=skins&game=tf2",
     "/balance/top-up",
   ]) {
     assert.match(headerSource, new RegExp(href.replace(/[?]/g, "\\?")));
@@ -53,9 +56,8 @@ test("поиск в шапке не питается локальным seed cat
   assert.match(headerSource, /<MarketplaceSearch key=\{`\$\{query}:\$\{currentSearch}`} products=\{\[]}/);
 });
 
-test("карточки скинов без изображения показывают название игры, а не GPT", () => {
-  assert.match(productCardSource, /product\.kind === "skins"/);
-  assert.match(productCardSource, /product\.game/);
+test("карточки скинов без изображения не показывают legacy Steam item placeholder", () => {
+  assert.doesNotMatch(productCardSource, /Steam item/);
 });
 
 test("меню услуг сохраняет одну строку и горизонтально прокручивается на узких экранах", () => {

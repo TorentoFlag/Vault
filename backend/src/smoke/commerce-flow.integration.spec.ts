@@ -18,6 +18,8 @@ import { UsersService } from "../modules/users/users.service";
 const databaseUrl = process.env.VAULT_TEST_DATABASE_URL;
 const steamId64 = "76561198000000011";
 const userId = `user_${steamId64}`;
+const commerceSmokeMarketHashName = "Commerce Smoke Deagle | Printstream (Minimal Wear)";
+const commerceSmokeSkinSlug = "commerce-smoke-desert-eagle-printstream";
 
 type TopUpSessionResponse = {
   checkoutUrl: string;
@@ -98,7 +100,8 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
     delete process.env.SIH_API_KEY_FILE;
     globalThis.fetch = originalFetch;
     await app?.close();
-    await pool.query("DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = 'Desert Eagle | Printstream (Minimal Wear)'");
+    await pool.query("DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = $1", [commerceSmokeMarketHashName]);
+    await pool.query("DELETE FROM catalog_products WHERE id = 'commerce-smoke-deagle-printstream'");
     await pool.query("DELETE FROM catalog_sync_runs WHERE id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'");
     await pool.end();
     if (tempDir !== null) await rm(tempDir, { recursive: true, force: true });
@@ -146,7 +149,42 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
         users
       RESTART IDENTITY
     `);
-    await pool.query("UPDATE catalog_products SET price_coin_minor = 318000 WHERE slug = 'desert-eagle-printstream'");
+    await pool.query(
+      `
+        INSERT INTO catalog_products (
+          id,
+          slug,
+          kind,
+          category,
+          game,
+          product_type,
+          title,
+          description,
+          price_coin_minor,
+          availability,
+          fulfillment_mode,
+          popularity,
+          image,
+          image_alt,
+          meta,
+          keywords,
+          details,
+          supplier_provider,
+          supplier_item_id,
+          supplier_snapshot,
+          supplier_fresh_at,
+          public_enabled
+        )
+        VALUES ('commerce-smoke-deagle-printstream', $1, 'skins', 'Игровые предметы', 'CS2', 'Пистолет', 'Desert Eagle | Printstream', 'Smoke fixture for SIH skin fulfillment.', 318000, 'available', 'steam-trade', 1, '/products/deagle-printstream.png', 'Desert Eagle Printstream из Counter-Strike 2', ARRAY['CS2', 'Minimal Wear'], ARRAY['пистолет', 'оружие', 'cs2'], '{"specifications":[],"fulfillment":{"title":"Steam Trade","description":"Trade URL required.","requirements":[]}}'::jsonb, NULL, $2, '{}'::jsonb, NULL, true)
+        ON CONFLICT (id) DO UPDATE
+        SET slug = EXCLUDED.slug,
+            supplier_item_id = EXCLUDED.supplier_item_id,
+            price_coin_minor = EXCLUDED.price_coin_minor,
+            public_enabled = true,
+            updated_at = clock_timestamp()
+      `,
+      [commerceSmokeSkinSlug, commerceSmokeMarketHashName],
+    );
     await pool.query(`
       INSERT INTO catalog_sync_runs (id, source, game, status, observed_at, finished_at, row_count, metadata)
       VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'sih', 'cs2', 'promoted', '2026-07-29T10:00:00.000Z', '2026-07-29T10:00:01.000Z', 1, '{"test":"commerce-smoke"}'::jsonb)
@@ -166,14 +204,14 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
         last_seen_at,
         last_sync_run_id
       )
-      VALUES ('sih', 'cs2', 'Desert Eagle | Printstream (Minimal Wear)', true, 3, 1011000, NULL, '{}'::jsonb, '2026-07-29T10:00:00.000Z', '2026-07-29T10:00:00.000Z', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+      VALUES ('sih', 'cs2', $1, true, 3, 1011000, NULL, '{}'::jsonb, '2026-07-29T10:00:00.000Z', '2026-07-29T10:00:00.000Z', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
       ON CONFLICT (supplier, game, market_hash_name) DO UPDATE
       SET active = EXCLUDED.active,
           available_quantity = EXCLUDED.available_quantity,
           price_microusd = EXCLUDED.price_microusd,
           last_sync_run_id = EXCLUDED.last_sync_run_id,
           last_seen_at = EXCLUDED.last_seen_at
-    `);
+    `, [commerceSmokeMarketHashName]);
   });
 
   it("proves Coins top-up, mixed checkout, SIH skin delivery, Steam refill delivery, and customer history projections", async () => {
@@ -235,7 +273,7 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
         expect(body).toMatchObject({
           amount: 1.011,
           appId: 730,
-          item: "Desert Eagle | Printstream (Minimal Wear)",
+          item: commerceSmokeMarketHashName,
           steamId: steamId64,
           test: true,
           token: "tradeToken",
@@ -256,7 +294,7 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
             customId: skinCustomId,
             expectedAmount: 1.011,
             id: 42,
-            item: "Desert Eagle | Printstream (Minimal Wear)",
+            item: commerceSmokeMarketHashName,
             sender: { offerId: 123456 },
             status: "finished",
             steamId: steamId64,
@@ -347,7 +385,7 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
     });
 
     await request(app.getHttpServer() as Parameters<typeof request>[0])
-      .put("/cart/items/desert-eagle-printstream")
+      .put(`/cart/items/${commerceSmokeSkinSlug}`)
       .set("Cookie", sessionCookie)
       .set("x-csrf-token", csrfToken)
       .send({ quantity: 1 })
@@ -364,7 +402,7 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
       .set("Cookie", sessionCookie)
       .set("x-csrf-token", csrfToken)
       .set("idempotency-key", "commerce-smoke-checkout")
-      .send({})
+      .send({ acceptedTotalCoinMinor: 393_000 })
       .expect(201);
     const checkoutBody = checkoutResponse(checkout.body);
     expect(checkoutBody.totalCoinMinor).toBeGreaterThan(0);
@@ -437,7 +475,7 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
         });
         const lines = arrayField(orders[0], "lines").map(requireRecord);
         expect(lines.map((line) => line.productSlug)).toEqual([
-          "desert-eagle-printstream",
+          commerceSmokeSkinSlug,
           "steam-top-up-500-rub",
         ]);
       });
@@ -450,7 +488,7 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
         expect(items).toHaveLength(1);
         expect(items[0]).toMatchObject({
           orderId: checkoutBody.id,
-          productSlug: "desert-eagle-printstream",
+          productSlug: commerceSmokeSkinSlug,
           status: "owned",
           actions: {
             sellToSite: { enabled: false, reason: "not_supported" },

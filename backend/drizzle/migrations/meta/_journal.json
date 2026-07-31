@@ -99,6 +99,13 @@
       "when": 1785494081489,
       "tag": "0013_catalog_supplier_item_index",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785508800000,
+      "tag": "0014_catalog_metadata",
+      "breakpoints": true
     }
   ]
 }

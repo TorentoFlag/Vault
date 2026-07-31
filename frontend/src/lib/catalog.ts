@@ -5,16 +5,20 @@ import type {
 } from "../types/commerce.ts";
 import type { ProductFilter } from "./marketplace.ts";
 import { searchProducts } from "./marketplace.ts";
+import { CATALOG_GAMES, parseCatalogGame, type CatalogGame } from "./catalog-games.ts";
 
 export type CatalogSort =
   | "relevance"
-  | "price-asc"
-  | "price-desc"
-  | "newest";
+  | "price_asc"
+  | "price_desc"
+  | "newest"
+  | "name_asc"
+  | "name_desc";
 
 export type CatalogFilters = {
   query: string;
   category: ProductFilter;
+  game?: CatalogGame;
   statuses: ProductAvailability[];
   types: string[];
   fulfillmentModes: ProductFulfillmentMode[];
@@ -39,7 +43,7 @@ export function createDefaultCatalogFilters(): CatalogFilters {
 const productFilters: ProductFilter[] = ["all", "steam", "skins"];
 const availabilityStatuses: ProductAvailability[] = ["available", "on-request"];
 const fulfillmentModes: ProductFulfillmentMode[] = ["automatic", "steam-trade", "manual"];
-const catalogSorts: CatalogSort[] = ["relevance", "price-asc", "price-desc", "newest"];
+const catalogSorts: CatalogSort[] = ["relevance", "price_asc", "price_desc", "newest", "name_asc", "name_desc"];
 type CatalogSearchParams = Pick<URLSearchParams, "get" | "getAll">;
 
 function uniqueValues(values: string[]) {
@@ -67,7 +71,8 @@ function normalizePriceBounds(minPrice?: number, maxPrice?: number) {
 export function parseCatalogSearchParams(searchParams: CatalogSearchParams): CatalogFilters {
   const defaults = createDefaultCatalogFilters();
   const category = searchParams.get("category");
-  const sort = searchParams.get("sort");
+  const sort = normalizeSort(searchParams.get("sort"));
+  const game = parseCatalogGame(searchParams.get("game"));
   const { minPrice, maxPrice } = normalizePriceBounds(
     parsePrice(searchParams.get("min")),
     parsePrice(searchParams.get("max")),
@@ -78,6 +83,7 @@ export function parseCatalogSearchParams(searchParams: CatalogSearchParams): Cat
     category: productFilters.includes(category as ProductFilter)
       ? category as ProductFilter
       : defaults.category,
+    ...(game === undefined ? {} : { game }),
     statuses: uniqueValues(searchParams.getAll("status"))
       .filter((value): value is ProductAvailability => (
         availabilityStatuses.includes(value as ProductAvailability)
@@ -96,6 +102,12 @@ export function parseCatalogSearchParams(searchParams: CatalogSearchParams): Cat
   };
 }
 
+function normalizeSort(value: string | null): string | null {
+  if (value === "price-asc") return "price_asc";
+  if (value === "price-desc") return "price_desc";
+  return value;
+}
+
 export function serializeCatalogFilters(filters: CatalogFilters) {
   const searchParams = new URLSearchParams();
   const query = filters.query.trim();
@@ -103,6 +115,7 @@ export function serializeCatalogFilters(filters: CatalogFilters) {
 
   if (query) searchParams.set("q", query);
   if (filters.category !== "all") searchParams.set("category", filters.category);
+  if (filters.game !== undefined) searchParams.set("game", filters.game);
   filters.statuses.forEach((status) => searchParams.append("status", status));
   filters.types.forEach((type) => searchParams.append("type", type));
   filters.fulfillmentModes.forEach((mode) => searchParams.append("fulfillment", mode));
@@ -180,6 +193,7 @@ export function hasActiveCatalogFilters(filters: CatalogFilters) {
   return Boolean(
     normalize(filters.query)
     || filters.category !== "all"
+    || filters.game !== undefined
     || filters.statuses.length
     || filters.types.length
     || filters.fulfillmentModes.length
@@ -205,6 +219,8 @@ export function filterAndSortCatalog(
     const matchesQuery = searchMatches.has(product.id);
     const matchesCategory = filters.category === "all"
       || product.kind === filters.category;
+    const matchesGame = filters.game === undefined
+      || (product.kind === "skins" && normalize(product.game ?? "") === filters.game);
     const matchesStatus = filters.statuses.length === 0
       || filters.statuses.includes(product.availability);
     const matchesType = matchesAnyTerm([product.productType], filters.types);
@@ -221,6 +237,7 @@ export function filterAndSortCatalog(
 
     return matchesQuery
       && matchesCategory
+      && matchesGame
       && matchesStatus
       && matchesType
       && matchesFulfillment
@@ -230,16 +247,24 @@ export function filterAndSortCatalog(
   });
 
   return [...filtered].sort((left, right) => {
-    if (filters.sort === "price-asc") {
+    if (filters.sort === "price_asc") {
       return left.priceCoins - right.priceCoins;
     }
 
-    if (filters.sort === "price-desc") {
+    if (filters.sort === "price_desc") {
       return right.priceCoins - left.priceCoins;
     }
 
     if (filters.sort === "newest") {
       return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+    }
+
+    if (filters.sort === "name_asc") {
+      return left.title.localeCompare(right.title, "ru-RU");
+    }
+
+    if (filters.sort === "name_desc") {
+      return right.title.localeCompare(left.title, "ru-RU");
     }
 
     return relevanceScore(right, normalizedQuery) - relevanceScore(left, normalizedQuery);

@@ -54,6 +54,47 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
       `,
       [deagleMarketHashName, runId],
     );
+    const metadataSnapshot = await pool.query<{ id: string }>(
+      `
+        INSERT INTO catalog_metadata_snapshots (
+          provider,
+          game,
+          locale,
+          source_url,
+          source_hash,
+          observed_at,
+          item_count,
+          filtered_count,
+          metadata
+        )
+        VALUES ('csgo_api', 'cs2', 'ru', 'https://raw.githubusercontent.com/TorentoFlag/CSGO-API/fixture/public/api/ru/all.json', 'deagle-fixture', '2026-07-28T10:00:00.000Z', 1, 0, '{"test":"catalog-live-price"}'::jsonb)
+        RETURNING id
+      `,
+    );
+    const snapshotId = metadataSnapshot.rows[0]?.id;
+    expect(snapshotId).toBeDefined();
+    await pool.query(
+      `
+        INSERT INTO catalog_metadata_items (
+          provider,
+          game,
+          locale,
+          market_hash_name,
+          provider_item_id,
+          title,
+          description,
+          category_name,
+          product_type,
+          rarity_name,
+          image_url,
+          tags,
+          raw,
+          snapshot_id
+        )
+        VALUES ('csgo_api', 'cs2', 'ru', $1, 'skin-deagle-printstream', 'Desert Eagle | Поток информации', 'Desert Eagle | Printstream для Counter-Strike 2.', 'Пистолеты', 'Пистолет', 'Тайное', 'https://cdn.example/deagle.png', ARRAY['Пистолеты','Тайное'], '{}'::jsonb, $2)
+      `,
+      [deagleMarketHashName, snapshotId],
+    );
   }
 
   beforeAll(() => {
@@ -63,6 +104,8 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
 
   afterAll(async () => {
     await pool.query("DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
+    await pool.query("DELETE FROM catalog_metadata_items WHERE provider = 'csgo_api' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
+    await pool.query("DELETE FROM catalog_metadata_snapshots WHERE provider = 'csgo_api' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
     await pool.query("DELETE FROM catalog_sync_runs WHERE source = 'sih' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
     await pool.query("DELETE FROM catalog_products WHERE supplier_provider = 'sih' AND supplier_item_id = $1", [deagleMarketHashName]);
     delete process.env.DATABASE_URL;
@@ -72,7 +115,10 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
 
   beforeEach(async () => {
     app = await createApp();
+    await pool.query("DELETE FROM catalog_products WHERE id LIKE 'test-api-game-filter-%'");
     await pool.query("DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
+    await pool.query("DELETE FROM catalog_metadata_items WHERE provider = 'csgo_api' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
+    await pool.query("DELETE FROM catalog_metadata_snapshots WHERE provider = 'csgo_api' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
     await pool.query("DELETE FROM catalog_sync_runs WHERE source = 'sih' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
     await pool.query("DELETE FROM catalog_products WHERE supplier_provider = 'sih' AND supplier_item_id = $1", [deagleMarketHashName]);
   });
@@ -93,14 +139,15 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
       .expect(200);
     const body = response.body as CatalogListDto;
 
-    expect(body.items.map((item) => item.slug)).toEqual([deagleProjectedSlug]);
-    expect(body.items[0]?.price).toEqual({
+    const providerItem = body.items.find((item) => item.slug === deagleProjectedSlug);
+    expect(providerItem).toBeDefined();
+    expect(providerItem?.price).toEqual({
       currency: "COINS",
       amountMinor: 18100,
       scale: 2,
       display: "181 Coins",
     });
-    expect(body.items[0]?.game).toBe("CS2");
+    expect(providerItem?.game).toBe("cs2");
   });
 
   it("does not publish non-CS2 seeded skin categories", async () => {
@@ -127,8 +174,9 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
       .expect(200);
     const body = response.body as CatalogListDto;
 
-    expect(body.items.map((item) => item.slug)).toEqual([deagleProjectedSlug]);
-    expect(body.items[0]?.price).toEqual({
+    const providerItem = body.items.find((item) => item.slug === deagleProjectedSlug);
+    expect(providerItem).toBeDefined();
+    expect(providerItem?.price).toEqual({
       currency: "COINS",
       amountMinor: 18100,
       scale: 2,
@@ -166,5 +214,112 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
       expect(secondPage.pagination.total).toBe(firstPage.pagination.total);
       expect(secondPage.items[0]?.slug).not.toBe(firstPage.items[0]?.slug);
     }
+  });
+
+  it("filters skins by canonical game and accepts Locker-style price sort", async () => {
+    await pool.query(
+      `
+        INSERT INTO catalog_products (
+          id,
+          slug,
+          kind,
+          category,
+          game,
+          product_type,
+          title,
+          description,
+          price_coin_minor,
+          availability,
+          fulfillment_mode,
+          popularity,
+          image,
+          image_alt,
+          meta,
+          keywords,
+          details,
+          public_enabled
+        )
+        VALUES
+          (
+            'test-api-game-filter-rust-jacket',
+            'test-api-game-filter-rust-jacket',
+            'skins',
+            'Игровые предметы',
+            'rust',
+            'Clothing',
+            'Rust Jacket',
+            'Rust clothing item.',
+            30000,
+            'available',
+            'steam-trade',
+            100,
+            'https://cdn.example/rust/jacket.png',
+            'Rust Jacket',
+            ARRAY['Rust','Clothing'],
+            ARRAY['rust','jacket'],
+            '{"specifications":[],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          ),
+          (
+            'test-api-game-filter-rust-boots',
+            'test-api-game-filter-rust-boots',
+            'skins',
+            'Игровые предметы',
+            'rust',
+            'Clothing',
+            'Rust Boots',
+            'Rust clothing item.',
+            10000,
+            'available',
+            'steam-trade',
+            1,
+            'https://cdn.example/rust/boots.png',
+            'Rust Boots',
+            ARRAY['Rust','Clothing'],
+            ARRAY['rust','boots'],
+            '{"specifications":[],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          ),
+          (
+            'test-api-game-filter-tf2-key',
+            'test-api-game-filter-tf2-key',
+            'skins',
+            'Игровые предметы',
+            'tf2',
+            'Tool',
+            'TF2 Key',
+            'TF2 tool item.',
+            50000,
+            'available',
+            'steam-trade',
+            200,
+            'https://cdn.example/tf2/key.png',
+            'TF2 Key',
+            ARRAY['Team Fortress 2','Tool'],
+            ARRAY['tf2','key'],
+            '{"specifications":[],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          )
+      `,
+    );
+
+    const response = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .query({ category: "skins", game: "rust", sort: "price_asc", limit: 20 })
+      .expect(200);
+    const body = response.body as CatalogListDto;
+
+    expect(body.items.map((item) => item.slug)).toEqual([
+      "test-api-game-filter-rust-boots",
+      "test-api-game-filter-rust-jacket",
+    ]);
+    expect(body.items.every((item) => item.game === "rust")).toBe(true);
+    expect(body.facets.games.map((item) => item.id)).toEqual(expect.arrayContaining(["rust", "tf2"]));
+    expect(body.facets.games.map((item) => item.id)).not.toContain("Dota 2");
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .query({ category: "skins", game: "dota2" })
+      .expect(400);
   });
 });

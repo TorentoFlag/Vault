@@ -1,8 +1,12 @@
 import { Inject, Injectable } from "@nestjs/common";
 
 import { DatabaseService } from "../../common/database/database.service";
+import type { AppConfig } from "../../config/app-config";
+import { APP_CONFIG } from "../../config/app-config.module";
 import type { SihCatalogGame, SihSupplierItem } from "../providers/sih/sih.types";
-import { createSihCs2CatalogProjection } from "./catalog-product-projection";
+import { getCatalogGameDefinition, type CatalogGame } from "./catalog-game";
+import type { CatalogMetadataItem } from "./catalog-metadata.types";
+import { createSihCatalogProjection } from "./catalog-product-projection";
 
 export type SihCatalogClient = {
   getItems(command: { game: SihCatalogGame }): Promise<SihSupplierItem[]>;
@@ -42,7 +46,10 @@ function snapshot(item: SihSupplierItem): Record<string, unknown> {
 
 @Injectable()
 export class CatalogSupplierSyncService {
-  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+  ) {}
 
   async syncSihGame(command: SyncSihGameCommand): Promise<CatalogSupplierSyncResult> {
     const observedAt = assertObservedAt(command.observedAt ?? new Date());
@@ -141,22 +148,6 @@ export class CatalogSupplierSyncService {
     tx: DatabaseTransactionClient,
     game: SihCatalogGame,
   ): Promise<number> {
-    if (game !== "cs2") {
-      await tx.query(
-        `
-          UPDATE catalog_products
-          SET public_enabled = false,
-              updated_at = clock_timestamp()
-          WHERE supplier_provider = 'sih'
-            AND lower(game) = $1
-            AND kind = 'skins'
-            AND public_enabled = true
-        `,
-        [game],
-      );
-      return 0;
-    }
-
     const listings = await tx.query<{
       available_quantity: number;
       image_url: string | null;
@@ -177,6 +168,15 @@ export class CatalogSupplierSyncService {
       `,
       [game],
     );
+    const definition = getCatalogGameDefinition(game);
+    const publicGame = this.config.catalog.publicGames.includes(game);
+    const metadataByMarketHashName = await this.metadataByMarketHashName(
+      tx,
+      game,
+      definition.metadataProvider,
+      definition.metadataLocale,
+      listings.rows.map((listing) => listing.market_hash_name),
+    );
 
     await tx.query(
       `
@@ -185,7 +185,7 @@ export class CatalogSupplierSyncService {
             updated_at = clock_timestamp()
         WHERE supplier_provider = 'seed'
           AND kind = 'skins'
-          AND coalesce(game, '') <> 'CS2'
+          AND lower(coalesce(game, '')) NOT IN ('cs2', 'rust', 'tf2')
           AND public_enabled = true
       `,
     );
@@ -213,11 +213,20 @@ export class CatalogSupplierSyncService {
 
     let promotedProductCount = 0;
     for (const listing of listings.rows) {
-      const projection = createSihCs2CatalogProjection({
+      const metadata = metadataByMarketHashName.get(listing.market_hash_name);
+      const projection = createSihCatalogProjection({
         availableQuantity: listing.available_quantity,
+        game,
         imageUrl: listing.image_url,
         marketHashName: listing.market_hash_name,
+        ...(metadata === undefined ? {} : { metadata }),
       });
+      const publicEnabled = publicGame
+        && metadata !== undefined
+        && metadata.imageUrl !== null
+        && metadata.imageUrl !== undefined
+        && metadata.description !== null
+        && metadata.description !== undefined;
       const updated = await tx.query(
         `
           UPDATE catalog_products
@@ -240,10 +249,11 @@ export class CatalogSupplierSyncService {
               supplier_item_id = $13,
               supplier_snapshot = $14::jsonb,
               supplier_fresh_at = $15,
-              public_enabled = catalog_products.public_enabled,
+              public_enabled = $16,
               updated_at = clock_timestamp()
           WHERE supplier_provider = 'sih'
             AND supplier_item_id = $1
+            AND lower(game) = $17
         `,
         [
           listing.market_hash_name,
@@ -261,6 +271,8 @@ export class CatalogSupplierSyncService {
           listing.market_hash_name,
           JSON.stringify(listing.snapshot),
           listing.last_seen_at,
+          publicEnabled,
+          game,
         ],
       );
 
@@ -293,7 +305,7 @@ export class CatalogSupplierSyncService {
               created_at,
               updated_at
             )
-            VALUES ($1, $2, 'skins', $3, $4, $5, $6, $7, 1, 'available', 'steam-trade', $8, $9, $10, $11, $12, $13::jsonb, 'sih', $14, $15::jsonb, $16, false, clock_timestamp(), clock_timestamp())
+            VALUES ($1, $2, 'skins', $3, $4, $5, $6, $7, 1, 'available', 'steam-trade', $8, $9, $10, $11, $12, $13::jsonb, 'sih', $14, $15::jsonb, $16, $17, clock_timestamp(), clock_timestamp())
             ON CONFLICT (id) DO UPDATE
             SET category = EXCLUDED.category,
                 game = EXCLUDED.game,
@@ -330,12 +342,70 @@ export class CatalogSupplierSyncService {
             listing.market_hash_name,
             JSON.stringify(listing.snapshot),
             listing.last_seen_at,
+            publicEnabled,
           ],
         );
       }
-      promotedProductCount += 1;
+      if (publicEnabled) promotedProductCount += 1;
     }
 
     return promotedProductCount;
+  }
+
+  private async metadataByMarketHashName(
+    tx: DatabaseTransactionClient,
+    game: CatalogGame,
+    provider: string,
+    locale: string,
+    marketHashNames: readonly string[],
+  ): Promise<Map<string, CatalogMetadataItem>> {
+    if (marketHashNames.length === 0) return new Map();
+    const result = await tx.query<{
+      provider: CatalogMetadataItem["provider"];
+      game: CatalogMetadataItem["game"];
+      locale: CatalogMetadataItem["locale"];
+      market_hash_name: string;
+      provider_item_id: string | null;
+      title: string;
+      description: string | null;
+      category_name: string | null;
+      product_type: string | null;
+      rarity_name: string | null;
+      image_url: string | null;
+      tags: string[];
+      raw: Record<string, unknown>;
+      snapshot_id: string;
+      updated_at: Date;
+    }>(
+      `
+        SELECT provider, game, locale, market_hash_name, provider_item_id, title, description, category_name, product_type, rarity_name, image_url, tags, raw, snapshot_id, updated_at
+        FROM catalog_metadata_items
+        WHERE provider = $1
+          AND game = $2
+          AND locale = $3
+          AND market_hash_name = ANY($4::text[])
+      `,
+      [provider, game, locale, marketHashNames],
+    );
+    return new Map(result.rows.map((row) => [
+      row.market_hash_name,
+      {
+        provider: row.provider,
+        game: row.game,
+        locale: row.locale,
+        marketHashName: row.market_hash_name,
+        providerItemId: row.provider_item_id,
+        title: row.title,
+        description: row.description,
+        categoryName: row.category_name,
+        productType: row.product_type,
+        rarityName: row.rarity_name,
+        imageUrl: row.image_url,
+        tags: row.tags,
+        raw: row.raw,
+        snapshotId: row.snapshot_id,
+        updatedAt: row.updated_at,
+      },
+    ]));
   }
 }

@@ -189,6 +189,54 @@ export const supplierListings = pgTable(
   ],
 );
 
+export const catalogMetadataSnapshots = pgTable(
+  "catalog_metadata_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    provider: text("provider").notNull(),
+    game: text("game").notNull(),
+    locale: text("locale").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    sourceHash: text("source_hash").notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    itemCount: integer("item_count").notNull(),
+    filteredCount: integer("filtered_count").default(0).notNull(),
+    metadata: jsonb("metadata").default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("catalog_metadata_snapshots_source_uidx").on(table.provider, table.game, table.locale, table.sourceHash),
+    index("catalog_metadata_snapshots_provider_game_idx").on(table.provider, table.game, table.locale, table.observedAt),
+  ],
+);
+
+export const catalogMetadataItems = pgTable(
+  "catalog_metadata_items",
+  {
+    provider: text("provider").notNull(),
+    game: text("game").notNull(),
+    locale: text("locale").notNull(),
+    marketHashName: text("market_hash_name").notNull(),
+    providerItemId: text("provider_item_id"),
+    title: text("title").notNull(),
+    description: text("description"),
+    categoryName: text("category_name"),
+    productType: text("product_type"),
+    rarityName: text("rarity_name"),
+    imageUrl: text("image_url"),
+    tags: text("tags").array().default([]).notNull(),
+    raw: jsonb("raw").default({}).notNull(),
+    snapshotId: uuid("snapshot_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.provider, table.game, table.locale, table.marketHashName] }),
+    index("catalog_metadata_items_game_market_hash_idx").on(table.game, table.marketHashName),
+    index("catalog_metadata_items_provider_game_idx").on(table.provider, table.game, table.locale),
+    index("catalog_metadata_items_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
 export const pricingSettings = pgTable(
   "pricing_settings",
   {

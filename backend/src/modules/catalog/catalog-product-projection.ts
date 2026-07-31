@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { getCatalogGameDefinition, type CatalogGame } from "./catalog-game";
+import type { CatalogMetadataItem } from "./catalog-metadata.types";
 import type { CatalogProductDetails } from "./catalog.types";
 
 export type SupplierCatalogProjection = {
@@ -82,6 +84,25 @@ function cs2Details(productType: string, condition: string | null): CatalogProdu
   };
 }
 
+function gameDetails(game: CatalogGame, productType: string): CatalogProductDetails {
+  const definition = getCatalogGameDefinition(game);
+  return {
+    specifications: [
+      { label: "Игра", value: definition.label },
+      { label: "Тип", value: productType },
+    ],
+    fulfillment: {
+      title: "Данные Steam Trade",
+      description: "Предмет покупается через SIH и передается по Steam Trade после оплаты внутренними Coins.",
+      requirements: [
+        "Для оформления игрового предмета требуется Steam-сессия.",
+        "Перед покупкой укажите действующий Steam Trade URL.",
+        "Цена и наличие проверяются по активному SIH listing перед оформлением.",
+      ],
+    },
+  };
+}
+
 export function createSihCs2CatalogProjection(command: {
   availableQuantity: number;
   imageUrl: string | null;
@@ -117,5 +138,58 @@ export function createSihCs2CatalogProjection(command: {
       ...command.marketHashName.toLocaleLowerCase("ru-RU").split(/[^a-zа-яё0-9-]+/iu).filter(Boolean),
     ],
     details: cs2Details(productType, condition),
+  };
+}
+
+export function createSihCatalogProjection(command: {
+  availableQuantity: number;
+  game: CatalogGame;
+  imageUrl: string | null;
+  marketHashName: string;
+  metadata?: CatalogMetadataItem;
+}): SupplierCatalogProjection {
+  if (command.game === "cs2" && command.metadata === undefined) {
+    return {
+      ...createSihCs2CatalogProjection(command),
+      game: "cs2",
+    };
+  }
+
+  const hash = stableHash(`sih:${command.game}:${command.marketHashName}`, 16);
+  const definition = getCatalogGameDefinition(command.game);
+  const metadata = command.metadata;
+  const title = metadata?.title ?? command.marketHashName;
+  const productType = metadata?.productType ?? metadata?.categoryName ?? "Игровой предмет";
+  const description = metadata?.description ?? `${title} для ${definition.label}. Предмет доступен через SIH и передается покупателю по Steam Trade.`;
+  const image = metadata?.imageUrl ?? command.imageUrl;
+  const meta = [
+    definition.label,
+    ...(metadata?.categoryName === undefined || metadata.categoryName === null ? [] : [metadata.categoryName]),
+    ...(metadata?.rarityName === undefined || metadata.rarityName === null ? [] : [metadata.rarityName]),
+    productType,
+  ];
+
+  return {
+    id: `sih-${command.game}-${hash}`,
+    slug: `${slugify(command.marketHashName)}-${hash.slice(0, 8)}`,
+    category: "Игровые предметы",
+    game: command.game,
+    productType,
+    title,
+    description,
+    popularity: Math.max(1, Math.min(100, 20 + command.availableQuantity)),
+    image,
+    imageAlt: image === null ? null : `${title} из ${definition.label}`,
+    meta: [...new Set(meta)],
+    keywords: [
+      command.game,
+      definition.label.toLocaleLowerCase("ru-RU"),
+      "steam trade",
+      "sih",
+      productType.toLocaleLowerCase("ru-RU"),
+      ...(metadata?.tags ?? []).map((tag) => tag.toLocaleLowerCase("ru-RU")),
+      ...command.marketHashName.toLocaleLowerCase("ru-RU").split(/[^a-zа-яё0-9-]+/iu).filter(Boolean),
+    ],
+    details: gameDetails(command.game, productType),
   };
 }

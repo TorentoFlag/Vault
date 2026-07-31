@@ -25,6 +25,7 @@ describe("loadAppConfig", () => {
       SIH_REQUEST_TIMEOUT_MS: "2500",
       SIH_RESPONSE_MAX_BYTES: "4096",
       ADMIN_API_TOKEN_FILE: "/run/secrets/admin-api-token",
+      CATALOG_PUBLIC_GAMES: "cs2,rust,tf2",
       CORS_ORIGINS: "https://vault.example, https://admin.vault.example",
     })).toEqual({
       nodeEnv: "test",
@@ -52,6 +53,9 @@ describe("loadAppConfig", () => {
         requestTimeoutMs: 2500,
         steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
       },
+      catalog: {
+        publicGames: ["cs2", "rust", "tf2"],
+      },
       corsOrigins: ["https://vault.example", "https://admin.vault.example"],
     });
   });
@@ -67,6 +71,7 @@ describe("loadAppConfig", () => {
     expect(() => loadAppConfig({ ARC_PAY_PUBLIC_ORIGIN: "https://vault.example/path?query=1" })).toThrow("ARC_PAY_PUBLIC_ORIGIN must be a valid HTTPS base URL.");
     expect(() => loadAppConfig({ SIH_REQUEST_TIMEOUT_MS: "499" })).toThrow("SIH_REQUEST_TIMEOUT_MS must be between 500 and 120000.");
     expect(() => loadAppConfig({ SIH_RESPONSE_MAX_BYTES: "1023" })).toThrow("SIH_RESPONSE_MAX_BYTES must be between 1024 and 16777216.");
+    expect(() => loadAppConfig({ CATALOG_PUBLIC_GAMES: "cs2,dota2" })).toThrow("CATALOG_PUBLIC_GAMES contains unsupported game: dota2.");
   });
 
   it("loads DATABASE_URL from a secret file without requiring the value in env", () => {

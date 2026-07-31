@@ -152,7 +152,7 @@ describe.skipIf(!databaseUrl)("cart PostgreSQL persistence", () => {
       .set("Cookie", sessionCookie)
       .set("x-csrf-token", csrfToken)
       .set("idempotency-key", "checkout-from-server-cart")
-      .send({})
+      .send({ acceptedTotalCoinMinor: 321_000 })
       .expect(201)
       .expect(({ body }) => {
         expect(body).toMatchObject({
