@@ -184,6 +184,23 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
     });
   });
 
+  it("filters and sorts supplier-linked products by their quoted Coins price", async () => {
+    await insertDeagleListing();
+    const promoted = await app.get(CatalogSupplierSyncService).promoteActiveSihListings("cs2");
+    expect(promoted.promotedProductCount).toBeGreaterThanOrEqual(1);
+
+    const response = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .query({ category: "skins", game: "cs2", min: "150", max: "250", sort: "price_asc", limit: 5 })
+      .expect(200);
+    const body = response.body as CatalogListDto;
+
+    const providerItem = body.items.find((item) => item.slug === deagleProjectedSlug);
+    expect(providerItem).toBeDefined();
+    expect(providerItem?.price.amountMinor).toBe(18100);
+    expect(body.items.every((item) => item.price.amountMinor >= 15000 && item.price.amountMinor <= 25000)).toBe(true);
+  });
+
   it("returns catalog pagination metadata instead of making the first page look exhaustive", async () => {
     await insertDeagleListing();
     const promoted = await app.get(CatalogSupplierSyncService).promoteActiveSihListings("cs2");

@@ -17,6 +17,59 @@ import type {
 const allowedKinds = new Set<CatalogProductKind>(["skins", "steam"]);
 const defaultCatalogLimit = 120;
 const maxCatalogLimit = 240;
+const supplierPricingJoin = `
+        LEFT JOIN LATERAL (
+          SELECT
+            pricing_settings.id,
+            pricing_settings.supplier_to_fiat_rate_minor,
+            pricing_settings.coin_rate_numerator,
+            pricing_settings.coin_rate_denominator,
+            pricing_settings.markup_bps,
+            pricing_settings.min_price_coin_minor,
+            pricing_settings.round_to_coin_minor
+          FROM pricing_settings
+          WHERE pricing_settings.scope = 'sih-skins'
+            AND pricing_settings.superseded_at IS NULL
+          ORDER BY pricing_settings.valid_from DESC, pricing_settings.created_at DESC, pricing_settings.id DESC
+          LIMIT 1
+        ) AS active_pricing_settings ON supplier_listings.price_microusd IS NOT NULL
+`;
+const supplierQuotedCoinMinorSql = `
+          (
+            (
+              GREATEST(
+                (
+                  (
+                    (
+                      (
+                        (supplier_listings.price_microusd::bigint * active_pricing_settings.supplier_to_fiat_rate_minor::bigint + 1000000 - 1)
+                        / 1000000
+                      )
+                      * (10000 + active_pricing_settings.markup_bps)::bigint + 10000 - 1
+                    )
+                    / 10000
+                  )
+                  * active_pricing_settings.coin_rate_numerator::bigint + active_pricing_settings.coin_rate_denominator::bigint - 1
+                )
+                / active_pricing_settings.coin_rate_denominator::bigint,
+                active_pricing_settings.min_price_coin_minor::bigint
+              )
+              + active_pricing_settings.round_to_coin_minor::bigint - 1
+            )
+            / active_pricing_settings.round_to_coin_minor::bigint
+          )
+          * active_pricing_settings.round_to_coin_minor::bigint
+`;
+const effectivePriceCoinMinorSql = `
+          COALESCE(
+            CASE
+              WHEN supplier_listings.price_microusd IS NOT NULL AND active_pricing_settings.id IS NOT NULL
+                THEN ${supplierQuotedCoinMinorSql}
+              ELSE NULL
+            END,
+            catalog_products.price_coin_minor::bigint
+          )
+`;
 const relatedTerms: Record<CatalogProductKind, string[]> = {
   steam: ["steam", "стим", "пополнение", "баланс", "кошелек"],
   skins: ["скин", "скины", "предмет", "предметы", "cs2", "rust", "раст", "tf2", "team fortress"],
@@ -292,6 +345,14 @@ export class CatalogService {
     types?: string[];
   } = {}): Promise<LoadedCatalogProduct[]> {
     const { params, where } = this.catalogWhere(command);
+    if (command.minPriceCoinMinor !== undefined) {
+      params.push(command.minPriceCoinMinor);
+      where.push(`${effectivePriceCoinMinorSql} >= $${params.length}`);
+    }
+    if (command.maxPriceCoinMinor !== undefined) {
+      params.push(command.maxPriceCoinMinor);
+      where.push(`${effectivePriceCoinMinorSql} <= $${params.length}`);
+    }
     const limit = Math.min(command.limit ?? maxCatalogLimit, maxCatalogLimit * 4);
     params.push(limit);
     const limitParam = params.length;
@@ -300,10 +361,10 @@ export class CatalogService {
     const offsetParam = params.length;
     const orderBy = (() => {
       if (command.sort === "price_asc") {
-        return "COALESCE(supplier_listings.price_microusd, catalog_products.price_coin_minor::bigint) ASC, catalog_products.id ASC";
+        return `${effectivePriceCoinMinorSql} ASC, catalog_products.id ASC`;
       }
       if (command.sort === "price_desc") {
-        return "COALESCE(supplier_listings.price_microusd, catalog_products.price_coin_minor::bigint) DESC, catalog_products.id ASC";
+        return `${effectivePriceCoinMinorSql} DESC, catalog_products.id ASC`;
       }
       if (command.sort === "name_asc") {
         return "lower(catalog_products.title) ASC, catalog_products.id ASC";
@@ -326,6 +387,7 @@ export class CatalogService {
       title: string;
       description: string;
       price_coin_minor: number;
+      effective_price_coin_minor: string;
       availability: CatalogProduct["availability"];
       fulfillment_mode: CatalogProduct["fulfillmentMode"];
       created_at: Date;
@@ -348,6 +410,7 @@ export class CatalogService {
           catalog_products.title,
           catalog_products.description,
           catalog_products.price_coin_minor,
+          ${effectivePriceCoinMinorSql}::text AS effective_price_coin_minor,
           catalog_products.availability,
           catalog_products.fulfillment_mode,
           catalog_products.created_at,
@@ -365,6 +428,7 @@ export class CatalogService {
           AND supplier_listings.game = lower(catalog_products.game)
           AND supplier_listings.market_hash_name = catalog_products.supplier_item_id
           AND supplier_listings.active = true
+${supplierPricingJoin}
         WHERE ${where.join("\n          AND ")}
         ORDER BY ${orderBy}
         LIMIT $${limitParam}
@@ -381,7 +445,8 @@ export class CatalogService {
       productType: row.product_type,
       title: row.title,
       description: row.description,
-      priceCoins: Math.floor(row.price_coin_minor / 100),
+      priceCoins: Math.floor(Number(row.effective_price_coin_minor) / 100),
+      priceCoinMinor: Number(row.effective_price_coin_minor),
       availability: row.availability,
       fulfillmentMode: row.fulfillment_mode,
       createdAt: row.created_at.toISOString(),
@@ -421,14 +486,6 @@ export class CatalogService {
     if (command.slug !== undefined) {
       params.push(command.slug);
       where.push(`catalog_products.slug = $${params.length}`);
-    }
-    if (command.minPriceCoinMinor !== undefined) {
-      params.push(command.minPriceCoinMinor);
-      where.push(`catalog_products.price_coin_minor >= $${params.length}`);
-    }
-    if (command.maxPriceCoinMinor !== undefined) {
-      params.push(command.maxPriceCoinMinor);
-      where.push(`catalog_products.price_coin_minor <= $${params.length}`);
     }
     const typeFilters = command.types ?? [];
     if (typeFilters.length > 0) {
@@ -505,10 +562,25 @@ export class CatalogService {
     types?: string[];
   }): Promise<number> {
     const { params, where } = this.catalogWhere(command);
+    if (command.minPriceCoinMinor !== undefined) {
+      params.push(command.minPriceCoinMinor);
+      where.push(`${effectivePriceCoinMinorSql} >= $${params.length}`);
+    }
+    if (command.maxPriceCoinMinor !== undefined) {
+      params.push(command.maxPriceCoinMinor);
+      where.push(`${effectivePriceCoinMinorSql} <= $${params.length}`);
+    }
     const result = await this.database.query<{ total: string }>(
       `
         SELECT count(*)::text AS total
         FROM catalog_products
+        LEFT JOIN supplier_listings
+          ON catalog_products.supplier_provider = 'sih'
+          AND supplier_listings.supplier = 'sih'
+          AND supplier_listings.game = lower(catalog_products.game)
+          AND supplier_listings.market_hash_name = catalog_products.supplier_item_id
+          AND supplier_listings.active = true
+${supplierPricingJoin}
         WHERE ${where.join("\n          AND ")}
       `,
       params,
