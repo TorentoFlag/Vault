@@ -1,8 +1,4 @@
 import type { Product, ProductDetails } from "../types/commerce.ts";
-import { siteConfig } from "../config/site.ts";
-import { formatCoinRate } from "../lib/marketplace.ts";
-
-const coinRateLabel = formatCoinRate(siteConfig.coin.rate);
 
 function createSkinDetails(
   productType: string,
@@ -24,24 +20,6 @@ function createSkinDetails(
         "Для оформления игрового предмета требуется локальная Steam-сессия.",
         "Укажите действующий Steam Trade URL перед оформлением заказа.",
         "Подтверждение создаёт локальную запись и списание Coins без запуска внешнего трейда.",
-      ],
-    },
-  };
-}
-
-function createSteamTopUpDetails(nominal: string): ProductDetails {
-  return {
-    specifications: [
-      { label: "Сервис", value: "Steam" },
-      { label: "Тип", value: "Пополнение баланса" },
-      { label: "Зачисление в Steam", value: nominal },
-    ],
-    fulfillment: {
-      title: "Данные пополнения Steam",
-      description: "Логин Steam сохраняется в локальном заказе. Внешнее зачисление на кошелёк не подключено.",
-      requirements: [
-        "Проверьте данные аккаунта Steam перед оформлением заказа.",
-        "Подтверждение создаёт локальную запись и списание Coins без внешнего пополнения.",
       ],
     },
   };
@@ -225,82 +203,6 @@ export const catalogProducts: Product[] = [
     meta: ["Rust", "Assault Rifle", "Alien Red"],
     keywords: ["rust", "раст", "alien red", "ak", "винтовка", "скин"],
     details: createSkinDetails("Винтовка", "Стандартное", undefined, "Rust"),
-  },
-  {
-    id: "steam-top-up-500",
-    slug: "steam-top-up-500-rub",
-    kind: "steam",
-    category: "Steam",
-    game: "Steam",
-    productType: "Пополнение баланса",
-    title: "Пополнение Steam на 500 ₽",
-    description: "Локальный заказ на пополнение кошелька Steam на 500 ₽ с пересчётом в Coins по фиксированному курсу Vault. Внешнее зачисление не подключено.",
-    priceCoins: 750,
-    availability: "available",
-    fulfillmentMode: "automatic",
-    createdAt: "2026-05-20T10:00:00.000Z",
-    popularity: 86,
-    isMock: true,
-    meta: [coinRateLabel, "Steam", "RUB"],
-    keywords: ["стим", "кошелек", "баланс", "пополнение"],
-    details: createSteamTopUpDetails("500 ₽"),
-  },
-  {
-    id: "steam-top-up-1000",
-    slug: "steam-top-up-1000-rub",
-    kind: "steam",
-    category: "Steam",
-    game: "Steam",
-    productType: "Пополнение баланса",
-    title: "Пополнение Steam на 1000 ₽",
-    description: `Локальный заказ на пополнение кошелька Steam на 1 000 ₽ по курсу ${coinRateLabel}. Перед оформлением проверьте логин; внешнее зачисление не подключено.`,
-    priceCoins: 1500,
-    availability: "available",
-    fulfillmentMode: "automatic",
-    createdAt: "2026-06-02T10:00:00.000Z",
-    popularity: 90,
-    isMock: true,
-    meta: [coinRateLabel, "Steam", "RUB"],
-    keywords: ["стим", "кошелек", "баланс", "пополнение"],
-    details: createSteamTopUpDetails("1 000 ₽"),
-  },
-  {
-    id: "steam-top-up-2000",
-    slug: "steam-top-up-2000-rub",
-    kind: "steam",
-    category: "Steam",
-    game: "Steam",
-    productType: "Пополнение баланса",
-    title: "Пополнение Steam на 2000 ₽",
-    description: "Локальный заказ на пополнение кошелька Steam на 2 000 ₽. Стоимость фиксируется в Coins, логин сохраняется в заказе, внешнее зачисление не подключено.",
-    priceCoins: 3000,
-    availability: "available",
-    fulfillmentMode: "automatic",
-    createdAt: "2026-06-20T10:00:00.000Z",
-    popularity: 84,
-    isMock: true,
-    meta: [coinRateLabel, "Steam", "RUB"],
-    keywords: ["стим", "кошелек", "баланс", "пополнение"],
-    details: createSteamTopUpDetails("2 000 ₽"),
-  },
-  {
-    id: "steam-top-up-5000",
-    slug: "steam-top-up-5000-rub",
-    kind: "steam",
-    category: "Steam",
-    game: "Steam",
-    productType: "Пополнение баланса",
-    title: "Пополнение Steam на 5000 ₽",
-    description: "Локальный заказ на пополнение кошелька Steam на 5 000 ₽ с расчётом по курсу Vault. Внешнее зачисление на Steam не подключено.",
-    priceCoins: 7500,
-    availability: "available",
-    fulfillmentMode: "automatic",
-    createdAt: "2026-07-01T10:00:00.000Z",
-    popularity: 78,
-    isMock: true,
-    meta: [coinRateLabel, "Steam", "RUB"],
-    keywords: ["стим", "кошелек", "баланс", "пополнение"],
-    details: createSteamTopUpDetails("5 000 ₽"),
   },
   {
     id: "gpt-plus",

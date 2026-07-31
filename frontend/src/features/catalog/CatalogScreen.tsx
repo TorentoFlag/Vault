@@ -31,6 +31,7 @@ import { getServiceNavigationHref, serviceNavigation } from "@/lib/service-navig
 import type { Product } from "@/types/commerce";
 
 import styles from "./catalog.module.css";
+import { SteamRefillForm } from "./SteamRefillForm";
 
 const categories: { value: ProductFilter; label: string }[] = [
   { value: "all", label: "Все" },
@@ -346,6 +347,7 @@ export function CatalogScreen({
   const activeChips = useMemo(() => getActiveChips(filters), [filters]);
   const draftChips = useMemo(() => getActiveChips(draftFilters), [draftFilters]);
   const catalogReturnHref = filtersKey ? `${pathname}?${filtersKey}` : pathname;
+  const isSteamRefillMode = filters.category === "steam";
 
   useEffect(() => {
     if (loadedFiltersKey === "" || loadedFiltersKey === filtersKey) return;
@@ -575,117 +577,123 @@ export function CatalogScreen({
           ))}
         </nav>
 
-        <div className={styles.toolbar}>
-          <div className={styles.resultSummary}>
-            <strong>{getCatalogResultTitle(filters)}</strong>
-            <span className={styles.demoNote}>Тип оформления указан в каждой карточке</span>
-            <span className={styles.srOnly} aria-live="polite">
-              Показано товаров: {feedEntries.length} из {serverPagination.total}
-            </span>
-          </div>
-          <div className={styles.toolbarActions}>
-            <button
-              ref={filterTriggerRef}
-              className={styles.filterToggle}
-              type="button"
-              aria-expanded={filtersOpen}
-              aria-controls="catalog-filters"
-              onClick={openFilters}
-            >
-              Фильтры
-              {activeChips.length ? <span>{activeChips.length}</span> : null}
-            </button>
-            <label className={styles.sortControl}>
-              <span>Сортировка</span>
-              <select
-                value={filters.sort}
-                onChange={(event) => updateFilters({
-                  ...filters,
-                  sort: event.target.value as CatalogSort,
-                })}
-              >
-                {sortOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
+        {isSteamRefillMode ? (
+          <SteamRefillForm />
+        ) : (
+          <>
+            <div className={styles.toolbar}>
+              <div className={styles.resultSummary}>
+                <strong>{getCatalogResultTitle(filters)}</strong>
+                <span className={styles.demoNote}>Тип оформления указан в каждой карточке</span>
+                <span className={styles.srOnly} aria-live="polite">
+                  Показано товаров: {feedEntries.length} из {serverPagination.total}
+                </span>
+              </div>
+              <div className={styles.toolbarActions}>
+                <button
+                  ref={filterTriggerRef}
+                  className={styles.filterToggle}
+                  type="button"
+                  aria-expanded={filtersOpen}
+                  aria-controls="catalog-filters"
+                  onClick={openFilters}
+                >
+                  Фильтры
+                  {activeChips.length ? <span>{activeChips.length}</span> : null}
+                </button>
+                <label className={styles.sortControl}>
+                  <span>Сортировка</span>
+                  <select
+                    value={filters.sort}
+                    onChange={(event) => updateFilters({
+                      ...filters,
+                      sort: event.target.value as CatalogSort,
+                    })}
+                  >
+                    {sortOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
 
-        {activeChips.length ? (
-          <div className={styles.activeFilters} aria-label="Активные фильтры">
-            {activeChips.map((chip) => (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => updateFilters(chip.remove(filters))}
-                aria-label={`Убрать фильтр: ${chip.label}`}
-              >
-                {chip.label}
-                <span aria-hidden="true">×</span>
-              </button>
-            ))}
-            <button className={styles.clearAll} type="button" onClick={resetFilters}>
-              Сбросить всё
-            </button>
-          </div>
-        ) : null}
-
-        <div className={styles.catalogLayout}>
-          <button
-            className={`${styles.overlay} ${filtersOpen ? styles.overlayVisible : ""}`}
-            type="button"
-            aria-label="Закрыть фильтры"
-            onClick={closeFilters}
-          />
-          <FilterPanel
-            filters={draftFilters}
-            onChange={setDraftFilters}
-            onReset={resetVisibleFilters}
-            onApply={applyFilters}
-            onClose={closeFilters}
-            open={filtersOpen}
-            hasActiveFilters={draftChips.length > 0}
-            dialogRef={filterDialogRef}
-            closeButtonRef={closeFilterButtonRef}
-            facets={catalogFacets}
-          />
-
-          <div className={styles.results}>
-            {visibleProducts.length ? (
-              <>
-                <div className={styles.productGrid} data-catalog-count={feedEntries.length}>
-                  {feedEntries.map(({ key, item: product }, index) => (
-                    <ProductCard
-                      key={key}
-                      product={product}
-                      priority={index < 4}
-                      headingLevel={2}
-                      returnHref={catalogReturnHref}
-                    />
-                  ))}
-                </div>
-                <div ref={loadMoreRef} className={`${styles.loadMore} ${hasMoreProducts ? "" : styles.loadMoreEnd}`} aria-live="polite">
-                  <span>Показано карточек: {feedEntries.length} из {serverPagination.total.toLocaleString("ru-RU")}</span>
-                  {loadMoreError ? <span>{loadMoreError}</span> : null}
-                  {hasMoreProducts ? <button
+            {activeChips.length ? (
+              <div className={styles.activeFilters} aria-label="Активные фильтры">
+                {activeChips.map((chip) => (
+                  <button
+                    key={chip.id}
                     type="button"
-                    disabled={loadingMore}
-                    onClick={() => void loadMoreProducts()}
-                  >{loadingMore ? "Загружаем..." : "Показать ещё"}</button> : <strong>Вы посмотрели все товары в этой подборке</strong>}
-                </div>
-              </>
-            ) : (
-              <EmptyState>
-                <div className={styles.emptyContent}>
-                  <strong>Товары не найдены</strong>
-                  <p>Измените параметры или сбросьте фильтры, чтобы увидеть весь каталог.</p>
-                  <Button type="button" onClick={resetFilters}>Сбросить фильтры</Button>
-                </div>
-              </EmptyState>
-            )}
-          </div>
-        </div>
+                    onClick={() => updateFilters(chip.remove(filters))}
+                    aria-label={`Убрать фильтр: ${chip.label}`}
+                  >
+                    {chip.label}
+                    <span aria-hidden="true">×</span>
+                  </button>
+                ))}
+                <button className={styles.clearAll} type="button" onClick={resetFilters}>
+                  Сбросить всё
+                </button>
+              </div>
+            ) : null}
+
+            <div className={styles.catalogLayout}>
+              <button
+                className={`${styles.overlay} ${filtersOpen ? styles.overlayVisible : ""}`}
+                type="button"
+                aria-label="Закрыть фильтры"
+                onClick={closeFilters}
+              />
+              <FilterPanel
+                filters={draftFilters}
+                onChange={setDraftFilters}
+                onReset={resetVisibleFilters}
+                onApply={applyFilters}
+                onClose={closeFilters}
+                open={filtersOpen}
+                hasActiveFilters={draftChips.length > 0}
+                dialogRef={filterDialogRef}
+                closeButtonRef={closeFilterButtonRef}
+                facets={catalogFacets}
+              />
+
+              <div className={styles.results}>
+                {visibleProducts.length ? (
+                  <>
+                    <div className={styles.productGrid} data-catalog-count={feedEntries.length}>
+                      {feedEntries.map(({ key, item: product }, index) => (
+                        <ProductCard
+                          key={key}
+                          product={product}
+                          priority={index < 4}
+                          headingLevel={2}
+                          returnHref={catalogReturnHref}
+                        />
+                      ))}
+                    </div>
+                    <div ref={loadMoreRef} className={`${styles.loadMore} ${hasMoreProducts ? "" : styles.loadMoreEnd}`} aria-live="polite">
+                      <span>Показано карточек: {feedEntries.length} из {serverPagination.total.toLocaleString("ru-RU")}</span>
+                      {loadMoreError ? <span>{loadMoreError}</span> : null}
+                      {hasMoreProducts ? <button
+                        type="button"
+                        disabled={loadingMore}
+                        onClick={() => void loadMoreProducts()}
+                      >{loadingMore ? "Загружаем..." : "Показать ещё"}</button> : <strong>Вы посмотрели все товары в этой подборке</strong>}
+                    </div>
+                  </>
+                ) : (
+                  <EmptyState>
+                    <div className={styles.emptyContent}>
+                      <strong>Товары не найдены</strong>
+                      <p>Измените параметры или сбросьте фильтры, чтобы увидеть весь каталог.</p>
+                      <Button type="button" onClick={resetFilters}>Сбросить фильтры</Button>
+                    </div>
+                  </EmptyState>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </Container>
     </main>
   );

@@ -426,6 +426,291 @@
   margin: 0 0 8px;
 }
 
+.steamRefill {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  align-items: start;
+  gap: 24px;
+  margin-top: 28px;
+}
+
+.steamRefillCard,
+.steamRefillSummary {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.steamRefillCard {
+  padding: clamp(22px, 3.3vw, 38px);
+}
+
+.steamRefillHeading > span,
+.steamRefillSummary > span {
+  color: #91a6dc;
+  font-family: var(--font-rajdhani), var(--font-inter), sans-serif;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.085em;
+  text-transform: uppercase;
+}
+
+.steamRefillHeading h2,
+.steamRefillSummary h2 {
+  margin: 4px 0 5px;
+  font-size: clamp(1.4rem, 2.1vw, 1.9rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.steamRefillHeading p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.steamRefillPresets {
+  margin: 25px 0 0;
+  border: 0;
+  padding: 0;
+}
+
+.steamRefillPresets legend,
+.steamRefillField label {
+  margin-bottom: 8px;
+  color: #d9e0e8;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.steamRefillPresets > div {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.steamRefillPresets button {
+  min-height: 44px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: #0e1218;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.steamRefillPresets button:hover {
+  border-color: #4b5c74;
+  color: var(--text);
+}
+
+.steamRefillPresets button[data-selected] {
+  border-color: rgb(77 124 254 / 0.66);
+  background: rgb(77 124 254 / 0.12);
+  color: #dce6ff;
+}
+
+.steamRefillField {
+  display: grid;
+  margin-top: 22px;
+}
+
+.steamRefillAmount {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: #0d1117;
+  transition: border-color var(--transition);
+}
+
+.steamRefillAmount:focus-within {
+  border-color: var(--accent-hover);
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+
+.steamRefillAmount input {
+  min-width: 0;
+  flex: 1;
+  min-height: 54px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 0 16px;
+  color: var(--text);
+  font-family: var(--font-rajdhani), var(--font-inter), sans-serif;
+  font-size: 1.35rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.steamRefillAmount > span {
+  display: flex;
+  align-items: center;
+  border-left: 1px solid var(--border);
+  background: var(--surface-raised);
+  padding: 0 15px;
+  color: #b9c4d2;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.steamRefillField > p {
+  margin: 7px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.steamRefillError {
+  margin: 10px 0 0;
+  color: #e9a0a0;
+  font-size: 0.75rem;
+}
+
+.steamRefillSuccess {
+  margin: 10px 0 0;
+  color: #a8d7ad;
+  font-size: 0.75rem;
+}
+
+.steamRefillMethod {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0e1218;
+  padding: 13px;
+}
+
+.steamRefillMethodMark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid #3b5798;
+  border-radius: 7px;
+  background: #182442;
+  color: #b7c8ff;
+  font-family: var(--font-rajdhani), var(--font-inter), sans-serif;
+  font-weight: 800;
+}
+
+.steamRefillMethod strong {
+  display: block;
+  font-size: 0.8rem;
+}
+
+.steamRefillMethod p {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.steamRefillMethod > span:last-child {
+  color: #9cd3aa;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.steamRefillSubmit,
+.steamRefillAuthLink {
+  width: 100%;
+  min-height: 49px;
+  margin-top: 18px;
+}
+
+.steamRefillAuthLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  padding: 0 16px;
+  color: white;
+  font-size: 0.86rem;
+  font-weight: 750;
+  text-align: center;
+  transition: background var(--transition), transform var(--transition);
+}
+
+.steamRefillAuthLink:hover {
+  background: var(--accent-hover);
+}
+
+.steamRefillSummary {
+  position: sticky;
+  top: var(--sticky-header-offset);
+  padding: 24px;
+}
+
+.steamRefillSummary dl {
+  display: grid;
+  gap: 11px;
+  margin: 22px 0 0;
+}
+
+.steamRefillSummary dl div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.steamRefillSummary dt,
+.steamRefillRate span {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.steamRefillSummary dd {
+  margin: 0;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.steamRefillTotal {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.steamRefillTotal dd {
+  font-family: var(--font-rajdhani), var(--font-inter), sans-serif;
+  font-size: 1.65rem;
+}
+
+.steamRefillRate {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #0d1117;
+  padding: 12px;
+}
+
+.steamRefillRate div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.steamRefillRate strong {
+  color: var(--text);
+  white-space: nowrap;
+  font-size: 0.76rem;
+}
+
 .overlay {
   display: none;
 }
@@ -555,12 +840,17 @@
   }
 
   .catalogLayout,
-  .loadingLayout {
+  .loadingLayout,
+  .steamRefill {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .loadingSidebar {
     display: none;
+  }
+
+  .steamRefillSummary {
+    position: static;
   }
 
   .sidebar {
@@ -664,6 +954,35 @@
   .productGrid,
   .loadingGrid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .steamRefill {
+    gap: 12px;
+    margin-top: 18px;
+  }
+
+  .steamRefillCard,
+  .steamRefillSummary {
+    padding: 20px;
+  }
+
+  .steamRefillPresets > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .steamRefillMethod {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .steamRefillMethod > span:last-child {
+    grid-column: 2;
+  }
+
+  .steamRefillSummary dl div,
+  .steamRefillRate div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
   }
 
   .loadMore {

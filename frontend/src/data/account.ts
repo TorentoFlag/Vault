@@ -1,5 +1,7 @@
 import { catalogProducts } from "./products.ts";
+import { siteConfig } from "../config/site.ts";
 import { createCheckoutRecords, createTopUpTransaction } from "../lib/account.ts";
+import { createSteamRefillProduct } from "../lib/steam-refill.ts";
 
 function product(id: string) {
   const result = catalogProducts.find((item) => item.id === id);
@@ -7,7 +9,7 @@ function product(id: string) {
   return result;
 }
 
-const steamOrder = createCheckoutRecords([product("steam-top-up-1000")], 10_500, {
+const steamOrder = createCheckoutRecords([createSteamRefillProduct(1000, siteConfig.coin.rate)], 10_500, {
   id: "demo-order-steam",
   transactionId: "demo-transaction-steam",
   number: "VLT-260705-1842",

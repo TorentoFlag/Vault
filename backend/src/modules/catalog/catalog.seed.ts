@@ -20,27 +20,6 @@ function skinDetails(productType: string, condition: string, floatValue?: string
   };
 }
 
-function steamTopUpDetails(nominal: string): CatalogProductDetails {
-  return {
-    specifications: [
-      { label: "Сервис", value: "Steam" },
-      { label: "Тип", value: "Пополнение баланса" },
-      { label: "Зачисление в Steam", value: nominal },
-    ],
-    fulfillment: {
-      title: "Данные пополнения Steam",
-      description: "Логин Steam фиксируется в заказе. Зачисление будет выполняться provider-адаптером после подключения SIH fulfillment.",
-      requirements: [
-        "Проверьте логин Steam перед оплатой.",
-        "Стоимость фиксируется в Coins по курсу Vault.",
-        "Перед отправкой провайдеру заказ пройдет повторную проверку статуса.",
-      ],
-    },
-  };
-}
-
-const coinRateLabel = "1 RUB = 1.5 Coins";
-
 export const firstReleaseCatalogProducts: CatalogProduct[] = [
   {
     id: "ak-redline",
@@ -193,77 +172,5 @@ export const firstReleaseCatalogProducts: CatalogProduct[] = [
     meta: ["Rust", "Assault Rifle", "Alien Red"],
     keywords: ["rust", "раст", "alien red", "ak", "винтовка", "скин"],
     details: skinDetails("Винтовка", "Стандартное", undefined, "Rust"),
-  },
-  {
-    id: "steam-top-up-500",
-    slug: "steam-top-up-500-rub",
-    kind: "steam",
-    category: "Steam",
-    game: "Steam",
-    productType: "Пополнение баланса",
-    title: "Пополнение Steam на 500 RUB",
-    description: "Пополнение кошелька Steam на 500 RUB с пересчетом в Coins по фиксированному курсу Vault.",
-    priceCoins: 750,
-    availability: "available",
-    fulfillmentMode: "automatic",
-    createdAt: "2026-05-20T10:00:00.000Z",
-    popularity: 86,
-    meta: [coinRateLabel, "Steam", "RUB"],
-    keywords: ["стим", "кошелек", "баланс", "пополнение"],
-    details: steamTopUpDetails("500 RUB"),
-  },
-  {
-    id: "steam-top-up-1000",
-    slug: "steam-top-up-1000-rub",
-    kind: "steam",
-    category: "Steam",
-    game: "Steam",
-    productType: "Пополнение баланса",
-    title: "Пополнение Steam на 1000 RUB",
-    description: "Пополнение кошелька Steam на 1000 RUB по курсу Vault. Перед оформлением проверьте логин.",
-    priceCoins: 1500,
-    availability: "available",
-    fulfillmentMode: "automatic",
-    createdAt: "2026-06-02T10:00:00.000Z",
-    popularity: 90,
-    meta: [coinRateLabel, "Steam", "RUB"],
-    keywords: ["стим", "кошелек", "баланс", "пополнение"],
-    details: steamTopUpDetails("1000 RUB"),
-  },
-  {
-    id: "steam-top-up-2000",
-    slug: "steam-top-up-2000-rub",
-    kind: "steam",
-    category: "Steam",
-    game: "Steam",
-    productType: "Пополнение баланса",
-    title: "Пополнение Steam на 2000 RUB",
-    description: "Пополнение кошелька Steam на 2000 RUB. Стоимость фиксируется в Coins, логин сохраняется в заказе.",
-    priceCoins: 3000,
-    availability: "available",
-    fulfillmentMode: "automatic",
-    createdAt: "2026-06-20T10:00:00.000Z",
-    popularity: 84,
-    meta: [coinRateLabel, "Steam", "RUB"],
-    keywords: ["стим", "кошелек", "баланс", "пополнение"],
-    details: steamTopUpDetails("2000 RUB"),
-  },
-  {
-    id: "steam-top-up-5000",
-    slug: "steam-top-up-5000-rub",
-    kind: "steam",
-    category: "Steam",
-    game: "Steam",
-    productType: "Пополнение баланса",
-    title: "Пополнение Steam на 5000 RUB",
-    description: "Пополнение кошелька Steam на 5000 RUB с расчетом по курсу Vault.",
-    priceCoins: 7500,
-    availability: "available",
-    fulfillmentMode: "automatic",
-    createdAt: "2026-07-01T10:00:00.000Z",
-    popularity: 78,
-    meta: [coinRateLabel, "Steam", "RUB"],
-    keywords: ["стим", "кошелек", "баланс", "пополнение"],
-    details: steamTopUpDetails("5000 RUB"),
   },
 ];

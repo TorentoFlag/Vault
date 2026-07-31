@@ -13,6 +13,7 @@ import type {
   CatalogProductKind,
   CatalogSort,
 } from "./catalog.types";
+import { buildSteamRefillProduct } from "./steam-refill-product";
 
 const allowedKinds = new Set<CatalogProductKind>(["skins", "steam"]);
 const defaultCatalogLimit = 120;
@@ -317,6 +318,9 @@ export class CatalogService {
   }
 
   async getBySlug(slug: string): Promise<CatalogProductDto> {
+    const steamRefillProduct = buildSteamRefillProduct(slug);
+    if (steamRefillProduct !== null) return steamRefillProduct;
+
     const product = (await this.loadProducts({ slug, limit: 1 }))[0];
     if (!product) throw new NotFoundException("Product not found");
     return productDto(await this.withLivePrice(product));
@@ -473,7 +477,7 @@ ${supplierPricingJoin}
     const params: Array<number | string> = [];
     const where = [
       "catalog_products.public_enabled = true",
-      "catalog_products.kind IN ('skins', 'steam')",
+      "catalog_products.kind = 'skins'",
     ];
     if (command.category !== undefined) {
       params.push(command.category);

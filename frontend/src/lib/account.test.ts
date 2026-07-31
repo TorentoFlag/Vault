@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { catalogProducts } from "../data/products.ts";
+import { siteConfig } from "../config/site.ts";
 import {
   createCheckoutRecords,
   createTopUpTransaction,
@@ -17,6 +18,7 @@ import {
   sortOrdersNewestFirst,
   validateSteamTradeUrl,
 } from "./account.ts";
+import { createSteamRefillProduct } from "./steam-refill.ts";
 
 function getCatalogProduct(id: string) {
   const product = catalogProducts.find((item) => item.id === id);
@@ -68,7 +70,7 @@ test("нормализация истории отбрасывает повре�
 });
 
 test("заказы сортируются по дате без изменения исходного массива", () => {
-  const older = createCheckoutRecords([getCatalogProduct("steam-top-up-500")], 0, {
+  const older = createCheckoutRecords([createSteamRefillProduct(500, siteConfig.coin.rate)], 0, {
     id: "older",
     number: "VLT-OLDER",
     createdAt: "2026-07-10T08:00:00.000Z",
@@ -195,7 +197,9 @@ test("order recipient snapshots only fields required by its product kinds and pr
   const tradeUrl = "https://steamcommunity.com/tradeoffer/new/?partner=123456789&token=AbC_12-x";
   const fulfillment = { steamLogin: "VaultPlayer", gptEmail: "linked-audit@example.com" };
   const create = (productIds: string[]) => createCheckoutRecords(
-    productIds.map(getCatalogProduct),
+    productIds.map((productId) => productId === "steam-top-up-500"
+      ? createSteamRefillProduct(500, siteConfig.coin.rate)
+      : getCatalogProduct(productId)),
     10_000,
     { fulfillment, steamTradeUrl: tradeUrl },
   ).order;

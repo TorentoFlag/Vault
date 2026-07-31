@@ -27,7 +27,7 @@ This deliberately mirrors the proven Locker shape where it fits: one backend, ex
 
 Included:
 
-- public catalog for skins and Steam refill products, both paid from the internal Coins wallet;
+- public catalog for skins and a dynamic Steam account refill form, both paid from the internal Coins wallet;
 - search and filters for available product categories;
 - internal Coins wallet;
 - top-up/payment flow sufficient to fund purchases or pay/refill through the approved provider flow;

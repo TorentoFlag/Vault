@@ -35,14 +35,12 @@ test("slug всех товаров уникальны", () => {
 
 test("условия получения согласованы со способом выдачи товара", () => {
   const skin = catalogProducts.find((product) => product.id === "ak-redline");
-  const steam = catalogProducts.find((product) => product.id === "steam-top-up-500");
   const gpt = catalogProducts.find((product) => product.id === "gpt-plus");
 
-  assert.ok(skin && steam && gpt);
+  assert.ok(skin && gpt);
+  assert.equal(catalogProducts.some((product) => product.kind === "steam"), false);
   assert.equal(skin.details.fulfillment.title, "Данные Steam Trade");
   assert.ok(skin.details.fulfillment.requirements.some((item) => item.includes("Trade URL")));
-  assert.equal(steam.details.fulfillment.title, "Данные пополнения Steam");
-  assert.ok(steam.details.fulfillment.requirements.some((item) => item.includes("Steam")));
   assert.equal(gpt.details.fulfillment.title, "Данные цифрового заказа");
   assert.ok(gpt.details.fulfillment.requirements.some((item) => item.includes("Email")));
 });

@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { QueryResult, QueryResultRow } from "pg";
 
 import { DatabaseService } from "../../common/database/database.service";
+import { parseSteamRefillAmountRub } from "../catalog/steam-refill-product";
 import type { CatalogProductDto } from "../catalog/catalog.types";
 import type { CheckoutRecipientSnapshot } from "../checkout/checkout.service";
 import { SihClient, SihProviderError } from "../providers/sih/sih.client";
@@ -121,12 +122,8 @@ function commandTypeForLine(line: FulfillmentOrderLineInput): FulfillmentCommand
 }
 
 function steamRefillAmountRub(productSlug: string): number {
-  const match = /^steam-top-up-([1-9][0-9]*)-rub$/.exec(productSlug);
-  if (match === null || match[1] === undefined) throw new Error("FULFILLMENT_STEAM_REFILL_AMOUNT_MISSING");
-  const amountRub = Number(match[1]);
-  if (!Number.isSafeInteger(amountRub) || amountRub < 50 || amountRub > 9_433) {
-    throw new Error("FULFILLMENT_STEAM_REFILL_AMOUNT_INVALID");
-  }
+  const amountRub = parseSteamRefillAmountRub(productSlug);
+  if (amountRub === null) throw new Error("FULFILLMENT_STEAM_REFILL_AMOUNT_INVALID");
   return amountRub;
 }
 

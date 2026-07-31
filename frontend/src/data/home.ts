@@ -5,7 +5,7 @@ export const categories: Category[] = [
   {
     id: "steam",
     title: "Steam",
-    description: "Номиналы Steam по фиксированному курсу.",
+    description: "Пополнение аккаунта Steam.",
     action: "Посмотреть варианты",
     href: "/catalog?category=steam",
   },

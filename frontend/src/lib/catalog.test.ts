@@ -125,14 +125,13 @@ test("заголовок результатов каталога отражае�
   );
 });
 
-test("категория Steam возвращает только пополнения Steam", () => {
+test("категория Steam не возвращает фиксированные карточки пополнения", () => {
   const result = filterAndSortCatalog(catalogProducts, {
     ...createDefaultCatalogFilters(),
     category: "steam",
   });
 
-  assert.equal(result.length, 4);
-  assert.ok(result.every((product) => product.kind === "steam"));
+  assert.equal(result.length, 0);
 });
 
 test("категория GPT возвращает только товары GPT", () => {
@@ -145,7 +144,7 @@ test("категория GPT возвращает только товары GPT"
   assert.ok(result.every((product) => product.kind === "gpt"));
 });
 
-test("поиск по Steam и GPT находит соответствующие категории", () => {
+test("поиск по Steam не возвращает фиксированные карточки, а GPT находит отложенную категорию", () => {
   const steam = filterAndSortCatalog(catalogProducts, {
     ...createDefaultCatalogFilters(),
     query: "Steam",
@@ -155,8 +154,7 @@ test("поиск по Steam и GPT находит соответствующие
     query: "GPT",
   });
 
-  assert.equal(steam.length, 4);
-  assert.ok(steam.every((product) => product.kind === "steam"));
+  assert.equal(steam.length, 0);
   assert.equal(gpt.length, 4);
   assert.ok(gpt.every((product) => product.kind === "gpt"));
 });
@@ -218,18 +216,15 @@ test("точный поиск по игре не смешивает игровы
 test("поиск, фасеты, цена и сортировка работают совместно", () => {
   const result = filterAndSortCatalog(catalogProducts, {
     ...createDefaultCatalogFilters(),
-    query: "пополнение",
-    category: "steam",
-    types: ["Пополнение баланса"],
-    minPrice: 1000,
-    maxPrice: 5000,
+    query: "Автомат",
+    category: "skins",
+    types: ["Автомат"],
+    minPrice: 3000,
+    maxPrice: 8000,
     sort: "price_desc",
   });
 
-  assert.deepEqual(result.map((product) => product.id), [
-    "steam-top-up-2000",
-    "steam-top-up-1000",
-  ]);
+  assert.deepEqual(result.map((product) => product.id), ["m4-printstream"]);
 });
 
 test("фильтр по типу предмета работает отдельно от текстового поиска", () => {
@@ -312,21 +307,19 @@ test("некорректные границы цены игнорируются,
 
 test("статус отображения выводится из наличия и способа выдачи", () => {
   const skin = catalogProducts.find((product) => product.id === "ak-redline");
-  const steam = catalogProducts.find((product) => product.id === "steam-top-up-1000");
   const gpt = catalogProducts.find((product) => product.id === "gpt-plus");
 
-  assert.ok(skin && steam && gpt);
+  assert.ok(skin && gpt);
   assert.equal(getProductStatusLabel(skin), "Доступен к оформлению");
-  assert.equal(getProductStatusLabel(steam), "Доступен к оформлению");
   assert.equal(getProductStatusLabel(gpt), "Локальный заказ");
 });
 
 test("статус под заказ имеет приоритет над способом выдачи", () => {
-  const steam = catalogProducts.find((product) => product.id === "steam-top-up-1000");
-  assert.ok(steam);
+  const skin = catalogProducts.find((product) => product.id === "ak-redline");
+  assert.ok(skin);
 
   assert.equal(getProductStatusLabel({
-    ...steam,
+    ...skin,
     availability: "on-request",
   }), "Локальный заказ");
 });
@@ -358,7 +351,7 @@ test("autocomplete and catalog use the same search engine and result limit", () 
     );
   }
   assert.equal(searchCatalogProducts(catalogProducts, "", 5).length, 5);
-  assert.equal(searchCatalogProducts(catalogProducts, "Steam", 5).length, 4);
+  assert.equal(searchCatalogProducts(catalogProducts, "Steam", 5).length, 0);
 });
 
 test("все товары явно отмечены как демонстрационные", () => {
