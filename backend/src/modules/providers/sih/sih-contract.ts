@@ -18,6 +18,7 @@ const SKIN_PROTECTION_ERRORS = new Set<NonNullable<SihSkinProtection["error"]>>(
 const TRUSTED_IMAGE_HOSTS = new Set([
   "cdn.cloudflare.steamstatic.com",
   "community.cloudflare.steamstatic.com",
+  "steaminventoryhelper.com",
   "steamcommunity-a.akamaihd.net",
 ]);
 

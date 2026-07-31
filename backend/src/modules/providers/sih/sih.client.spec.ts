@@ -45,6 +45,11 @@ describe("SihClient", () => {
             count: 10,
             image: "-9a81dlWabc123abc123abc",
           },
+          "AWP | Asiimov (Field-Tested)": {
+            price: 15.79,
+            count: 2,
+            image: "https://steaminventoryhelper.com/cdn-cgi/imagedelivery/MvHeJSvDbl13NYkuyvKbPw/weapons/dd9f12f736ff63da9566/public",
+          },
         },
       }));
     };
@@ -69,6 +74,13 @@ describe("SihClient", () => {
         imageUrl: "https://community.cloudflare.steamstatic.com/economy/image/-9a81dlWabc123abc123abc",
         marketHashName: "AK-47 | Redline (Field-Tested)",
         priceMicrousd: 1_011_000n,
+      },
+      {
+        availableQuantity: 2,
+        game: "cs2",
+        imageUrl: "https://steaminventoryhelper.com/cdn-cgi/imagedelivery/MvHeJSvDbl13NYkuyvKbPw/weapons/dd9f12f736ff63da9566/public",
+        marketHashName: "AWP | Asiimov (Field-Tested)",
+        priceMicrousd: 15_790_000n,
       },
     ]);
   });

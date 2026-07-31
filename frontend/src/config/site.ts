@@ -1,6 +1,7 @@
 import type { CoinConfig } from "@/types/commerce";
 
 export function publicAssetPath(path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
   return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}${path}`;
 }
 

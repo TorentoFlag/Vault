@@ -23,6 +23,8 @@ export type SyncSihGameCommand = {
   observedAt?: Date;
 };
 
+type DatabaseTransactionClient = Parameters<Parameters<DatabaseService["transaction"]>[0]>[0];
+
 function assertObservedAt(value: Date): Date {
   if (!Number.isFinite(value.getTime())) throw new Error("CATALOG_SYNC_OBSERVED_AT_INVALID");
   return value;
@@ -136,7 +138,7 @@ export class CatalogSupplierSyncService {
   }
 
   private async promoteSihGameListingsInTransaction(
-    tx: { query: <Row extends Record<string, unknown> = Record<string, unknown>>(text: string, values?: readonly unknown[]) => Promise<{ rows: Row[]; rowCount: number | null }> },
+    tx: DatabaseTransactionClient,
     game: SihCatalogGame,
   ): Promise<number> {
     if (game !== "cs2") {
