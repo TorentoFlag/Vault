@@ -169,26 +169,10 @@ function relevance(product: CatalogProduct, query: string): number {
   );
 }
 
-function facetOptions(products: LoadedCatalogProduct[], selector: (product: LoadedCatalogProduct) => string | undefined): CatalogFacetOption[] {
-  return [...new Set(products.map(selector).filter((value): value is string => Boolean(value)))]
+function facetOptionsFromValues(values: Array<string | null | undefined>): CatalogFacetOption[] {
+  return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))]
     .sort((left, right) => left.localeCompare(right, "ru-RU"))
     .map((value) => ({ id: value, title: value }));
-}
-
-function facets(products: LoadedCatalogProduct[]): CatalogFacetsDto {
-  return {
-    kinds: [
-      { id: "skins", title: "Игровые предметы" },
-      { id: "steam", title: "Steam" },
-    ],
-    games: facetOptions(products, (product) => product.game),
-    productTypes: facetOptions(products, (product) => product.productType),
-    fulfillmentModes: [
-      { id: "automatic", title: "Автоматически" },
-      { id: "steam-trade", title: "Steam Trade" },
-    ],
-    availability: [{ id: "available", title: "Доступен к оформлению" }],
-  };
 }
 
 @Injectable()
@@ -227,7 +211,11 @@ export class CatalogService {
         offset,
         sort,
       }),
-      this.loadFacets(),
+      this.loadFacets({
+        ...(category === undefined ? {} : { category }),
+        ...(game === undefined ? {} : { game }),
+        search,
+      }),
       this.countProducts({
         ...(category === undefined ? {} : { category }),
         ...(game === undefined ? {} : { game }),
@@ -540,44 +528,63 @@ export class CatalogService {
     return game;
   }
 
-  private async loadFacets(): Promise<CatalogFacetsDto> {
+  private async loadFacets(command: {
+    category?: CatalogProductKind;
+    game?: CatalogGame;
+    search?: string;
+  } = {}): Promise<CatalogFacetsDto> {
+    const { params, where } = this.catalogWhere(command);
+    const gameFacets = this.catalogWhere({
+      ...(command.category === undefined ? {} : { category: command.category }),
+      ...(command.search === undefined ? {} : { search: command.search }),
+    });
     const result = await this.database.query<{
       game: string | null;
       product_type: string | null;
+      condition_value: string | null;
     }>(
       `
-        SELECT DISTINCT game, product_type
+        SELECT DISTINCT
+          catalog_products.game,
+          catalog_products.product_type,
+          condition_specification.value ->> 'value' AS condition_value
         FROM catalog_products
-        WHERE public_enabled = true
-          AND kind IN ('skins', 'steam')
-        ORDER BY game ASC, product_type ASC
+        LEFT JOIN LATERAL jsonb_array_elements(coalesce(catalog_products.details -> 'specifications', '[]'::jsonb)) AS condition_specification(value)
+          ON lower(condition_specification.value ->> 'label') = 'состояние'
+        WHERE ${where.join("\n          AND ")}
+        ORDER BY catalog_products.game ASC, catalog_products.product_type ASC, condition_value ASC
       `,
+      params,
     );
-    const facetRows = result.rows.map((row) => ({
-      id: "facet",
-      slug: "facet",
-      kind: "skins" as const,
-      category: "",
-      ...(row.game === null ? {} : { game: row.game }),
-      productType: row.product_type ?? "",
-      title: "",
-      description: "",
-      priceCoins: 0,
-      availability: "available" as const,
-      fulfillmentMode: "steam-trade" as const,
-      createdAt: new Date(0).toISOString(),
-      popularity: 0,
-      meta: [],
-      keywords: [],
-      details: { specifications: [], fulfillment: { title: "", description: "", requirements: [] } },
-    }));
-    const rawFacets = facets(facetRows);
+    const gameResult = await this.database.query<{ game: string | null }>(
+      `
+        SELECT DISTINCT catalog_products.game
+        FROM catalog_products
+        WHERE ${gameFacets.where.join("\n          AND ")}
+        ORDER BY catalog_products.game ASC
+      `,
+      gameFacets.params,
+    );
+    const games = CATALOG_GAMES
+      .filter((game) => gameResult.rows.some((row) => parseCatalogGame(row.game) === game))
+      .map((game) => ({
+        id: game,
+        title: getCatalogGameDefinition(game).label,
+      }));
+
     return {
-      ...rawFacets,
-      games: rawFacets.games.map((game) => ({
-        id: normalize(game.id),
-        title: getCatalogGameDefinition(parseCatalogGame(game.id) ?? "cs2").label,
-      })),
+      kinds: [
+        { id: "skins", title: "Игровые предметы" },
+        { id: "steam", title: "Steam" },
+      ],
+      games,
+      productTypes: facetOptionsFromValues(result.rows.map((row) => row.product_type)),
+      conditions: facetOptionsFromValues(result.rows.map((row) => row.condition_value)),
+      fulfillmentModes: [
+        { id: "automatic", title: "Автоматически" },
+        { id: "steam-trade", title: "Steam Trade" },
+      ],
+      availability: [{ id: "available", title: "Доступен к оформлению" }],
     };
   }
 }

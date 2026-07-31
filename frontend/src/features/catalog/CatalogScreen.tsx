@@ -20,7 +20,7 @@ import {
   type CatalogFilters,
   type CatalogSort,
 } from "@/lib/catalog";
-import { fetchCatalogList, type CatalogPagination } from "@/lib/catalog-api";
+import { fetchCatalogList, type CatalogFacets, type CatalogPagination } from "@/lib/catalog-api";
 import {
   CATALOG_FEED_BATCH_SIZE,
   createCatalogFeedEntries,
@@ -76,15 +76,6 @@ function numberFromInput(value: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
-function productCondition(product: Product) {
-  return product.details.specifications.find((item) => item.label.toLocaleLowerCase("ru-RU") === "состояние")?.value;
-}
-
-function uniqueSorted(values: string[]) {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
-    .sort((left, right) => left.localeCompare(right, "ru-RU"));
-}
-
 function FilterPanel({
   filters,
   onChange,
@@ -95,7 +86,7 @@ function FilterPanel({
   hasActiveFilters,
   dialogRef,
   closeButtonRef,
-  products,
+  facets,
 }: {
   filters: CatalogFilters;
   onChange: (next: CatalogFilters) => void;
@@ -106,26 +97,15 @@ function FilterPanel({
   hasActiveFilters: boolean;
   dialogRef: RefObject<HTMLElement | null>;
   closeButtonRef: RefObject<HTMLButtonElement | null>;
-  products: Product[];
+  facets: CatalogFacets;
 }) {
-  const relevantProducts = products.filter((product) => (
-    (filters.category === "all" || product.kind === filters.category)
-    && (filters.game === undefined || (product.kind === "skins" && product.game?.toLocaleLowerCase("en-US") === filters.game))
-  ));
-  const typeOptions = uniqueSorted(
-    relevantProducts
-      .map((product) => product.productType),
-  );
-  const conditionOptions = uniqueSorted(
-    relevantProducts
-      .filter((product) => product.kind === "skins")
-      .map((product) => productCondition(product) ?? ""),
-  );
+  const typeOptions = facets.productTypes;
+  const conditionOptions = facets.conditions;
   const typeLegend = filters.category === "skins" && filters.game === "cs2"
     ? "Оружие"
     : "Тип предмета";
   const filteredTypeOptions = filters.category === "steam"
-    ? typeOptions.filter((type) => typeOptions.length > 1 || type !== "Пополнение баланса")
+    ? typeOptions.filter((type) => typeOptions.length > 1 || type.id !== "Пополнение баланса")
     : typeOptions;
   const limitedTypeOptions = filteredTypeOptions.slice(0, 18);
   const limitedConditionOptions = conditionOptions.slice(0, 12);
@@ -163,12 +143,12 @@ function FilterPanel({
           <legend>{typeLegend}</legend>
           {limitedTypeOptions.map((type) => (
             <Checkbox
-              key={type}
-              label={type}
-              checked={filters.types.includes(type)}
+              key={type.id}
+              label={type.title}
+              checked={filters.types.includes(type.id)}
               onChange={() => onChange({
                 ...filters,
-                types: toggleValue(filters.types, type),
+                types: toggleValue(filters.types, type.id),
               })}
             />
           ))}
@@ -181,12 +161,12 @@ function FilterPanel({
           <legend>Состояние</legend>
           {limitedConditionOptions.map((condition) => (
             <Checkbox
-              key={condition}
-              label={condition}
-              checked={filters.conditions.includes(condition)}
+              key={condition.id}
+              label={condition.title}
+              checked={filters.conditions.includes(condition.id)}
               onChange={() => onChange({
                 ...filters,
-                conditions: toggleValue(filters.conditions, condition),
+                conditions: toggleValue(filters.conditions, condition.id),
               })}
             />
           ))}
@@ -322,7 +302,15 @@ function getActiveChips(filters: CatalogFilters): ActiveChip[] {
   return chips;
 }
 
-export function CatalogScreen({ products, pagination }: { products: Product[]; pagination: CatalogPagination }) {
+export function CatalogScreen({
+  products,
+  pagination,
+  facets,
+}: {
+  products: Product[];
+  pagination: CatalogPagination;
+  facets: CatalogFacets;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -331,6 +319,7 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
   const filtersKey = useMemo(() => serializeCatalogFilters(filters).toString(), [filters]);
   const [loadedProducts, setLoadedProducts] = useState(products);
   const [serverPagination, setServerPagination] = useState(pagination);
+  const [catalogFacets, setCatalogFacets] = useState(facets);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -374,6 +363,7 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
         if (cancelled) return;
         setLoadedProducts(nextPage.items);
         setServerPagination(nextPage.pagination);
+        setCatalogFacets(nextPage.facets);
         setFeedState({ key: filtersKey, count: CATALOG_FEED_BATCH_SIZE });
         setLoadedFiltersKey(filtersKey);
       } catch {
@@ -416,6 +406,7 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
       });
       setLoadedProducts((current) => mergeProducts(current, nextPage.items));
       setServerPagination(nextPage.pagination);
+      setCatalogFacets(nextPage.facets);
       setFeedState({ key: filtersKey, count: visibleProducts.length + nextPage.items.length });
       setLoadedFiltersKey(filtersKey);
     } catch {
@@ -657,7 +648,7 @@ export function CatalogScreen({ products, pagination }: { products: Product[]; p
             hasActiveFilters={draftChips.length > 0}
             dialogRef={filterDialogRef}
             closeButtonRef={closeFilterButtonRef}
-            products={loadedProducts}
+            facets={catalogFacets}
           />
 
           <div className={styles.results}>

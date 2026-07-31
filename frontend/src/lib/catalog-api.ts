@@ -34,7 +34,22 @@ type ApiCatalogProduct = {
 
 export type CatalogApiList = {
   items: Product[];
+  facets: CatalogFacets;
   pagination: CatalogPagination;
+};
+
+export type CatalogFacetOption = {
+  id: string;
+  title: string;
+};
+
+export type CatalogFacets = {
+  kinds: CatalogFacetOption[];
+  games: CatalogFacetOption[];
+  productTypes: CatalogFacetOption[];
+  conditions: CatalogFacetOption[];
+  fulfillmentModes: CatalogFacetOption[];
+  availability: CatalogFacetOption[];
 };
 
 export type CatalogPagination = {
@@ -141,6 +156,37 @@ function isCatalogPagination(value: unknown): value is CatalogPagination {
   );
 }
 
+function emptyCatalogFacets(): CatalogFacets {
+  return {
+    kinds: [],
+    games: [],
+    productTypes: [],
+    conditions: [],
+    fulfillmentModes: [],
+    availability: [],
+  };
+}
+
+function isCatalogFacetOption(value: unknown): value is CatalogFacetOption {
+  return isRecord(value) && typeof value.id === "string" && typeof value.title === "string";
+}
+
+function catalogFacetOptions(value: unknown): CatalogFacetOption[] {
+  return Array.isArray(value) && value.every(isCatalogFacetOption) ? value : [];
+}
+
+function mapCatalogFacets(value: unknown): CatalogFacets {
+  if (!isRecord(value)) return emptyCatalogFacets();
+  return {
+    kinds: catalogFacetOptions(value.kinds),
+    games: catalogFacetOptions(value.games),
+    productTypes: catalogFacetOptions(value.productTypes),
+    conditions: catalogFacetOptions(value.conditions),
+    fulfillmentModes: catalogFacetOptions(value.fulfillmentModes),
+    availability: catalogFacetOptions(value.availability),
+  };
+}
+
 async function parseJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return null;
@@ -201,6 +247,7 @@ export async function fetchCatalogList(options: CatalogFetchOptions = {}): Promi
   }
   return {
     items: body.items.map(mapApiCatalogProduct),
+    facets: mapCatalogFacets(body.facets),
     pagination: body.pagination,
   };
 }

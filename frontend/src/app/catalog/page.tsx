@@ -34,7 +34,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
 
   return (
     <Suspense fallback={<CatalogLoading />}>
-      <CatalogScreen key={filtersKey} products={catalog.items} pagination={catalog.pagination} />
+      <CatalogScreen key={filtersKey} products={catalog.items} pagination={catalog.pagination} facets={catalog.facets} />
     </Suspense>
   );
 }

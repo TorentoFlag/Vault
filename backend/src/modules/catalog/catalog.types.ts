@@ -60,6 +60,7 @@ export type CatalogFacetsDto = {
   kinds: CatalogFacetOption[];
   games: CatalogFacetOption[];
   productTypes: CatalogFacetOption[];
+  conditions: CatalogFacetOption[];
   fulfillmentModes: CatalogFacetOption[];
   availability: CatalogFacetOption[];
 };

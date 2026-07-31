@@ -537,4 +537,111 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
     expect(middleBody.items).toHaveLength(1);
     expect(middleBody.items[0]?.slug).toBe("test-api-game-filter-cs2-price-middle");
   });
+
+  it("returns scoped catalog facets from all matching products before pagination", async () => {
+    await pool.query(
+      `
+        INSERT INTO catalog_products (
+          id,
+          slug,
+          kind,
+          category,
+          game,
+          product_type,
+          title,
+          description,
+          price_coin_minor,
+          availability,
+          fulfillment_mode,
+          popularity,
+          image,
+          image_alt,
+          meta,
+          keywords,
+          details,
+          public_enabled
+        )
+        VALUES
+          (
+            'test-api-game-filter-cs2-facet-rifle',
+            'test-api-game-filter-cs2-facet-rifle',
+            'skins',
+            'Игровые предметы',
+            'cs2',
+            'FacetProbe Винтовки',
+            'FacetProbe Rifle',
+            'facetprobe CS2 rifle item.',
+            10000,
+            'available',
+            'steam-trade',
+            300,
+            'https://cdn.example/cs2/facet-rifle.png',
+            'Facet Rifle Test',
+            ARRAY['CS2','FacetProbe Minimal'],
+            ARRAY['facetprobe','rifle'],
+            '{"specifications":[{"label":"Состояние","value":"FacetProbe Minimal"}],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          ),
+          (
+            'test-api-game-filter-cs2-facet-container',
+            'test-api-game-filter-cs2-facet-container',
+            'skins',
+            'Игровые предметы',
+            'cs2',
+            'FacetProbe Контейнеры',
+            'FacetProbe Container',
+            'facetprobe CS2 container item.',
+            20000,
+            'available',
+            'steam-trade',
+            1,
+            'https://cdn.example/cs2/facet-container.png',
+            'Facet Container Test',
+            ARRAY['CS2','FacetProbe Factory'],
+            ARRAY['facetprobe','container'],
+            '{"specifications":[{"label":"Состояние","value":"FacetProbe Factory"}],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          ),
+          (
+            'test-api-game-filter-rust-facet-decoy',
+            'test-api-game-filter-rust-facet-decoy',
+            'skins',
+            'Игровые предметы',
+            'rust',
+            'FacetProbe Rust',
+            'FacetProbe Rust Decoy',
+            'facetprobe Rust item.',
+            30000,
+            'available',
+            'steam-trade',
+            500,
+            'https://cdn.example/rust/facet-decoy.png',
+            'Facet Rust Test',
+            ARRAY['Rust','FacetProbe Rust'],
+            ARRAY['facetprobe','rust'],
+            '{"specifications":[{"label":"Состояние","value":"FacetProbe Rust"}],"fulfillment":{"title":"","description":"","requirements":[]}}'::jsonb,
+            true
+          )
+      `,
+    );
+
+    const response = await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get("/catalog")
+      .query({ category: "skins", game: "cs2", q: "facetprobe", limit: 1 })
+      .expect(200);
+    const body = response.body as CatalogListDto;
+
+    expect(body.items).toHaveLength(1);
+    expect(body.pagination.total).toBe(2);
+    expect(body.pagination.hasMore).toBe(true);
+    expect(body.facets.productTypes.map((item) => item.id)).toEqual([
+      "FacetProbe Винтовки",
+      "FacetProbe Контейнеры",
+    ]);
+    expect(body.facets.conditions.map((item) => item.id)).toEqual([
+      "FacetProbe Factory",
+      "FacetProbe Minimal",
+    ]);
+    expect(body.facets.games.map((item) => item.id)).toEqual(expect.arrayContaining(["cs2", "rust"]));
+  });
 });

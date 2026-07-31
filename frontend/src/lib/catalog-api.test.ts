@@ -76,7 +76,16 @@ test("fetchCatalogList requests backend catalog with canonical filters and hides
           total: 1,
           hasMore: false,
         },
-        facets: {},
+        facets: {
+          productTypes: [
+            { id: "Винтовки", title: "Винтовки" },
+            { id: "Контейнеры", title: "Контейнеры" },
+          ],
+          conditions: [
+            { id: "После полевых испытаний", title: "После полевых испытаний" },
+            { id: "Прямо с завода", title: "Прямо с завода" },
+          ],
+        },
         pricing: {
           coinRate: {
             fiatCurrency: "RUB",
@@ -104,6 +113,8 @@ test("fetchCatalogList requests backend catalog with canonical filters and hides
     total: 1,
     hasMore: false,
   });
+  assert.deepEqual(response.facets.productTypes.map((item) => item.id), ["Винтовки", "Контейнеры"]);
+  assert.deepEqual(response.facets.conditions.map((item) => item.id), ["После полевых испытаний", "Прямо с завода"]);
 });
 
 test("fetchCatalogList requests catalog pages with limit and offset", async () => {
