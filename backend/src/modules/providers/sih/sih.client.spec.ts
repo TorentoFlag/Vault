@@ -232,6 +232,27 @@ describe("SihClient", () => {
     });
   });
 
+  it("treats a rejected Steam account check as a permanent provider rejection", async () => {
+    const fetcher: SihFetch = () => Promise.resolve(jsonResponse({
+      message: "Аккаунт Steam herald.winston не найден: User not found",
+      success: false,
+    }));
+    const client = new SihClient({
+      apiKeyFile: await secretFile("market-api-key"),
+      fetcher,
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 4_096,
+      requestTimeoutMs: 1_000,
+      steamRefillApiKeyFile: await secretFile("steam-refill-api-key"),
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    await expect(client.checkSteamAccount({ steamUsername: "herald.winston" })).rejects.toMatchObject({
+      code: "SIH_REQUEST_REJECTED",
+      disposition: "permanent",
+    });
+  });
+
   it("creates SIH skin purchase orders with customId and exact micro-USD amount", async () => {
     const seen: { apiKey: string | null; body: unknown; path: string } = {
       apiKey: null,

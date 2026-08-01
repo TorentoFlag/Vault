@@ -25,6 +25,13 @@ function invalid(): never {
   throw new Error("SIH_RESPONSE_INVALID");
 }
 
+export class SihSteamCheckRejectedError extends Error {
+  constructor() {
+    super("SIH_STEAM_CHECK_REJECTED");
+    this.name = "SihSteamCheckRejectedError";
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -213,7 +220,9 @@ export function parseSihMinimumItem(rawPayload: string, game: SihCatalogGame, ex
 
 export function parseSihSteamCheck(rawPayload: string): SihSteamCheckResult {
   const payload = parseJson(rawPayload);
-  if (!isRecord(payload) || payload.success !== true) invalid();
+  if (!isRecord(payload)) invalid();
+  if (payload.success === false) throw new SihSteamCheckRejectedError();
+  if (payload.success !== true) invalid();
   const transactionId = canonicalText(payload.transactionId, 100);
   if (transactionId.length < 10) invalid();
   return { transactionId };

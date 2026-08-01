@@ -17,6 +17,7 @@ import {
   parseSihSteamCheck,
   parseSihSteamPay,
   sihAppId,
+  SihSteamCheckRejectedError,
 } from "./sih-contract";
 import type {
   SihCatalogGame,
@@ -182,6 +183,9 @@ export class SihClient {
     try {
       return parseSihSteamCheck(payload);
     } catch (error) {
+      if (error instanceof SihSteamCheckRejectedError) {
+        throw new SihProviderError("permanent", "SIH_REQUEST_REJECTED", undefined, { cause: error });
+      }
       throw new SihProviderError("retryable", "SIH_CONTRACT_SUSPECT", undefined, { cause: error });
     }
   }
