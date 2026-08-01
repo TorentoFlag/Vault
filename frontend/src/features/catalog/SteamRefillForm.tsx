@@ -116,15 +116,6 @@ export function SteamRefillForm() {
           {showAmountError ? <p id="steam-refill-error" className={styles.steamRefillError} role="alert">{amountError}</p> : null}
         </div>
 
-        <div className={styles.steamRefillMethod}>
-          <span className={styles.steamRefillMethodMark}>S</span>
-          <div>
-            <strong>Оформление через корзину Vault</strong>
-            <p>Логин Steam будет указан на шаге оформления заказа.</p>
-          </div>
-          <span>SIH</span>
-        </div>
-
         {submitError ? <p className={styles.steamRefillError} role="alert">{submitError}</p> : null}
         {submitStatus === "added" ? <p className={styles.steamRefillSuccess} role="status">Пополнение добавлено в корзину.</p> : null}
 

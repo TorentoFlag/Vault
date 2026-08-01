@@ -30,6 +30,18 @@ test("skin cart gates Steam and Trade URL before balance top-up", () => {
   assert.match(cart, /account\/steam\?returnTo=%2Fcart/);
 });
 
+test("cart shortfall notice does not name the payment provider", () => {
+  const cart = source("src/features/cart/CartScreen.tsx");
+  assert.match(cart, /<span>Пополните недостающую сумму\.<\/span>/);
+  assert.doesNotMatch(cart, /Пополните недостающую сумму через Arc Pay/);
+});
+
+test("cart summary does not show the extra server order footnote", () => {
+  const cart = source("src/features/cart/CartScreen.tsx");
+  assert.doesNotMatch(cart, /Подтверждение создаёт серверный заказ и списание Coins/);
+  assert.doesNotMatch(cart, /summaryFootnote/);
+});
+
 test("Steam Trade URL settings persist through backend without exposing saved token in the input", () => {
   const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
   const form = source("src/features/account/SteamTradeUrlForm.tsx");

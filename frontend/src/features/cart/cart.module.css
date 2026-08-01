@@ -459,13 +459,6 @@
   transform: translateY(1px);
 }
 
-.summaryFootnote {
-  margin: 13px 0 0;
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-  line-height: 1.45;
-}
-
 .emptyPanel,
 .successPanel,
 .statePanel {

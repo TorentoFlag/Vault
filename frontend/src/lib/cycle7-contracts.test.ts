@@ -30,3 +30,9 @@ test("skin checkout renders the linked Steam identity, Trade URL and edit action
   assert.match(checkout, /Изменить[\s\S]*Steam|Настроить Steam/);
   assert.match(checkout, /account\/steam\?returnTo=%2Fcheckout/);
 });
+
+test("checkout recipient section does not render the extra fulfillment summary card", () => {
+  const checkout = source("src/features/checkout/CheckoutScreen.tsx");
+  assert.doesNotMatch(checkout, /deliveryGrid/);
+  assert.doesNotMatch(checkout, /Данные после заказа/);
+});

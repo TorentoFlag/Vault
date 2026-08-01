@@ -188,7 +188,7 @@ export function CartScreen() {
               ) : !hasSufficientBalance ? (
                 <div className={styles.shortfallNotice} id="insufficient-coins-note">
                   <strong>Не хватает {formatCoins(cartShortfallCoins)} Coins</strong>
-                  <span>Пополните недостающую сумму через Arc Pay; товары останутся в корзине.</span>
+                  <span>Пополните недостающую сумму.</span>
                 </div>
               ) : (
                 <div className={styles.readyNotice}>
@@ -247,7 +247,6 @@ export function CartScreen() {
                     </Button>
                   )}
               </div>
-              <p className={styles.summaryFootnote}>Подтверждение создаёт серверный заказ и списание Coins.</p>
             </aside>
           </div>
         )}

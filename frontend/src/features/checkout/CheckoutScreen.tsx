@@ -241,7 +241,6 @@ export function CheckoutScreen() {
                     <Link href="/account/steam?returnTo=%2Fcheckout">Настроить Steam</Link>
                   </div>
                 ) : null}
-                <div className={styles.deliveryGrid}>{cart.map((product) => <article key={product.id}><span>{product.kind === "skins" ? "ST" : product.kind === "steam" ? "S" : "GPT"}</span><div><strong>{product.details.fulfillment.title}</strong><p>{product.details.fulfillment.description}</p></div><StatusBadge tone={product.kind === "skins" ? "neutral" : "success"}>{product.kind === "skins" ? "Steam подключён" : "Данные после заказа"}</StatusBadge></article>)}</div>
                 {cart.some((product) => product.kind === "steam" || product.kind === "gpt") ? (
                   <div className={styles.recipientFields}>
                     {cart.some((product) => product.kind === "steam") ? <label><span>Логин получателя Steam *</span><input value={fulfillment.steamLogin} aria-invalid={fulfillmentTouched && !!fulfillmentErrors.steamLogin} onChange={(event) => updateFulfillment("steamLogin", event.target.value)} />{fulfillmentTouched && fulfillmentErrors.steamLogin ? <small role="alert">{fulfillmentErrors.steamLogin}</small> : <small>Проверьте написание до оформления.</small>}</label> : null}

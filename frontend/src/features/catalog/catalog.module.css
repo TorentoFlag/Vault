@@ -577,48 +577,6 @@
   font-size: 0.75rem;
 }
 
-.steamRefillMethod {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  margin-top: 22px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #0e1218;
-  padding: 13px;
-}
-
-.steamRefillMethodMark {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 1px solid #3b5798;
-  border-radius: 7px;
-  background: #182442;
-  color: #b7c8ff;
-  font-family: var(--font-rajdhani), var(--font-inter), sans-serif;
-  font-weight: 800;
-}
-
-.steamRefillMethod strong {
-  display: block;
-  font-size: 0.8rem;
-}
-
-.steamRefillMethod p {
-  margin: 2px 0 0;
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-}
-
-.steamRefillMethod > span:last-child {
-  color: #9cd3aa;
-  font-size: 0.68rem;
-  font-weight: 700;
-}
-
 .steamRefillSubmit,
 .steamRefillAuthLink {
   width: 100%;
@@ -968,14 +926,6 @@
 
   .steamRefillPresets > div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .steamRefillMethod {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .steamRefillMethod > span:last-child {
-    grid-column: 2;
   }
 
   .steamRefillSummary dl div,
