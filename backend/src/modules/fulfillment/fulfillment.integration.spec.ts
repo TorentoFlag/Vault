@@ -758,7 +758,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
         JOIN order_lines ON order_lines.order_id = orders.id
         JOIN fulfillment_commands ON fulfillment_commands.order_line_id = order_lines.id
         JOIN wallet_holds ON wallet_holds.order_id = orders.id
-        WHERE orders.id = $1
+        WHERE orders.id = $1::uuid
       `,
       [order.id],
     );
@@ -1084,7 +1084,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
         JOIN fulfillment_commands ON fulfillment_commands.order_line_id = order_lines.id
         JOIN fulfillment_provider_attempts ON fulfillment_provider_attempts.command_id = fulfillment_commands.id
         JOIN wallet_holds ON wallet_holds.order_id = orders.id
-        WHERE orders.id = $1
+        WHERE orders.id = $1::uuid
         GROUP BY fulfillment_commands.status, wallet_holds.status, order_lines.status, orders.status
       `,
       [order.id],
@@ -1208,6 +1208,99 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     expect(persisted.rows[0]).toEqual({
       operations: ["steam_check", "steam_pay", "steam_pay"],
       statuses: ["succeeded", "failed", "succeeded"],
+    });
+  });
+
+  it("releases the Coins hold when SIH rejects a Steam refill account before pay", async () => {
+    await wallet.creditUser({
+      userId,
+      amountCoinMinor: 500_000,
+      idempotencyKey: "topup-credit-steam-refill-rejected-account",
+      reason: "test-credit",
+    });
+    const order = await checkout.checkoutFromCart({
+      userId,
+      idempotencyKey: "checkout-steam-refill-rejected-account",
+      acceptedTotalCoinMinor: 75_000,
+      items: [{ productSlug: "steam-top-up-500-rub", quantity: 1, recipient: { steamLogin: "missing_steam_user" } }],
+    });
+
+    globalThis.fetch = (input, init) => {
+      if (typeof init?.body !== "string") throw new Error("Expected SIH JSON body");
+      const url = input instanceof URL
+        ? input
+        : new URL(typeof input === "string" ? input : input.url);
+      if (!url.pathname.endsWith("/steam/check")) throw new Error("Steam pay must not be called after rejected check");
+      return Promise.resolve(new Response(JSON.stringify({
+        message: "Аккаунт Steam missing_steam_user не найден: User not found",
+        success: false,
+      }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      }));
+    };
+
+    await expect(fulfillment.processNextPendingCommand({ skinTestMode: true })).rejects.toMatchObject({
+      code: "SIH_REQUEST_REJECTED",
+    });
+
+    await expect(wallet.getBalance(userId)).resolves.toEqual({
+      postedCoinMinor: 500_000,
+      heldCoinMinor: 0,
+      availableCoinMinor: 500_000,
+    });
+    const persisted = await pool.query<{
+      attempt_statuses: string[];
+      command_status: string;
+      hold_status: string;
+      last_error_code: string | null;
+      line_status: string;
+      operations: string[];
+      order_status: string;
+      settlement_entries: string;
+      settlement_transactions: string;
+    }>(
+      `
+        SELECT
+          fulfillment_commands.status AS command_status,
+          fulfillment_commands.last_error_code,
+          wallet_holds.status AS hold_status,
+          order_lines.status AS line_status,
+          orders.status AS order_status,
+          array_agg(fulfillment_provider_attempts.operation ORDER BY fulfillment_provider_attempts.created_at) AS operations,
+          array_agg(fulfillment_provider_attempts.status ORDER BY fulfillment_provider_attempts.created_at) AS attempt_statuses,
+          (SELECT count(*)::text
+           FROM wallet_ledger_entries
+           WHERE transaction_id IN (
+             SELECT id
+             FROM wallet_transactions
+             WHERE user_id = $2
+               AND idempotency_key = 'fulfillment-settle:' || $1::text
+           )) AS settlement_entries,
+          (SELECT count(*)::text
+           FROM wallet_transactions
+           WHERE user_id = $2
+             AND idempotency_key = 'fulfillment-settle:' || $1::text) AS settlement_transactions
+        FROM orders
+        JOIN order_lines ON order_lines.order_id = orders.id
+        JOIN fulfillment_commands ON fulfillment_commands.order_line_id = order_lines.id
+        JOIN fulfillment_provider_attempts ON fulfillment_provider_attempts.command_id = fulfillment_commands.id
+        JOIN wallet_holds ON wallet_holds.order_id = orders.id
+        WHERE orders.id = $1::uuid
+        GROUP BY fulfillment_commands.status, fulfillment_commands.last_error_code, wallet_holds.status, order_lines.status, orders.status
+      `,
+      [order.id, userId],
+    );
+    expect(persisted.rows[0]).toEqual({
+      attempt_statuses: ["failed"],
+      command_status: "failed",
+      hold_status: "released",
+      last_error_code: "SIH_REQUEST_REJECTED",
+      line_status: "supplier_failed",
+      operations: ["steam_check"],
+      order_status: "failed",
+      settlement_entries: "0",
+      settlement_transactions: "1",
     });
   });
 

@@ -979,7 +979,11 @@ export class FulfillmentService {
     });
   }
 
-  private async markAttemptFailed(pending: { attemptId: string; commandId: string; orderId: string }, errorCode: string, disposition: SihFailureDisposition): Promise<void> {
+  private async markAttemptFailed(
+    pending: { attemptId: string; commandId: string; orderId: string; orderLineId: string; userId: string },
+    errorCode: string,
+    disposition: SihFailureDisposition,
+  ): Promise<void> {
     await this.database.transaction(async (client) => {
       await client.query(
         `
@@ -991,6 +995,30 @@ export class FulfillmentService {
         `,
         [pending.attemptId, errorCode],
       );
+      if (errorCode === "SIH_REQUEST_REJECTED") {
+        await client.query(
+          `
+            UPDATE order_lines
+            SET status = 'supplier_failed'
+            WHERE id = $1
+          `,
+          [pending.orderLineId],
+        );
+        await client.query(
+          `
+            UPDATE fulfillment_commands
+            SET status = 'failed',
+                last_error_code = $2,
+                finished_at = clock_timestamp(),
+                updated_at = clock_timestamp(),
+                locked_at = NULL
+            WHERE id = $1
+          `,
+          [pending.commandId, errorCode],
+        );
+        await this.settleOrderIfTerminal(client, pending);
+        return;
+      }
       await client.query(
         `
           UPDATE fulfillment_commands
