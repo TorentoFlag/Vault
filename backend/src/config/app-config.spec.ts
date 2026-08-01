@@ -62,7 +62,7 @@ describe("loadAppConfig", () => {
     });
   });
 
-  it("fails closed on invalid ports and Arc Pay environments", () => {
+  it("fails closed on invalid ports and payment provider environments", () => {
     expect(() => loadAppConfig({ PORT: "0" })).toThrow("PORT must be between 1 and 65535.");
     expect(() => loadAppConfig({ ARC_PAY_ENVIRONMENT: "qa" })).toThrow("ARC_PAY_ENVIRONMENT must be sandbox or live.");
     expect(loadAppConfig({ ARC_PAY_PROVIDER_MODE: "real" }).arcPay.providerMode).toBe("real");

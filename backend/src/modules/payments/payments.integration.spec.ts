@@ -228,7 +228,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     });
   });
 
-  it("credits Coins only from a verified captured fake Arc Pay webhook and deduplicates retries", async () => {
+  it("credits Coins only from a verified captured fake payment provider webhook and deduplicates retries", async () => {
     await app?.close();
     app = null;
     tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-"));
@@ -347,7 +347,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     });
   });
 
-  it("creates a real Arc Pay hosted checkout request with SBP only without crediting Coins", async () => {
+  it("creates a real payment provider hosted checkout request with SBP only without crediting Coins", async () => {
     await app?.close();
     app = null;
     tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-"));
@@ -426,7 +426,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     });
   });
 
-  it("marks a real Arc Pay top-up failed when checkout creation is rejected", async () => {
+  it("marks a real payment provider top-up failed when checkout creation is rejected", async () => {
     await app?.close();
     app = null;
     tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-failed-"));
@@ -497,7 +497,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     });
   });
 
-  it("credits Coins from a verified real Arc Pay captured webhook and deduplicates retries", async () => {
+  it("credits Coins from a verified real payment provider captured webhook and deduplicates retries", async () => {
     await app?.close();
     app = null;
     tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-webhook-"));
@@ -607,7 +607,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     });
   });
 
-  it("marks a Hosted Checkout top-up failed from a verified real Arc Pay declined webhook", async () => {
+  it("marks a Hosted Checkout top-up failed from a verified real payment provider declined webhook", async () => {
     await app?.close();
     app = null;
     tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-declined-"));
@@ -686,7 +686,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
         payment_id: providerPaymentId,
         amount: 100_000,
         currency: "RUB",
-        decline_code: "expired_card",
+        decline_code: "payment_declined",
       },
     });
     const signature = arcPayWebhookSignature(webhookBody, eventId, timestamp, webhookSecret);
@@ -721,7 +721,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     });
   });
 
-  it("moves a paid top-up to manual review on a verified Arc Pay refund without reversing wallet history", async () => {
+  it("moves a paid top-up to manual review on a verified payment provider refund without reversing wallet history", async () => {
     await app?.close();
     app = null;
     tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-real-refund-"));
@@ -869,7 +869,7 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
     });
   });
 
-  it("reconciles a missing Arc Pay webhook by polling payment status without double-crediting Coins", async () => {
+  it("reconciles a missing payment provider webhook by polling payment status without double-crediting Coins", async () => {
     await app?.close();
     app = null;
     tempDir = await mkdtemp(join(tmpdir(), "vault-arc-pay-reconcile-"));

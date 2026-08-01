@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development for parallel task execution only after the coordinator writes `.agents/coordination.md`. Use superpowers:executing-plans for inline execution. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn the imported Vault frontend into a production backend-owned storefront where users buy Coins through Arc Pay, then spend Coins on SIH-backed Steam skin purchases and SIH-backed Steam account refill, with GPT refill deferred.
+**Goal:** Turn the imported Vault frontend into a production backend-owned storefront where users buy Coins through payment provider, then spend Coins on SIH-backed Steam skin purchases and SIH-backed Steam account refill, with GPT refill deferred.
 
-**Architecture:** Build a NestJS/PostgreSQL modular-monolith backend, generate OpenAPI contracts for the existing Next.js frontend, and migrate frontend localStorage commerce flows slice by slice. Arc Pay handles Coins top-up through Hosted Checkout; SIH handles skin and Steam refill fulfillment. Provider effects use durable attempts, idempotency, inbox/outbox, workers, reconciliation, and real sandbox evidence.
+**Architecture:** Build a NestJS/PostgreSQL modular-monolith backend, generate OpenAPI contracts for the existing Next.js frontend, and migrate frontend localStorage commerce flows slice by slice. payment provider handles Coins top-up through Hosted Checkout; SIH handles skin and Steam refill fulfillment. Provider effects use durable attempts, idempotency, inbox/outbox, workers, reconciliation, and real sandbox evidence.
 
 **Tech Stack:** Next.js 16, React 19, TypeScript, CSS Modules, NestJS, PostgreSQL, Drizzle ORM, Redis, BullMQ, OpenAPI, Node test runner or Vitest as selected during backend foundation.
 
@@ -16,7 +16,7 @@
 - Customer-facing balances and product prices are denominated in Coins.
 - No customer-facing dollar symbol.
 - Use integer/scaled money and rate calculations only.
-- Arc Pay and SIH secrets are backend-only.
+- payment provider and SIH secrets are backend-only.
 - No external side effect without durable attempt, idempotency, timeout, redaction, and recovery path.
 - Real provider acceptance is separate from deterministic test evidence.
 
@@ -46,8 +46,8 @@
 
 **Decisions required before backend provider implementation:**
 - [x] Use SIH Steam Refill as the first-release Steam refill fulfillment path.
-- [x] Require Steam refill checkout to be paid from pre-funded internal Coins, not direct card/SBP payment.
-- [x] Use Arc Pay Hosted Checkout as the first-release Coins top-up/payment provider, same as Locker.
+- [x] Require Steam refill checkout to be paid from pre-funded internal Coins, not direct external payment.
+- [x] Use payment provider Hosted Checkout as the first-release Coins top-up/payment provider, same as Locker.
 - [ ] Set final fixed coin rate.
 - [ ] Provide legal entity, INN, legal address, domain, support email, and work hours.
 - [ ] Provide final languages/currencies.
@@ -151,16 +151,16 @@
 **Tasks:**
 - [x] Implement double-entry Coins wallet journal, active holds, active-hold settlement, available balance projection, and current-user posted transaction history.
 - [x] Implement wallet reconciliation. Current status: `WalletService.reconcileWallet` and `npm --prefix backend run wallet:reconcile -- --limit=100` provide a read-only invariant report for unbalanced posted transactions, missing ledger entries, orphan holds, terminal orders with active holds, and invalid wallet amounts.
-- [x] Implement top-up/payment aggregate with immutable displayed terms. Current status: `/payments/top-up/sessions` creates idempotent Arc Pay top-up intents and provider attempts; disabled mode returns `provider_configuration_required`, while deterministic fake mode returns `checkout_pending` plus a fake checkout URL.
-- [ ] Implement Arc Pay checkout-session creation, method discovery, real webhook verification, status/reconciliation, refund and chargeback adapters. Current status: real Hosted Checkout creation exists for sandbox keys and sends SBP-only `payment_methods`; real webhook signature verification exists for `Webhook-Id`, `Webhook-Timestamp`, and `Webhook-Signature`; refund/chargeback webhooks move paid top-ups to `manual_review` without automatic wallet reversal; method discovery, merchant-initiated refunds, and dispute polling remain.
-- [ ] Implement webhook inbox, status polling, idempotent posting, and reconciliation. Current status: signed webhook inbox and idempotent wallet posting exist for fake and real Arc Pay signature formats; real Hosted Checkout webhooks are correlated by signed `data.payment_id` plus `GET /payments/{id}` lookup to recover `external_id`/`metadata.vault_top_up_id`; missing-webhook polling uses `GET /payments?search=<top_up_id>` and idempotently credits or fails pending top-ups; refund/chargeback webhooks move already credited top-ups to `manual_review`; broader refund/chargeback reconciliation remains.
+- [x] Implement top-up/payment aggregate with immutable displayed terms. Current status: `/payments/top-up/sessions` creates idempotent payment provider top-up intents and provider attempts; disabled mode returns `provider_configuration_required`, while deterministic fake mode returns `checkout_pending` plus a fake checkout URL.
+- [ ] Implement payment provider checkout-session creation, method discovery, real webhook verification, status/reconciliation, refund and chargeback adapters. Current status: real Hosted Checkout creation exists for sandbox keys and sends SBP-only `payment_methods`; real webhook signature verification exists for `Webhook-Id`, `Webhook-Timestamp`, and `Webhook-Signature`; refund/chargeback webhooks move paid top-ups to `manual_review` without automatic wallet reversal; method discovery, merchant-initiated refunds, and dispute polling remain.
+- [ ] Implement webhook inbox, status polling, idempotent posting, and reconciliation. Current status: signed webhook inbox and idempotent wallet posting exist for fake and real payment provider signature formats; real Hosted Checkout webhooks are correlated by signed `data.payment_id` plus `GET /payments/{id}` lookup to recover `external_id`/`metadata.vault_top_up_id`; missing-webhook polling uses `GET /payments?search=<top_up_id>` and idempotently credits or fails pending top-ups; refund/chargeback webhooks move already credited top-ups to `manual_review`; broader refund/chargeback reconciliation remains.
 - [ ] Implement top-up UI with active rate, Coins credited, fiat amount, accepted legal checkbox, and disabled payment until consent. Current status: UI shows active rate/fiat amount, requires legal consent, creates backend top-up sessions, redirects when backend returns a checkout URL, and shows provider-configuration state when no checkout URL exists.
 - [x] Ensure browser return never credits wallet by itself.
 
 **Acceptance:**
 - [x] Wallet tests prove balanced immutable journal, idempotency for top-up credit/order hold settlement, and read-only reconciliation reporting for broken wallet invariants.
-- [ ] Arc Pay adapter contract tests cover idempotency, method discovery, checkout creation, webhook verification, status mapping, unknown events, refunds/chargebacks, and retries.
-- [ ] Real Arc Pay sandbox/test transaction evidence is recorded before enabling Coins top-up. Current status: Vault has sandbox Hookdeck endpoints for local Hosted Checkout return URLs and webhook delivery; signed Hookdeck delivery into local backend was accepted and posted Coins in test DB. A real paid Arc Pay sandbox transaction still needs provider-side payment completion evidence before release.
+- [ ] payment provider adapter contract tests cover idempotency, method discovery, checkout creation, webhook verification, status mapping, unknown events, refunds/chargebacks, and retries.
+- [ ] Real payment provider sandbox/test transaction evidence is recorded before enabling Coins top-up. Current status: Vault has sandbox Hookdeck endpoints for local Hosted Checkout return URLs and webhook delivery; signed Hookdeck delivery into local backend was accepted and posted Coins in test DB. A real paid payment provider sandbox transaction still needs provider-side payment completion evidence before release.
 
 ### Phase 6: Cart and Checkout
 
@@ -229,11 +229,11 @@
 - [ ] Replace placeholder company/INN/address/support values.
 - [ ] Ensure footer/document details match exactly.
 - [ ] Implement support ticket or mail handoff with clear operational behavior.
-- [ ] Implement minimal admin read models and reasoned recovery commands. Current status: `GET /admin/operations/overview` exposes token-gated, read-only, redacted queues for manual-review payments, problem orders, fulfillment commands, and unprocessed/rejected webhook events; `POST /admin/operations/payments/reconcile` runs Arc Pay pending top-up reconciliation as a reasoned, idempotent, audited command without direct balance/order overwrites; `POST /admin/operations/fulfillment/reconcile` runs submitted SIH skin status polling as a reasoned, idempotent, audited command without direct order/status overwrites. Other recovery commands remain unimplemented until their command/audit policies are written.
-- [ ] Add backup/restore, deployment, rollback, incident, reconciliation, and secret-rotation runbooks. Current status: deterministic commerce smoke runbook exists for Coins top-up, mixed checkout, SIH skin delivery, Steam refill delivery, and customer projections; provider acceptance runbook and executable readiness preflight exist for Steam OpenID, Arc Pay, SIH catalog, SIH skin test order, and SIH Steam refill gates; backup/restore/deployment/rollback/incident/secret-rotation runbooks remain.
+- [ ] Implement minimal admin read models and reasoned recovery commands. Current status: `GET /admin/operations/overview` exposes token-gated, read-only, redacted queues for manual-review payments, problem orders, fulfillment commands, and unprocessed/rejected webhook events; `POST /admin/operations/payments/reconcile` runs payment provider pending top-up reconciliation as a reasoned, idempotent, audited command without direct balance/order overwrites; `POST /admin/operations/fulfillment/reconcile` runs submitted SIH skin status polling as a reasoned, idempotent, audited command without direct order/status overwrites. Other recovery commands remain unimplemented until their command/audit policies are written.
+- [ ] Add backup/restore, deployment, rollback, incident, reconciliation, and secret-rotation runbooks. Current status: deterministic commerce smoke runbook exists for Coins top-up, mixed checkout, SIH skin delivery, Steam refill delivery, and customer projections; provider acceptance runbook and executable readiness preflight exist for Steam OpenID, payment provider, SIH catalog, SIH skin test order, and SIH Steam refill gates; backup/restore/deployment/rollback/incident/secret-rotation runbooks remain.
 
 **Acceptance:**
-- [ ] Footer contains payment logos, legal identity, support email, work hours, Valve disclaimer, and legal links.
+- [ ] Footer contains the SBP payment logo, legal identity, support email, work hours, Valve disclaimer, and legal links.
 - [ ] Legal tests verify no inconsistent company/support details.
 - [ ] Admin commands cannot directly overwrite money/order state.
 
@@ -261,7 +261,7 @@
 ## Self-review
 
 - First-release scope is skins plus SIH-backed Steam refill; GPT is deferred.
-- Arc Pay is selected for Coins top-up; SIH is selected for skin and Steam refill fulfillment.
+- payment provider is selected for Coins top-up; SIH is selected for skin and Steam refill fulfillment.
 - Current frontend visual value is preserved while replacing localStorage authority.
 - Money, provider, and fulfillment invariants are copied into tasks rather than left as vague guidance.
 - Agent autonomy is supported through docs, ownership rules, and acceptance gates without overloading root `AGENTS.md`.

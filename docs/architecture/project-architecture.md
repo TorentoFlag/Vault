@@ -17,7 +17,7 @@ Recommended foundation:
 - one backend image with API, critical worker, and background worker entrypoints;
 - backend-generated OpenAPI as the frontend contract;
 - SIH for Steam-traded skin catalog/purchase/fulfillment and Steam account refill fulfillment;
-- Arc Pay Hosted Checkout for customer Coins top-up, matching the Locker payment approach;
+- payment provider Hosted Checkout for customer Coins top-up, matching the Locker payment approach;
 - Steam OpenID for skin-purchase identity;
 - internal wallet in Coins with append-only financial history.
 
@@ -35,7 +35,7 @@ Included:
 - Steam Trade URL collection and immutable snapshot at checkout;
 - cart, checkout, order history, payment history, trade/fulfillment history;
 - inventory page for purchased/won items with actions only when backed by real state transitions;
-- legal pages, footer, 18+ warning, Valve disclaimer, support contact, payment logos.
+- legal pages, footer, 18+ warning, Valve disclaimer, support contact, and the SBP payment logo.
 
 Excluded from first release:
 
@@ -55,7 +55,7 @@ Excluded from first release:
 - Catalog prices and wallet balances are always in Coins.
 - Fixed coin rate must not be 1:1 to fiat. Current concept uses `1 RUB = 1.5 Coins`; Locker used `1 RUB = 1.7` internal units. Pick one before backend Task 2 and keep it central.
 - Place 18+ warning in a persistent header/footer/banner surface.
-- Footer must include payment logos, legal identity, support email on the site domain, work hours, Valve disclaimer, and links to privacy, offer/user agreement, refund terms, and Provably Fair.
+- Footer must include the SBP payment logo, legal identity, support email on the site domain, work hours, Valve disclaimer, and links to privacy, offer/user agreement, refund terms, and Provably Fair.
 - Do not show product count badges for small categories.
 - If sell-to-site is not working, remove "и продавайте" from all public copy and disable/hide sale actions with honest state-specific copy.
 
@@ -66,7 +66,7 @@ Excluded from first release:
 - `catalog`: normalized products, categories, supplier listings, availability, search facets.
 - `pricing`: provider prices, markup, coin conversion, quote snapshots.
 - `wallet`: immutable Coins ledger, holds, available balance projection, reconciliation.
-- `payments`: Arc Pay Hosted Checkout sessions for Coins top-up, webhook inbox, payment status reconciliation, refund/chargeback handling.
+- `payments`: payment provider Hosted Checkout sessions for Coins top-up, webhook inbox, payment status reconciliation, refund/chargeback handling.
 - `cart`: authenticated server-side cart and quote refresh.
 - `checkout`: orchestration of quote validation, wallet holds, orders, and provider outbox.
 - `orders`: order aggregate and per-line state.

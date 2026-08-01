@@ -171,7 +171,7 @@ function toDto(row: TopUpPaymentRow): TopUpSessionDto {
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (value !== null && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
-  throw new BadRequestException("Arc Pay webhook payload must be an object");
+  throw new BadRequestException("payment provider webhook payload must be an object");
 }
 
 function optionalStringField(record: Record<string, unknown>, ...keys: string[]): string | undefined {
@@ -234,7 +234,7 @@ function normalizeArcPayWebhook(providerEventIdHeader: string | undefined, paylo
 
   const normalizedProviderSessionId = providerSessionId ?? providerPaymentId;
   if (!providerEventId || !eventType || !normalizedProviderSessionId || !providerStatus || amountMinor === undefined || !currency) {
-    throw new BadRequestException("Arc Pay webhook payload is missing required payment fields");
+    throw new BadRequestException("payment provider webhook payload is missing required payment fields");
   }
 
   return {
@@ -346,7 +346,7 @@ export class PaymentsService {
       if (this.config.arcPay.providerMode === "fake") {
         const providerSessionId = `fake_arc_pay_${id}`;
         const checkoutBaseUrl = this.config.arcPay.fakeCheckoutBaseUrl;
-        if (checkoutBaseUrl === undefined) throw new ServiceUnavailableException("Arc Pay fake checkout URL is not configured");
+        if (checkoutBaseUrl === undefined) throw new ServiceUnavailableException("payment provider fake checkout URL is not configured");
         const checkoutUrl = `${checkoutBaseUrl}/checkout/${providerSessionId}`;
         await client.query(
           `
@@ -450,8 +450,8 @@ export class PaymentsService {
 
   private async createRealTopUpSession(command: CreateTopUpSessionCommand): Promise<TopUpSessionDto> {
     const publicOrigin = this.config.arcPay.publicOrigin;
-    if (publicOrigin === undefined) throw new ServiceUnavailableException("Arc Pay public origin is not configured");
-    if (this.config.arcPay.secretKeyFile === undefined) throw new ServiceUnavailableException("Arc Pay secret key is not configured");
+    if (publicOrigin === undefined) throw new ServiceUnavailableException("payment provider public origin is not configured");
+    if (this.config.arcPay.secretKeyFile === undefined) throw new ServiceUnavailableException("payment provider secret key is not configured");
     const hash = requestHash(command);
     const initial = await this.database.transaction(async (client) => {
       const existing = await this.findTopUpPayment(client, command.userId, command.idempotencyKey);
@@ -590,7 +590,7 @@ export class PaymentsService {
           ],
         );
       });
-      throw new ServiceUnavailableException("Arc Pay checkout creation failed");
+      throw new ServiceUnavailableException("payment provider checkout creation failed");
     }
 
     return this.database.transaction(async (client) => {
@@ -637,16 +637,16 @@ export class PaymentsService {
 
   async handleArcPayWebhook(command: HandleArcPayWebhookCommand): Promise<PaymentWebhookResultDto> {
     if (this.config.arcPay.providerMode === "disabled") {
-      throw new ServiceUnavailableException("Arc Pay webhook verification is not configured");
+      throw new ServiceUnavailableException("payment provider webhook verification is not configured");
     }
     const signingSecretFile = this.config.arcPay.webhookSigningSecretFile;
     if (signingSecretFile === undefined) {
-      throw new ServiceUnavailableException("Arc Pay webhook signing secret is not configured");
+      throw new ServiceUnavailableException("payment provider webhook signing secret is not configured");
     }
     const signingSecret = (await readFile(signingSecretFile, "utf8")).trim();
     if (this.config.arcPay.providerMode === "fake") {
       if (!verifyFakeArcPayWebhookSignature(command.payload, command.signature, signingSecret)) {
-        throw new UnauthorizedException("Arc Pay webhook signature is invalid");
+        throw new UnauthorizedException("payment provider webhook signature is invalid");
       }
     } else {
       if (!verifyArcPayWebhookSignature({
@@ -656,7 +656,7 @@ export class PaymentsService {
         ...(command.signature === undefined ? {} : { signature: command.signature }),
         ...(command.timestamp === undefined ? {} : { timestamp: command.timestamp }),
       })) {
-        throw new UnauthorizedException("Arc Pay webhook signature is invalid");
+        throw new UnauthorizedException("payment provider webhook signature is invalid");
       }
     }
 
@@ -666,7 +666,7 @@ export class PaymentsService {
 
   async reconcilePendingTopUps(command: { limit?: number } = {}): Promise<PaymentReconciliationResultDto> {
     if (this.config.arcPay.providerMode !== "real") {
-      throw new ServiceUnavailableException("Arc Pay reconciliation requires real provider mode");
+      throw new ServiceUnavailableException("payment provider reconciliation requires real provider mode");
     }
     const limit = command.limit ?? 20;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new BadRequestException("Reconciliation limit must be between 1 and 100");

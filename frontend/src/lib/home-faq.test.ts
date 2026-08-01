@@ -6,7 +6,7 @@ import { categories, faqItems } from "../data/home.ts";
 test("FAQ покрывает оплату, курс Coins, Steam Trade, доставку и возвраты", () => {
   const questions = faqItems.map((item) => item.question.toLocaleLowerCase("ru-RU"));
   for (const phrase of [
-    "картой",
+    "оплачивать",
     "сбп",
     "чек",
     "списались",
@@ -17,7 +17,7 @@ test("FAQ покрывает оплату, курс Coins, Steam Trade, дост
     "trade url",
     "не подошёл",
     "срока",
-    "вернутся",
+    "возвращается",
     "повреждённый",
   ]) {
     assert.ok(questions.some((question) => question.includes(phrase)), phrase);

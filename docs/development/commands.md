@@ -41,7 +41,7 @@ Run from `/Users/anton/Finext/Vault`.
 | Sync catalog metadata | `npm --prefix backend run catalog:sync-metadata -- --game=cs2` |
 | Sync all public catalog games | `SIH_API_KEY_FILE=/absolute/restricted/sih-key CATALOG_PUBLIC_GAMES=cs2,rust,tf2 npm --prefix backend run catalog:sync-all-games` |
 | Promote covered SIH listings | `npm --prefix backend run catalog:promote-sih -- --game=cs2` |
-| Reconcile pending Arc Pay top-ups | `npm --prefix backend run payments:reconcile -- --limit=20` |
+| Reconcile pending payment provider top-ups | `npm --prefix backend run payments:reconcile -- --limit=20` |
 | Check wallet invariants | `npm --prefix backend run wallet:reconcile -- --limit=100` |
 | SIH sandbox catalog acceptance | `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run acceptance:sih-catalog` |
 | Full backend gate | `npm --prefix backend run verify` |
@@ -57,11 +57,11 @@ Vault maps PostgreSQL to host port `55432` and Redis to host port `56379` so it 
 
 Run `DATABASE_URL=postgres://vault_test:vault_test_password@localhost:55433/vault_test npm --prefix backend run db:migrate` before integration tests when migrations changed or the test database is fresh.
 
-Keep `STEAM_WEB_API_KEY_FILE`, `SIH_API_KEY_FILE`, `SIH_STEAM_REFILL_API_KEY_FILE`, `ADMIN_API_TOKEN_FILE`, Arc Pay API keys, webhook secrets, and SIH acceptance trade-token files outside the repository and do not print their contents. Steam OpenID challenge verification does not require the Steam Web API key; use the key only for backend-side Steam Web API/profile/provider calls when that adapter needs it. The SIH sandbox acceptance test is skipped unless the file path is explicitly provided. `acceptance:readiness` prints only variable/gate names and exits nonzero until every real provider gate has its required public origins and secret files.
+Keep `STEAM_WEB_API_KEY_FILE`, `SIH_API_KEY_FILE`, `SIH_STEAM_REFILL_API_KEY_FILE`, `ADMIN_API_TOKEN_FILE`, payment provider API keys, webhook secrets, and SIH acceptance trade-token files outside the repository and do not print their contents. Steam OpenID challenge verification does not require the Steam Web API key; use the key only for backend-side Steam Web API/profile/provider calls when that adapter needs it. The SIH sandbox acceptance test is skipped unless the file path is explicitly provided. `acceptance:readiness` prints only variable/gate names and exits nonzero until every real provider gate has its required public origins and secret files.
 
 ## HTTPS browser/provider acceptance
 
-Steam OpenID and Arc Pay Hosted Checkout need public HTTPS origins. For local browser acceptance, use Cloudflare quick tunnels for the browser-facing frontend and backend:
+Steam OpenID and payment provider Hosted Checkout need public HTTPS origins. For local browser acceptance, use Cloudflare quick tunnels for the browser-facing frontend and backend:
 
 | Purpose | Command |
 | --- | --- |

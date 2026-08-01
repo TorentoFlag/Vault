@@ -66,7 +66,7 @@ function GuardState({ gate, shortfall, requiresSteam }: { gate: Exclude<Checkout
     insufficient: {
       eyebrow: "Баланс Coins",
       title: `Не хватает ${formatCoins(shortfall)} Coins`,
-      description: "Корзина сохранена. Пополните недостающую сумму через Arc Pay и вернитесь к оформлению.",
+      description: "Корзина сохранена. Пополните недостающую сумму и вернитесь к оформлению.",
       action: <Link className={styles.primaryLink} href={`/balance/top-up?returnTo=%2Fcart&requiredCoins=${shortfall}`}>Рассчитать пополнение</Link>,
     },
     "auth-required": {

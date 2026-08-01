@@ -226,7 +226,7 @@ describe.skipIf(!databaseUrl)("commerce smoke", () => {
         : new URL(typeof input === "string" ? input : input.url);
 
       if (url.href === "https://api.arcpay.space/v1/checkout/sessions") {
-        if (typeof init?.body !== "string") throw new Error("Expected Arc Pay JSON body");
+        if (typeof init?.body !== "string") throw new Error("Expected payment provider JSON body");
         const body = JSON.parse(init.body) as Record<string, unknown>;
         providerRequests.push({ body, path: url.pathname });
         createdTopUpId = typeof body.external_id === "string" ? body.external_id : null;

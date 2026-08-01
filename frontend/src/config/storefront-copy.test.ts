@@ -3,6 +3,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { siteConfig } from "./site.ts";
+
 const sourceRoot = join(process.cwd(), "src");
 
 function sourceFiles(directory: string): string[] {
@@ -21,6 +23,12 @@ const forbiddenStorefrontPatterns = [
   /тестов/giu,
   /имитир/giu,
   /backend/giu,
+  new RegExp(`${"Arc"}\\s+${"Pay"}`, "giu"),
+  /банковская карта/giu,
+  /карта или\s+сбп/giu,
+  /оплачивать[^.?!]*картой/giu,
+  /деньги[^.?!]*карту/giu,
+  /банковские данные/giu,
   /временно/giu,
   /ожида(?:ет|ют) юридического согласования/giu,
   /реальн(?:ый|ые|ая|ое) (?:платёж|платежи|списание|списания|покупка|покупки)[^.]*не/giu,
@@ -39,4 +47,8 @@ test("storefront copy avoids demo labels and technical placeholders", () => {
   });
 
   assert.deepEqual(violations, []);
+});
+
+test("storefront exposes SBP as the only payment method", () => {
+  assert.deepEqual(siteConfig.paymentMethods.map((method) => method.name), ["СБП"]);
 });

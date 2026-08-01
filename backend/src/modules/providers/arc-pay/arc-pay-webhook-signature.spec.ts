@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { verifyArcPayWebhookSignature } from "./arc-pay-webhook-signature";
 
 describe("verifyArcPayWebhookSignature", () => {
-  it("verifies Arc Pay HMAC over event id, timestamp and raw body", () => {
+  it("verifies payment provider HMAC over event id, timestamp and raw body", () => {
     const rawBody = Buffer.from("{\"event_id\":\"evt_1\"}", "utf8");
     const timestamp = "1785237600";
     const eventId = "019f7841-4b12-7a2f-a42b-5c3a72e3b277";

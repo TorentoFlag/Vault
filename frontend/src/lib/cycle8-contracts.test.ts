@@ -33,7 +33,7 @@ test("skin cart gates Steam and Trade URL before balance top-up", () => {
 test("cart shortfall notice does not name the payment provider", () => {
   const cart = source("src/features/cart/CartScreen.tsx");
   assert.match(cart, /<span>Пополните недостающую сумму\.<\/span>/);
-  assert.doesNotMatch(cart, /Пополните недостающую сумму через Arc Pay/);
+  assert.doesNotMatch(cart, /Пополните недостающую сумму через/);
 });
 
 test("cart summary does not show the extra server order footnote", () => {

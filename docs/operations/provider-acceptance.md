@@ -23,7 +23,7 @@ The readiness command checks these gates:
 | Gate | Purpose |
 | --- | --- |
 | `steam-openid-browser` | Browser can start and finish Steam OpenID through public HTTPS backend and frontend origins. |
-| `arc-pay-hosted-checkout` | Backend can create a real Arc Pay sandbox Hosted Checkout session using SBP-only configuration. |
+| `arc-pay-hosted-checkout` | Backend can create a real payment provider sandbox Hosted Checkout session using SBP-only configuration. |
 | `arc-pay-webhook` | Provider webhook can be delivered to the backend public HTTPS origin and verified with the webhook signing secret. |
 | `sih-catalog` | Backend can call SIH catalog/minimum item endpoints with the sandbox key. |
 | `sih-skin-test-order` | Operator has supplied a test Steam identity and trade token file for a SIH skin test order. |
@@ -37,12 +37,12 @@ Keep all files outside the repository. Never echo their contents.
 
 | Variable | Required for |
 | --- | --- |
-| `PUBLIC_BASE_URL` | Steam OpenID callback and Arc Pay webhook delivery; must be HTTPS. |
+| `PUBLIC_BASE_URL` | Steam OpenID callback and payment provider webhook delivery; must be HTTPS. |
 | `PUBLIC_FRONTEND_ORIGIN` | Steam OpenID browser return; must be HTTPS. |
-| `ARC_PAY_PROVIDER_MODE=real` | Arc Pay Hosted Checkout acceptance. |
-| `ARC_PAY_SECRET_KEY_FILE` | Arc Pay Hosted Checkout and status polling. |
-| `ARC_PAY_PUBLIC_ORIGIN` | Arc Pay success/fail/cancel URLs; must be HTTPS. |
-| `ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE` | Arc Pay webhook signature verification. |
+| `ARC_PAY_PROVIDER_MODE=real` | payment provider Hosted Checkout acceptance. |
+| `ARC_PAY_SECRET_KEY_FILE` | payment provider Hosted Checkout and status polling. |
+| `ARC_PAY_PUBLIC_ORIGIN` | payment provider success/fail/cancel URLs; must be HTTPS. |
+| `ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE` | payment provider webhook signature verification. |
 | `SIH_API_KEY_FILE` | SIH catalog and skin purchase acceptance. |
 | `SIH_STEAM_REFILL_API_KEY_FILE` | SIH Steam refill acceptance and fulfillment. |
 | `SIH_ACCEPTANCE_STEAM_ID64` | SIH skin test-order recipient Steam identity. |
@@ -76,9 +76,9 @@ Accepted evidence may include:
 
 Do not paste SIH API keys, raw item payloads with sensitive fields, or test-user trade tokens into docs, commits, screenshots, or chat.
 
-## Arc Pay Acceptance
+## payment provider Acceptance
 
-Arc Pay release evidence needs both provider/browser evidence and database proof.
+payment provider release evidence needs both provider/browser evidence and database proof.
 
 Minimum sequence:
 
@@ -86,13 +86,13 @@ Minimum sequence:
 2. Expose backend and frontend through public HTTPS origins.
 3. Run `acceptance:readiness` and confirm `READY arc-pay-hosted-checkout` plus `READY arc-pay-webhook`.
 4. Log in through the real browser session.
-5. Create a Coins top-up from the UI; the request must create a durable top-up intent and Arc Pay provider attempt.
-6. Complete the sandbox SBP Hosted Checkout flow through Arc Pay.
+5. Create a Coins top-up from the UI; the request must create a durable top-up intent and payment provider provider attempt.
+6. Complete the sandbox SBP Hosted Checkout flow through payment provider.
 7. Deliver the signed webhook to the backend public HTTPS origin.
 8. Confirm Coins are credited only from webhook/status reconciliation, not from browser return.
 9. Record database evidence: top-up id, payment id, attempt status, webhook inbox state, wallet transaction id, and resulting Coins balance.
 
-Evidence must be redacted. Never include Arc Pay secret keys, webhook signing secret, raw authorization headers, cookies, or full PII.
+Evidence must be redacted. Never include payment provider secret keys, webhook signing secret, raw authorization headers, cookies, or full PII.
 
 ## Steam OpenID Acceptance
 

@@ -69,7 +69,7 @@ export function TopUpScreen({
         return;
       }
       if (session.status === "provider_configuration_required") {
-        setSubmitError("Платёжная страница Arc Pay ещё не настроена. Расчёт сохранён на сервере, Coins не зачислены.");
+        setSubmitError("Платёжная страница ещё не настроена. Расчёт сохранён на сервере, Coins не зачислены.");
         return;
       }
       if (session.status === "manual_review") {
@@ -172,10 +172,10 @@ export function TopUpScreen({
                   <div className={styles.mockMethod}>
                     <span className={styles.methodMark}>V</span>
                     <div>
-                      <strong>Банковская карта или СБП</strong>
+                      <strong>СБП</strong>
                       <p>Vault создаёт платёжную сессию и ждёт подтверждение провайдера.</p>
                     </div>
-                    <span>Arc Pay</span>
+                    <span>Только СБП</span>
                   </div>
 
                   <div className={styles.consentBox}>
@@ -195,7 +195,7 @@ export function TopUpScreen({
                   <Button className={styles.submitButton} type="submit" disabled={!!amountError || !acceptedTerms || submitStatus === "submitting"}>
                     {submitStatus === "submitting" ? "Создаём сессию" : "Перейти к оплате"}
                   </Button>
-                  <p className={styles.formFootnote}>Банковские данные вводятся только на стороне платёжного провайдера. Возврат в браузер не зачисляет Coins сам по себе.</p>
+                  <p className={styles.formFootnote}>Подтверждение СБП проходит на стороне платёжного провайдера. Возврат в браузер не зачисляет Coins сам по себе.</p>
             </form>
 
             <aside className={styles.summaryCard} aria-labelledby="top-up-summary-title">

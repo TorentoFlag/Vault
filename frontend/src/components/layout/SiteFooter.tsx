@@ -34,14 +34,14 @@ export function SiteFooter() {
         </div>
         <div className={styles.footerColumn}>
           <h2>Оплата и получение</h2>
-          <div className={styles.paymentMethods} aria-label="Платёжные системы">
+          <div className={styles.paymentMethods} aria-label="Способ оплаты">
             {siteConfig.paymentMethods.map((method) => (
               <span className={styles.paymentLogo} key={method.name} title={method.name}>
                 <Image src={publicAssetPath(method.src)} alt={method.name} width={38} height={22} />
               </span>
             ))}
           </div>
-          <p>Пополнение Coins проходит через Arc Pay. Цены каталога указаны в Coins.</p>
+          <p>Пополнение Coins проходит через СБП. Цены каталога указаны в Coins.</p>
         </div>
         <div className={styles.footerColumn}>
           <h2>Реквизиты</h2>

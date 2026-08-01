@@ -6,23 +6,23 @@ Date: 2026-07-27
 
 ## Sources
 
-- Arc Pay docs: `https://finext.gitbook.io/arc-pay/ru`, `https://finext.gitbook.io/arc-pay/ru/integracionnye-gaidy/hpp.md`, `https://finext.gitbook.io/arc-pay/ru/api-reference/overview.md`, `https://finext.gitbook.io/arc-pay/ru/vebkhuki/overview.md`
+- payment provider docs: `https://finext.gitbook.io/arc-pay/ru`, `https://finext.gitbook.io/arc-pay/ru/integracionnye-gaidy/hpp.md`, `https://finext.gitbook.io/arc-pay/ru/api-reference/overview.md`, `https://finext.gitbook.io/arc-pay/ru/vebkhuki/overview.md`
 - BreenX quick information and LLM docs index, researched but not selected for first-release payment/refill: `https://breenx.readme.io/reference/краткая-информация-1`, `https://breenx.readme.io/llms.txt`
 - BreenX transaction docs, researched only: `/transaction/start`, `/transaction/status`, callbacks, statuses, request signature, response signature, STEAM, STEAM_SBP, STEAM_DIRECT.
 - SIH docs: `https://docs.sih.app/guide/`, `https://docs.sih.app/guide/purchases`, `https://docs.sih.app/steam-refill-api/`
 - Locker local docs under `../Locker/docs/architecture/` and `../Locker/docs/development/`.
 - Agent guidance sources: OpenAI AGENTS.md docs, agents.md, and arXiv papers on AGENTS.md efficiency/smells.
 
-## Arc Pay findings
+## payment provider findings
 
-Arc Pay is the selected first-release provider for customer Coins top-up, following the existing Locker payment approach.
+payment provider is the selected first-release provider for customer Coins top-up, following the existing Locker payment approach.
 
 Integration shape:
 
 - Use Hosted checkout sessions for redirect integration.
-- Vault backend creates a checkout session; Arc Pay hosts the buyer-facing checkout page.
+- Vault backend creates a checkout session; payment provider hosts the buyer-facing checkout page.
 - Browser return to success/fail/cancel URL is not authoritative.
-- Vault credits Coins only after a signed Arc Pay webhook or equivalent confirmed status/reconciliation read.
+- Vault credits Coins only after a signed payment provider webhook or equivalent confirmed status/reconciliation read.
 - Secret API keys are backend-only. Publishable/browser-safe keys are not needed for the first Hosted Checkout path.
 
 Relevant API facts:
@@ -37,12 +37,12 @@ Relevant API facts:
 - `success_url`, `fail_url`, and `cancel_url` must be HTTPS URLs; temporary Hookdeck acceptance URLs include the Hookdeck source id as a path prefix.
 - `payment_methods` must use method/mode pairs returned by `GET /payment-methods/available` for the same API key environment and shop configuration.
 - Environment is selected by API key prefix; do not send a separate environment field to create checkout.
-- Standard methods include `bank_card` and `sbp`, but actual availability must come from discovery for the active merchant/shop/environment.
-- Checkout sessions do not have a per-request `callback_url`; payment webhooks for checkout sessions use the merchant-level webhook endpoint configured in the Arc Pay portal.
+- The active Vault checkout contract allows only `sbp/h2h`; any other method exposed by the provider account is out of scope until the owner explicitly changes the payment policy.
+- Checkout sessions do not have a per-request `callback_url`; payment webhooks for checkout sessions use the merchant-level webhook endpoint configured in the payment provider portal.
 
 Webhook facts:
 
-- Arc Pay sends signed POST webhooks for payment outcomes.
+- payment provider sends signed POST webhooks for payment outcomes.
 - Do not rely on synchronous API response or browser redirect for terminal payment state.
 - A 2xx response within 10 seconds confirms delivery; other responses trigger retries.
 - Retries use exponential backoff up to 72 hours.
@@ -53,16 +53,16 @@ Webhook facts:
 
 Architecture implication:
 
-- `payments` owns Arc Pay checkout creation, callback inbox, reconciliation, refunds/chargebacks, and wallet top-up posting.
-- Top-up amount is RUB kopecks at Arc Pay and Coins minor units in Vault's wallet journal.
-- The frontend shows active rate, Coins credited, and final RUB amount before redirecting to Arc Pay.
+- `payments` owns payment provider checkout creation, callback inbox, reconciliation, refunds/chargebacks, and wallet top-up posting.
+- Top-up amount is RUB kopecks at payment provider and Coins minor units in Vault's wallet journal.
+- The frontend shows active rate, Coins credited, and final RUB amount before redirecting to payment provider.
 - Browser return may show pending/success UI copy, but must not post Coins by itself.
-- Current real checkout implementation uses only `sbp/h2h` in the Arc Pay Hosted Checkout request, even if the Arc Pay shop also has card methods available. Card test credentials are not valid acceptance evidence for this SBP-only checkout path.
-- Current deterministic implementation includes `ARC_PAY_PROVIDER_MODE=fake` for local tests: it creates a fake checkout URL, accepts only a local HMAC-signed fake webhook, deduplicates by webhook id, validates amount/currency, and posts Coins through the wallet journal in the same database transaction as webhook processing. This is not real Arc Pay signature verification or acceptance evidence.
+- Current real checkout implementation uses only `sbp/h2h` in the payment provider Hosted Checkout request. Non-SBP provider test credentials are not valid acceptance evidence for this SBP-only checkout path.
+- Current deterministic implementation includes `ARC_PAY_PROVIDER_MODE=fake` for local tests: it creates a fake checkout URL, accepts only a local HMAC-signed fake webhook, deduplicates by webhook id, validates amount/currency, and posts Coins through the wallet journal in the same database transaction as webhook processing. This is not real payment provider signature verification or acceptance evidence.
 
 ## BreenX findings, not selected
 
-BreenX exposes API v1 at `https://app.breenx.net/gate/api/v1`. It was researched because it was initially supplied as a possible service, but it is not the selected first-release provider after the Arc Pay decision.
+BreenX exposes API v1 at `https://app.breenx.net/gate/api/v1`. It was researched because it was initially supplied as a possible service, but it is not the selected first-release provider after the payment provider decision.
 
 Authentication/signing:
 
@@ -103,7 +103,7 @@ Callbacks:
 
 Steam methods:
 
-- `steam`: card payment for Steam account refill; provider returns a hosted card form URL.
+- `steam`: non-SBP customer payment for Steam account refill; this method is out of scope for Vault's current payment policy.
 - `steam_sbp`: SBP payment for Steam account refill; docs recommend `check` first with Steam account and USD amount, then `start`; form displays RUB.
 - `steam_direct`: refill funded from project balance; `start` reserves project funds and reports status through callback/status.
 
@@ -112,7 +112,7 @@ Architecture implication:
 - If Vault uses BreenX for customer-paid Steam refill, the backend creates a BreenX transaction and browser navigates to `pay_form_url`.
 - If Vault uses BreenX only as a Steam refill provider after internal wallet debit, use `steam_direct` and treat BreenX result as fulfillment, not as customer payment.
 - Do not mix these flows without a product decision. Customer-paid refill and wallet-paid refill have different ledger effects.
-- Current Vault decision: do not use BreenX for first-release Steam refill fulfillment or Coins top-up. Use SIH for Steam refill fulfillment and Arc Pay for Coins top-up.
+- Current Vault decision: do not use BreenX for first-release Steam refill fulfillment or Coins top-up. Use SIH for Steam refill fulfillment and payment provider for Coins top-up.
 
 ## SIH findings
 
@@ -182,14 +182,14 @@ Architecture implication:
 - Steam refill in the first release is paid from the internal Coins wallet.
 - SIH Steam Refill API is the preferred fulfillment provider for Steam refill.
 - BreenX Steam methods are not part of the first-release refill path unless SIH acceptance fails or the owner explicitly changes the decision.
-- Coins top-up in the first release uses Arc Pay Hosted Checkout, same as Locker.
+- Coins top-up in the first release uses payment provider Hosted Checkout, same as Locker.
 
 ## Open product/architecture questions
 
 These require product/owner decision before provider implementation:
 
 1. What is the final fixed coin rate?
-2. What are final languages, currencies, company legal details, domain, support email, and public Arc Pay return/webhook origins?
+2. What are final languages, currencies, company legal details, domain, support email, and public payment provider return/webhook origins?
 3. Is "sell inventory to site" required in first release? If yes, what provider-backed valuation and settlement path authorizes it?
 
 ## Agent-workflow research takeaways

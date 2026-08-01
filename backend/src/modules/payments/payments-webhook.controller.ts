@@ -32,12 +32,12 @@ export class PaymentsWebhookController {
   @ApiHeader({
     name: "Webhook-Signature",
     required: true,
-    description: "Arc Pay HMAC signature in `t=<unix>,v1=<hex>` format. Fake mode also accepts X-Arc-Pay-Signature.",
+    description: "payment provider HMAC signature in `t=<unix>,v1=<hex>` format. Fake mode also accepts X-Arc-Pay-Signature.",
   })
   @ApiHeader({
     name: "Webhook-Timestamp",
     required: false,
-    description: "Unix timestamp included in the Arc Pay signed payload.",
+    description: "Unix timestamp included in the payment provider signed payload.",
   })
   @HttpCode(200)
   @Post("arc-pay")

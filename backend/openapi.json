@@ -1064,7 +1064,7 @@
           {
             "name": "Webhook-Timestamp",
             "in": "header",
-            "description": "Unix timestamp included in the Arc Pay signed payload.",
+            "description": "Unix timestamp included in the payment provider signed payload.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1073,7 +1073,7 @@
           {
             "name": "Webhook-Signature",
             "in": "header",
-            "description": "Arc Pay HMAC signature in `t=<unix>,v1=<hex>` format. Fake mode also accepts X-Arc-Pay-Signature.",
+            "description": "payment provider HMAC signature in `t=<unix>,v1=<hex>` format. Fake mode also accepts X-Arc-Pay-Signature.",
             "required": true,
             "schema": {
               "type": "string"

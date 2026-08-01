@@ -154,7 +154,7 @@ describe("OpenAPI contract", () => {
     expect(status?.enum).toEqual(["held", "fulfilled", "partially_fulfilled", "failed", "manual_review"]);
   });
 
-  it("documents manual-review top-up sessions for refunded or disputed Arc Pay payments", async () => {
+  it("documents manual-review top-up sessions for refunded or disputed payment provider payments", async () => {
     const document = JSON.parse(await createOpenApiJson()) as {
       paths: {
         "/payments/top-up/sessions"?: {

@@ -19,11 +19,7 @@ export const siteConfig = {
     hours: "Ежедневно, 10:00–22:00 (МСК)",
   },
   paymentMethods: [
-    { name: "Visa", src: "/payments/visa.svg" },
-    { name: "Mastercard", src: "/payments/mastercard.svg" },
-    { name: "МИР", src: "/payments/mir.svg" },
     { name: "СБП", src: "/payments/sbp.svg" },
-    { name: "Steam", src: "/payments/steam.svg" },
   ] as const,
   valveDisclaimer:
     "Наш сайт не связан, не аффилирован и не одобрен Valve Corporation или Steam.",

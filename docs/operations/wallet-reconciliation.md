@@ -23,7 +23,7 @@ The command is read-only. It exits `0` when no wallet invariant issues are found
 
 - It does not credit, debit, release, capture, or overwrite wallet state.
 - It does not decide refunds, chargebacks, or provider disputes.
-- It does not replace Arc Pay or SIH reconciliation.
+- It does not replace payment provider or SIH reconciliation.
 - It does not make manual-review orders safe to close automatically.
 
 ## Operator Handling

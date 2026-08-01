@@ -505,7 +505,7 @@ Add:
 
 Do not print:
 - SIH API key
-- Arc Pay keys
+- payment provider keys
 - webhook secrets
 - Steam session cookies
 
@@ -555,7 +555,7 @@ Browser QA:
 - Search works inside each game.
 - Sort by price ascending/descending works.
 - Cart/checkout blocks game-item purchase without Steam login and Trade URL.
-- Test-mode checkout for a low-cost item completes through Arc Pay and creates database proof.
+- Test-mode checkout for a low-cost item completes through payment provider and creates database proof.
 
 **Full Verification Gate:**
 
@@ -584,7 +584,7 @@ npm --prefix frontend run build
 - Dota 2.
 - Sell-to-site.
 - Automatic machine translation for Rust/TF2 metadata.
-- Replacing Arc Pay.
+- Replacing payment provider.
 - Changing internal Coin economics.
 - Changing SIH provider for item fulfillment.
 

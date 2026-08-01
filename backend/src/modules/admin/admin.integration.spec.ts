@@ -324,7 +324,7 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
     expect(serialized).not.toContain("responseSnapshot");
   });
 
-  it("runs Arc Pay top-up reconciliation once behind admin auth, idempotency, reason, and durable audit", async () => {
+  it("runs payment provider top-up reconciliation once behind admin auth, idempotency, reason, and durable audit", async () => {
     await app?.close();
     const arcPaySecretKeyFile = join(tempDir ?? tmpdir(), "arc-pay-secret");
     await writeFile(arcPaySecretKeyFile, "sk_test_admin_reconcile\n", "utf8");
@@ -402,14 +402,14 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
     await request(app.getHttpServer() as Parameters<typeof request>[0])
       .post("/admin/operations/payments/reconcile")
       .set("x-admin-token", adminToken)
-      .send({ reason: "recover missing Arc Pay webhook", limit: 10 })
+      .send({ reason: "recover missing payment provider webhook", limit: 10 })
       .expect(400);
 
     const first = await request(app.getHttpServer() as Parameters<typeof request>[0])
       .post("/admin/operations/payments/reconcile")
       .set("x-admin-token", adminToken)
       .set("idempotency-key", "admin-reconcile-arc-pay-1")
-      .send({ reason: "recover missing Arc Pay webhook", limit: 10 })
+      .send({ reason: "recover missing payment provider webhook", limit: 10 })
       .expect(200);
 
     expect(first.body).toEqual({
@@ -430,7 +430,7 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
       .post("/admin/operations/payments/reconcile")
       .set("x-admin-token", adminToken)
       .set("idempotency-key", "admin-reconcile-arc-pay-1")
-      .send({ reason: "recover missing Arc Pay webhook", limit: 10 })
+      .send({ reason: "recover missing payment provider webhook", limit: 10 })
       .expect(200);
 
     expect(second.body).toEqual({
@@ -469,7 +469,7 @@ describe.skipIf(!databaseUrl)("admin operations read models", () => {
     expect(persisted.rows[0]?.audit_metadata).toEqual({
       idempotencyKey: "admin-reconcile-arc-pay-1",
       limit: 10,
-      reason: "recover missing Arc Pay webhook",
+      reason: "recover missing payment provider webhook",
       result: {
         checked: 1,
         credited: 1,

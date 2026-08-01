@@ -40,7 +40,7 @@ When docs and code drift, establish intended behavior from tests/specs, fix the 
 - External effects require durable attempts, idempotency, inbox/outbox, reconciliation, and redacted evidence.
 - No network call inside an open database transaction.
 - Steam skin checkout requires Steam identity plus valid Steam Trade URL.
-- Arc Pay and SIH secrets stay backend-only and must never enter client code, logs, screenshots, or docs.
+- payment provider and SIH secrets stay backend-only and must never enter client code, logs, screenshots, or docs.
 - Do not claim real payment, Steam refill, SIH purchase, or trade delivery without provider evidence plus database proof.
 
 ## Working method
@@ -86,7 +86,7 @@ Run from the repository root:
 - Apply DB migration: `npm --prefix backend run db:migrate`
 - Integration tests: `npm --prefix backend run test:integration`
 - Commerce smoke: `npm --prefix backend run smoke:commerce`
-- Reconcile pending Arc Pay top-ups: `npm --prefix backend run payments:reconcile -- --limit=20`
+- Reconcile pending payment provider top-ups: `npm --prefix backend run payments:reconcile -- --limit=20`
 - Check wallet invariants: `npm --prefix backend run wallet:reconcile -- --limit=100`
 - Provider acceptance readiness: `npm --prefix backend run acceptance:readiness`
 - SIH sandbox catalog acceptance: `SIH_API_KEY_FILE=/absolute/restricted/sih-key npm --prefix backend run acceptance:sih-catalog`

@@ -23,7 +23,7 @@ Provider request/response snapshots, payment webhook payload snapshots, Steam Tr
 
 ## Recovery Command Scope
 
-`POST /admin/operations/payments/reconcile` runs Arc Pay pending top-up reconciliation through the existing `PaymentsService`.
+`POST /admin/operations/payments/reconcile` runs payment provider pending top-up reconciliation through the existing `PaymentsService`.
 
 `POST /admin/operations/fulfillment/reconcile` runs submitted SIH skin command reconciliation through the existing `FulfillmentService`.
 
@@ -36,7 +36,7 @@ Body:
 
 ```json
 {
-  "reason": "recover missing Arc Pay webhook or submitted SIH skin command",
+  "reason": "recover missing payment provider webhook or submitted SIH skin command",
   "limit": 20
 }
 ```
@@ -45,11 +45,11 @@ Rules:
 
 - `reason` is required and must explain the operator action.
 - `limit` must be between 1 and 100. The default is 20.
-- The command only reconciles `checkout_pending` Arc Pay top-ups.
+- The command only reconciles `checkout_pending` payment provider top-ups.
 - The fulfillment command only reconciles submitted SIH skin purchases by polling `get-order`.
 - The fulfillment command does not retry pending SIH create-order, retry Steam refill payment, or force terminal statuses.
 - The command does not directly overwrite balances, orders, provider statuses, or ledger rows.
-- Arc Pay provider lookup runs outside an open database transaction.
+- payment provider provider lookup runs outside an open database transaction.
 - SIH provider lookup runs outside an open database transaction.
 - The existing payment service writes provider attempt evidence and applies wallet credits idempotently through wallet ledger logic.
 - The existing fulfillment service writes provider attempt evidence and applies order-line/hold settlement transitions through its state machine.
@@ -61,7 +61,7 @@ Rules:
 
 - No direct balance overwrite.
 - No direct order status overwrite.
-- No provider retry/refund/settlement commands beyond Arc Pay status polling reconciliation for missing webhooks and SIH submitted skin status polling.
+- No provider retry/refund/settlement commands beyond payment provider status polling reconciliation for missing webhooks and SIH submitted skin status polling.
 - No customer-facing frontend surface.
 
 Future recovery actions must follow the same shape: reasoned command, durable idempotency, durable audit, no secrets in outputs, and compensating journal entries where money changes.
