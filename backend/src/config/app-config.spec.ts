@@ -20,6 +20,7 @@ describe("loadAppConfig", () => {
       ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE: "/run/secrets/arc-pay-webhook-secret",
       STEAM_WEB_API_KEY_FILE: "/run/secrets/steam-web-api-key",
       SIH_API_KEY_FILE: "/run/secrets/sih-api-key",
+      SIH_STEAM_REFILL_API_KEY_FILE: "/run/secrets/sih-steam-refill-api-key",
       SIH_MARKET_BASE_URL: "https://api.sih.market",
       SIH_STEAM_REFILL_BASE_URL: "https://core.steaminventoryhelper.com",
       SIH_REQUEST_TIMEOUT_MS: "2500",
@@ -51,6 +52,7 @@ describe("loadAppConfig", () => {
         marketBaseUrl: "https://api.sih.market",
         maximumBodyBytes: 4096,
         requestTimeoutMs: 2500,
+        steamRefillApiKeyFile: "/run/secrets/sih-steam-refill-api-key",
         steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
       },
       catalog: {

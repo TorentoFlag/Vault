@@ -58,8 +58,11 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     process.env.DATABASE_URL = databaseUrl;
     const tempDir = await mkdtemp(join(tmpdir(), "vault-sih-fulfillment-"));
     const apiKeyFile = join(tempDir, "api-key");
+    const steamRefillApiKeyFile = join(tempDir, "steam-refill-api-key");
     await writeFile(apiKeyFile, "test-sih-secret-key\n", { mode: 0o600 });
+    await writeFile(steamRefillApiKeyFile, "test-sih-steam-refill-secret-key\n", { mode: 0o600 });
     process.env.SIH_API_KEY_FILE = apiKeyFile;
+    process.env.SIH_STEAM_REFILL_API_KEY_FILE = steamRefillApiKeyFile;
     pool = new Pool({ connectionString: databaseUrl });
   });
 
@@ -71,6 +74,7 @@ describe.skipIf(!databaseUrl)("fulfillment provider attempts", () => {
     await pool.query("DELETE FROM catalog_sync_runs WHERE id IN ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc')");
     delete process.env.DATABASE_URL;
     delete process.env.SIH_API_KEY_FILE;
+    delete process.env.SIH_STEAM_REFILL_API_KEY_FILE;
     await app?.close();
     await pool.end();
   });

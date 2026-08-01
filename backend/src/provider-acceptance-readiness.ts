@@ -96,6 +96,7 @@ export async function evaluateProviderAcceptanceReadiness(
   probe: FileProbe = probeReadableNonemptyFile,
 ): Promise<ProviderAcceptanceReadiness> {
   const sihApiKeyReason = await validateSecretFile("SIH_API_KEY_FILE", env, probe);
+  const sihSteamRefillApiKeyReason = await validateSecretFile("SIH_STEAM_REFILL_API_KEY_FILE", env, probe);
 
   const gates: ProviderAcceptanceGate[] = [
     gate("steam-openid-browser", [
@@ -118,7 +119,7 @@ export async function evaluateProviderAcceptanceReadiness(
       await validateSecretFile("SIH_ACCEPTANCE_TRADE_TOKEN_FILE", env, probe),
     ]),
     gate("sih-steam-refill", [
-      sihApiKeyReason,
+      sihSteamRefillApiKeyReason,
       optionalString(env.SIH_STEAM_REFILL_ACCEPTANCE_LOGIN) === undefined ? "SIH_STEAM_REFILL_ACCEPTANCE_LOGIN missing" : undefined,
       validatePositiveInteger("SIH_STEAM_REFILL_ACCEPTANCE_AMOUNT_RUB", env.SIH_STEAM_REFILL_ACCEPTANCE_AMOUNT_RUB),
       optionalString(env.SIH_STEAM_REFILL_MUTATION_APPROVED) === "yes"

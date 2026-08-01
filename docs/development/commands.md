@@ -57,7 +57,7 @@ Vault maps PostgreSQL to host port `55432` and Redis to host port `56379` so it 
 
 Run `DATABASE_URL=postgres://vault_test:vault_test_password@localhost:55433/vault_test npm --prefix backend run db:migrate` before integration tests when migrations changed or the test database is fresh.
 
-Keep `STEAM_WEB_API_KEY_FILE`, `SIH_API_KEY_FILE`, `ADMIN_API_TOKEN_FILE`, Arc Pay API keys, webhook secrets, and SIH acceptance trade-token files outside the repository and do not print their contents. Steam OpenID challenge verification does not require the Steam Web API key; use the key only for backend-side Steam Web API/profile/provider calls when that adapter needs it. The SIH sandbox acceptance test is skipped unless the file path is explicitly provided. `acceptance:readiness` prints only variable/gate names and exits nonzero until every real provider gate has its required public origins and secret files.
+Keep `STEAM_WEB_API_KEY_FILE`, `SIH_API_KEY_FILE`, `SIH_STEAM_REFILL_API_KEY_FILE`, `ADMIN_API_TOKEN_FILE`, Arc Pay API keys, webhook secrets, and SIH acceptance trade-token files outside the repository and do not print their contents. Steam OpenID challenge verification does not require the Steam Web API key; use the key only for backend-side Steam Web API/profile/provider calls when that adapter needs it. The SIH sandbox acceptance test is skipped unless the file path is explicitly provided. `acceptance:readiness` prints only variable/gate names and exits nonzero until every real provider gate has its required public origins and secret files.
 
 ## HTTPS browser/provider acceptance
 

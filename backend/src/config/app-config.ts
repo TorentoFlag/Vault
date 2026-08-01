@@ -29,6 +29,7 @@ export type AppConfig = {
     marketBaseUrl: string;
     maximumBodyBytes: number;
     requestTimeoutMs: number;
+    steamRefillApiKeyFile?: string;
     steamRefillBaseUrl: string;
   };
   catalog: {
@@ -148,6 +149,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const arcPayWebhookSigningSecretFile = optionalString(env.ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE);
   const steamWebApiKeyFile = optionalString(env.STEAM_WEB_API_KEY_FILE);
   const sihApiKeyFile = optionalString(env.SIH_API_KEY_FILE);
+  const sihSteamRefillApiKeyFile = optionalString(env.SIH_STEAM_REFILL_API_KEY_FILE);
   const adminApiTokenFile = optionalString(env.ADMIN_API_TOKEN_FILE);
 
   return {
@@ -174,6 +176,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       marketBaseUrl: parseHttpsUrl("SIH_MARKET_BASE_URL", env.SIH_MARKET_BASE_URL, "https://api.sih.market"),
       maximumBodyBytes: parseBoundedInteger("SIH_RESPONSE_MAX_BYTES", env.SIH_RESPONSE_MAX_BYTES, 16_777_216, 1_024, 16_777_216),
       requestTimeoutMs: parseBoundedInteger("SIH_REQUEST_TIMEOUT_MS", env.SIH_REQUEST_TIMEOUT_MS, 60_000, 500, 120_000),
+      ...(sihSteamRefillApiKeyFile ? { steamRefillApiKeyFile: sihSteamRefillApiKeyFile } : {}),
       steamRefillBaseUrl: parseHttpsUrl("SIH_STEAM_REFILL_BASE_URL", env.SIH_STEAM_REFILL_BASE_URL, "https://core.steaminventoryhelper.com"),
     },
     catalog: {

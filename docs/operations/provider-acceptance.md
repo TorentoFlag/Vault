@@ -43,7 +43,8 @@ Keep all files outside the repository. Never echo their contents.
 | `ARC_PAY_SECRET_KEY_FILE` | Arc Pay Hosted Checkout and status polling. |
 | `ARC_PAY_PUBLIC_ORIGIN` | Arc Pay success/fail/cancel URLs; must be HTTPS. |
 | `ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE` | Arc Pay webhook signature verification. |
-| `SIH_API_KEY_FILE` | SIH catalog, skin, and Steam refill acceptance. |
+| `SIH_API_KEY_FILE` | SIH catalog and skin purchase acceptance. |
+| `SIH_STEAM_REFILL_API_KEY_FILE` | SIH Steam refill acceptance and fulfillment. |
 | `SIH_ACCEPTANCE_STEAM_ID64` | SIH skin test-order recipient Steam identity. |
 | `SIH_ACCEPTANCE_TRADE_TOKEN_FILE` | SIH skin test-order trade token. |
 | `SIH_STEAM_REFILL_ACCEPTANCE_LOGIN` | SIH Steam refill recipient login. |

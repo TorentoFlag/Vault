@@ -43,6 +43,7 @@ Runtime config lives outside git:
 - `/opt/vault/secrets/arc-pay-secret-key`
 - `/opt/vault/secrets/arc-pay-webhook-secret`
 - `/opt/vault/secrets/sih-api-key`
+- `/opt/vault/secrets/sih-steam-refill-api-key`
 
 Never commit, echo, screenshot, or paste secret file contents.
 

@@ -23,6 +23,7 @@ import { FulfillmentService } from "./fulfillment.service";
         marketBaseUrl: config.sih.marketBaseUrl,
         maximumBodyBytes: config.sih.maximumBodyBytes,
         requestTimeoutMs: config.sih.requestTimeoutMs,
+        ...(config.sih.steamRefillApiKeyFile ? { steamRefillApiKeyFile: config.sih.steamRefillApiKeyFile } : {}),
         steamRefillBaseUrl: config.sih.steamRefillBaseUrl,
       }),
     },

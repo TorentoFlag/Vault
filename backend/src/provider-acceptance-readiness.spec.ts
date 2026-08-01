@@ -39,7 +39,7 @@ describe("provider acceptance readiness", () => {
         id: "sih-steam-refill",
         status: "blocked",
         reasons: [
-          "SIH_API_KEY_FILE missing",
+          "SIH_STEAM_REFILL_API_KEY_FILE missing",
           "SIH_STEAM_REFILL_ACCEPTANCE_LOGIN missing",
           "SIH_STEAM_REFILL_ACCEPTANCE_AMOUNT_RUB missing",
           "SIH_STEAM_REFILL_MUTATION_APPROVED must be yes",
@@ -58,6 +58,7 @@ describe("provider acceptance readiness", () => {
         ARC_PAY_PUBLIC_ORIGIN: "https://vault.example/pay",
         ARC_PAY_WEBHOOK_SIGNING_SECRET_FILE: "/run/secrets/arc-pay-webhook",
         SIH_API_KEY_FILE: "/run/secrets/sih",
+        SIH_STEAM_REFILL_API_KEY_FILE: "/run/secrets/sih-steam-refill",
         SIH_ACCEPTANCE_STEAM_ID64: "76561198000000000",
         SIH_ACCEPTANCE_TRADE_TOKEN_FILE: "/run/secrets/sih-trade-token",
         SIH_STEAM_REFILL_ACCEPTANCE_LOGIN: "vault_acceptance",

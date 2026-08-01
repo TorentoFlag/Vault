@@ -9,12 +9,14 @@ import {
   type SihFetch,
 } from "./sih.client";
 
-async function apiKeyFile(): Promise<string> {
+async function secretFile(name = "api-key", value = "test-secret-key"): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "vault-sih-"));
-  const file = join(directory, "api-key");
-  await writeFile(file, "test-secret-key\n", { mode: 0o600 });
+  const file = join(directory, name);
+  await writeFile(file, `${value}\n`, { mode: 0o600 });
   return file;
 }
+
+const apiKeyFile = secretFile;
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
@@ -145,11 +147,12 @@ describe("SihClient", () => {
       }));
     };
     const client = new SihClient({
-      apiKeyFile: await apiKeyFile(),
+      apiKeyFile: await secretFile("market-api-key", "market-secret-key"),
       fetcher,
       marketBaseUrl: "https://api.sih.market",
       maximumBodyBytes: 4_096,
       requestTimeoutMs: 1_000,
+      steamRefillApiKeyFile: await secretFile("steam-refill-api-key", "steam-refill-secret-key"),
       steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
     });
 
@@ -163,12 +166,12 @@ describe("SihClient", () => {
     expect(requests).toEqual([
       {
         path: "/p/api/v1.0/steam/check",
-        apiKey: "test-secret-key",
+        apiKey: "steam-refill-secret-key",
         body: { steamUsername: "igb53" },
       },
       {
         path: "/p/api/v1.0/steam/pay",
-        apiKey: "test-secret-key",
+        apiKey: "steam-refill-secret-key",
         body: {
           amount: 50,
           currency: "RUB",
@@ -197,6 +200,7 @@ describe("SihClient", () => {
       marketBaseUrl: "https://api.sih.market",
       maximumBodyBytes: 4_096,
       requestTimeoutMs: 1_000,
+      steamRefillApiKeyFile: await secretFile("steam-refill-api-key"),
       steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
     });
 
@@ -208,6 +212,23 @@ describe("SihClient", () => {
       cashbackUsd: 0n,
       paymentAmountRub: 5_000n,
       status: "success",
+    });
+  });
+
+  it("requires a separate Steam refill api key file for Steam refill requests", async () => {
+    const fetcher: SihFetch = () => Promise.resolve(jsonResponse({ success: true }));
+    const client = new SihClient({
+      apiKeyFile: await secretFile("market-api-key", "market-secret-key"),
+      fetcher,
+      marketBaseUrl: "https://api.sih.market",
+      maximumBodyBytes: 4_096,
+      requestTimeoutMs: 1_000,
+      steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
+    });
+
+    await expect(client.checkSteamAccount({ steamUsername: "igb53" })).rejects.toMatchObject({
+      code: "SIH_CONFIGURATION_INVALID",
+      disposition: "permanent",
     });
   });
 

@@ -36,6 +36,7 @@ export type SihClientOptions = {
   marketBaseUrl: string;
   maximumBodyBytes: number;
   requestTimeoutMs: number;
+  steamRefillApiKeyFile?: string;
   steamRefillBaseUrl: string;
 };
 
@@ -232,7 +233,7 @@ export class SihClient {
   }
 
   private async requestJson(url: URL, header: "market" | "steam-refill", init: RequestInit, acceptedStatuses: readonly number[] = [200]): Promise<{ body: string; status: number }> {
-    const apiKey = await this.loadApiKey();
+    const apiKey = await this.loadApiKey(header);
     let response: Response;
     try {
       response = await this.fetcher(url, {
@@ -263,10 +264,13 @@ export class SihClient {
     };
   }
 
-  private async loadApiKey(): Promise<string> {
-    if (this.options.apiKeyFile === undefined) throw new SihProviderError("permanent", "SIH_CONFIGURATION_INVALID");
+  private async loadApiKey(header: "market" | "steam-refill"): Promise<string> {
+    const apiKeyFile = header === "steam-refill"
+      ? this.options.steamRefillApiKeyFile
+      : this.options.apiKeyFile;
+    if (apiKeyFile === undefined) throw new SihProviderError("permanent", "SIH_CONFIGURATION_INVALID");
     try {
-      const value = (await readFile(this.options.apiKeyFile, "utf8")).trim();
+      const value = (await readFile(apiKeyFile, "utf8")).trim();
       if (value.length === 0 || value.length > 4_096) throw new Error("SIH_API_KEY_INVALID");
       return value;
     } catch (error) {
