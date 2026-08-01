@@ -1,7 +1,7 @@
 import type { Product } from "./commerce";
 
 export type OrderStatus = "completed" | "processing" | "cancelled" | "failed" | "needs_review";
-export type OrderDeliveryStatus = "delivered" | "failed" | "inventory-ready" | "needs-review" | "pending";
+export type OrderDeliveryStatus = "delivered" | "failed" | "inventory-ready" | "needs-review" | "pending" | "trade-offer-sent" | "trade-protection";
 
 export type OrderItemSnapshot = {
   id: string;
@@ -51,7 +51,7 @@ export type TradeEvent = {
   title: string;
   itemId?: string;
   orderNumber?: string;
-  status: "completed" | "processing" | "pending";
+  status: "completed" | "processing" | "pending" | "trade-protection";
 };
 
 export type SteamSettings = {

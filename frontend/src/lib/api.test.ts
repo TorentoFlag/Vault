@@ -220,12 +220,13 @@ test("API client maps backend order history without exposing internal request fi
           recipientSnapshots: [
             { kind: "steam-trade", steamId64: "76561198000000002", steamTradePartnerAccountId: "39734273" },
           ],
-          lines: [
-            {
-              id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
-              productSlug: "desert-eagle-printstream",
-              kind: "skins",
-              title: "Desert Eagle | Printstream",
+      lines: [
+        {
+          id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+          fulfillmentStage: "pending",
+          productSlug: "desert-eagle-printstream",
+          kind: "skins",
+          title: "Desert Eagle | Printstream",
               quantity: 1,
               unitPriceCoinMinor: 318_000,
               recipientSnapshot: { kind: "steam-trade", steamId64: "76561198000000002", steamTradePartnerAccountId: "39734273" },
@@ -271,6 +272,7 @@ test("API client maps backend fulfillment order statuses into account history st
     lines: [
       {
         id: "81e734db-4db8-4862-b160-d2e4b74f2d55",
+        fulfillmentStage: "pending",
         productSlug: "desert-eagle-printstream",
         kind: "skins",
         title: "Desert Eagle | Printstream",
@@ -304,6 +306,46 @@ test("API client maps backend fulfillment order statuses into account history st
     { deliveryStatus: "failed", status: "failed" },
     { deliveryStatus: "needs-review", status: "needs_review" },
   ]);
+});
+
+test("API client maps accepted Steam trades awaiting SIH protection into a specific delivery state", async () => {
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    fetch: async () => new Response(JSON.stringify({
+      orders: [
+        {
+          id: "926042c4-7a3a-4a62-b978-7b3caf46553e",
+          userId: "user_76561198000000002",
+          status: "held",
+          totalCoinMinor: 3_100,
+          createdAt: "2026-08-01T13:22:34.261Z",
+          recipientSnapshots: [
+            { kind: "steam-trade", steamId64: "76561198000000002", steamTradePartnerAccountId: "39734273" },
+          ],
+          lines: [
+            {
+              id: "77b31961-303a-43b5-9a0f-02f2b855949a",
+              fulfillmentStage: "trade_protection",
+              productSlug: "stattrak-aug-trigger-discipline-battle-scarred",
+              kind: "skins",
+              title: "StatTrak™ AUG | Стрелковая дисциплина (Закалённое в боях)",
+              quantity: 1,
+              unitPriceCoinMinor: 3_100,
+              recipientSnapshot: { kind: "steam-trade", steamId64: "76561198000000002", steamTradePartnerAccountId: "39734273" },
+            },
+          ],
+        },
+      ],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  });
+
+  const [order] = await client.getOrderHistory();
+
+  assert.equal(order?.status, "processing");
+  assert.equal(order?.items[0]?.deliveryStatus, "trade-protection");
 });
 
 test("API client maps backend inventory projection with disabled provider-backed actions", async () => {
@@ -363,7 +405,7 @@ test("API client maps backend fulfillment trade history without provider snapsho
             id: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
             itemId: "81e734db-4db8-4862-b160-d2e4b74f2d55",
             orderNumber: "VLT-11111111",
-            status: "processing",
+            status: "trade_protection",
             title: "AK-47 | Redline",
           },
           {
@@ -390,7 +432,7 @@ test("API client maps backend fulfillment trade history without provider snapsho
       id: "2fdb9de9-df14-4c16-82cc-7c8396e2fcde",
       itemId: "81e734db-4db8-4862-b160-d2e4b74f2d55",
       orderNumber: "VLT-11111111",
-      status: "processing",
+      status: "trade-protection",
       title: "AK-47 | Redline",
     },
     {

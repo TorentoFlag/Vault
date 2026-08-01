@@ -10,6 +10,7 @@ type Queryable = {
 };
 
 export type OrderHistoryLineDto = {
+  fulfillmentStage: OrderHistoryLineFulfillmentStage;
   id: string;
   productSlug: string;
   kind: CatalogProductKind;
@@ -20,6 +21,7 @@ export type OrderHistoryLineDto = {
 };
 
 export type OrderHistoryStatus = "failed" | "fulfilled" | "held" | "manual_review" | "partially_fulfilled";
+export type OrderHistoryLineFulfillmentStage = "pending" | "trade_offer_sent" | "trade_protection" | "delivered" | "failed" | "needs_review";
 
 export type OrderHistoryItemDto = {
   id: string;
@@ -45,16 +47,39 @@ type OrderRow = {
 };
 
 type OrderLineRow = {
+  command_status: string | null;
   id: string;
+  latest_response_snapshot: Record<string, unknown> | null;
   order_id: string;
   line_index: number;
   product_slug: string;
   kind: CatalogProductKind;
+  line_status: string;
   title: string;
   quantity: number;
   unit_price_coin_minor: number;
   recipient_snapshot: CheckoutRecipientSnapshot;
 };
+
+function nestedString(value: Record<string, unknown> | null, path: readonly string[]): string | null {
+  let current: unknown = value;
+  for (const key of path) {
+    if (typeof current !== "object" || current === null || !(key in current)) return null;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return typeof current === "string" ? current : null;
+}
+
+function fulfillmentStage(row: OrderLineRow): OrderHistoryLineFulfillmentStage {
+  if (row.line_status === "supplier_finished") return "delivered";
+  if (row.line_status === "supplier_failed") return "failed";
+  if (row.line_status === "protection_failed" || row.command_status === "manual_review") return "needs_review";
+  const providerStatus = nestedString(row.latest_response_snapshot, ["status"]);
+  const protectionStatus = nestedString(row.latest_response_snapshot, ["protection", "status"]);
+  if (providerStatus === "finished" && protectionStatus === "processing") return "trade_protection";
+  if (row.line_status === "supplier_sent") return "trade_offer_sent";
+  return "pending";
+}
 
 @Injectable()
 export class OrdersService {
@@ -79,8 +104,36 @@ export class OrdersService {
     const orderIds = orders.rows.map((order) => order.id);
     const lines = await client.query<OrderLineRow>(
       `
-        SELECT id, order_id, line_index, product_slug, kind, title, quantity, unit_price_coin_minor, recipient_snapshot
+        SELECT
+          order_lines.id,
+          order_lines.order_id,
+          order_lines.line_index,
+          order_lines.product_slug,
+          order_lines.kind,
+          order_lines.status AS line_status,
+          order_lines.title,
+          order_lines.quantity,
+          order_lines.unit_price_coin_minor,
+          order_lines.recipient_snapshot,
+          fulfillment_command.status AS command_status,
+          latest_attempt.response_snapshot AS latest_response_snapshot
         FROM order_lines
+        LEFT JOIN LATERAL (
+          SELECT fulfillment_commands.id, fulfillment_commands.status
+          FROM fulfillment_commands
+          WHERE fulfillment_commands.order_line_id = order_lines.id
+            AND fulfillment_commands.command_type IN ('sih_skin_purchase', 'sih_steam_refill')
+          ORDER BY fulfillment_commands.created_at ASC, fulfillment_commands.id ASC
+          LIMIT 1
+        ) AS fulfillment_command ON true
+        LEFT JOIN LATERAL (
+          SELECT fulfillment_provider_attempts.response_snapshot
+          FROM fulfillment_provider_attempts
+          WHERE fulfillment_provider_attempts.command_id = fulfillment_command.id
+            AND fulfillment_provider_attempts.status = 'succeeded'
+          ORDER BY fulfillment_provider_attempts.created_at DESC, fulfillment_provider_attempts.id DESC
+          LIMIT 1
+        ) AS latest_attempt ON true
         WHERE order_id = ANY($1::uuid[])
         ORDER BY order_id ASC, line_index ASC
       `,
@@ -102,6 +155,7 @@ export class OrdersService {
         recipientSnapshots: order.recipient_snapshots,
         createdAt: order.created_at.toISOString(),
         lines: (linesByOrder.get(order.id) ?? []).map((line) => ({
+          fulfillmentStage: fulfillmentStage(line),
           id: line.id,
           productSlug: line.product_slug,
           kind: line.kind,

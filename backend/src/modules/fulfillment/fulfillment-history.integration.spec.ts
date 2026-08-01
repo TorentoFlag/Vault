@@ -130,7 +130,7 @@ describe.skipIf(!databaseUrl)("fulfillment trade history projection", () => {
         INSERT INTO fulfillment_provider_attempts (command_id, order_id, order_line_id, provider, operation, status, idempotency_key, provider_order_id, request_snapshot, response_snapshot, created_at, finished_at)
         VALUES
           ('11111111-1111-4111-8111-111111111111', $1, $2, 'sih', 'get_order', 'succeeded', 'attempt-finished', 'provider-finished', '{"token":"secret"}'::jsonb, '{"status":"finished","protection":{"status":"finished"},"secret":"hidden"}'::jsonb, '2026-07-29T09:20:00.000Z', '2026-07-29T09:20:01.000Z'),
-          ('33333333-3333-4333-8333-333333333333', $1, $3, 'sih', 'get_order', 'succeeded', 'attempt-sent', 'provider-sent', '{}'::jsonb, '{"status":"sent"}'::jsonb, '2026-07-29T09:22:00.000Z', '2026-07-29T09:22:01.000Z')
+          ('33333333-3333-4333-8333-333333333333', $1, $3, 'sih', 'get_order', 'succeeded', 'attempt-sent', 'provider-sent', '{}'::jsonb, '{"status":"finished","protection":{"status":"processing"}}'::jsonb, '2026-07-29T09:22:00.000Z', '2026-07-29T09:22:01.000Z')
       `,
       [orderId, finishedLine, sentLine],
     );
@@ -160,7 +160,7 @@ describe.skipIf(!databaseUrl)("fulfillment trade history projection", () => {
               id: sent.id,
               itemId: sentLine,
               orderNumber: `VLT-${orderId.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
-              status: "processing",
+              status: "trade_protection",
               title: "AK-47 | Redline",
             },
             {

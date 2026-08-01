@@ -133,6 +133,16 @@ describe("OpenAPI contract", () => {
                         orders?: {
                           items?: {
                             properties?: {
+                              lines?: {
+                                items?: {
+                                  required?: string[];
+                                  properties?: {
+                                    fulfillmentStage?: {
+                                      enum?: string[];
+                                    };
+                                  };
+                                };
+                              };
                               status?: {
                                 enum?: string[];
                               };
@@ -152,6 +162,9 @@ describe("OpenAPI contract", () => {
 
     const status = document.paths["/orders/me"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.orders?.items?.properties?.status;
     expect(status?.enum).toEqual(["held", "fulfilled", "partially_fulfilled", "failed", "manual_review"]);
+    const line = document.paths["/orders/me"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.orders?.items?.properties?.lines?.items;
+    expect(line?.required).toContain("fulfillmentStage");
+    expect(line?.properties?.fulfillmentStage?.enum).toEqual(["pending", "trade_offer_sent", "trade_protection", "delivered", "failed", "needs_review"]);
   });
 
   it("documents manual-review top-up sessions for refunded or disputed payment provider payments", async () => {
@@ -388,6 +401,6 @@ describe("OpenAPI contract", () => {
     const item = document.paths["/fulfillment/me/trades"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.properties?.events?.items;
     expect(item?.required).toEqual(["id", "createdAt", "direction", "title", "itemId", "orderNumber", "status"]);
     expect(item?.properties?.direction?.enum).toEqual(["purchase", "withdrawal"]);
-    expect(item?.properties?.status?.enum).toEqual(["pending", "processing", "completed"]);
+    expect(item?.properties?.status?.enum).toEqual(["pending", "processing", "trade_protection", "completed"]);
   });
 });

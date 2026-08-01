@@ -7,6 +7,7 @@ import {
   createCheckoutRecords,
   createTopUpTransaction,
   getOrderItemDeliveryStatusLabel,
+  getOrderStatusLabel,
   getOverviewTransactions,
   getTradeStatusLabel,
   getTransactionStatusLabel,
@@ -166,10 +167,19 @@ test("overview operations are newest-first and failed rows state that balance di
 test("order and trade statuses avoid unsupported automatic fulfillment promises", () => {
   assert.equal(getOrderItemDeliveryStatusLabel("delivered"), "Выполнено");
   assert.equal(getOrderItemDeliveryStatusLabel("inventory-ready"), "Доступно в инвентаре");
+  assert.equal(getOrderItemDeliveryStatusLabel("trade-protection" as never), "Трейд принят, завершаем проверку");
   assert.equal(getOrderItemDeliveryStatusLabel("pending"), "Ожидает обработки");
   assert.equal(getTradeStatusLabel("completed"), "Завершено");
   assert.equal(getTradeStatusLabel("processing"), "В обработке");
+  assert.equal(getTradeStatusLabel("trade-protection" as never), "Трейд принят, идет проверка");
   assert.equal(getTradeStatusLabel("pending"), "Ожидает обработки");
+});
+
+test("order status label distinguishes accepted Steam trades awaiting protection", () => {
+  assert.equal(getOrderStatusLabel({
+    status: "processing",
+    items: [{ ...createCheckoutRecords([getCatalogProduct("ak-redline")], 0).order.items[0]!, deliveryStatus: "trade-protection" }],
+  }), "Проверка защиты");
 });
 
 test("повреждённый Trade URL из localStorage сбрасывается", () => {

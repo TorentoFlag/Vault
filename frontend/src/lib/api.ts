@@ -88,6 +88,7 @@ type ApiOrderRecipientSnapshot =
   };
 
 type ApiOrderLine = {
+  fulfillmentStage: "pending" | "trade_offer_sent" | "trade_protection" | "delivered" | "failed" | "needs_review";
   id: string;
   productSlug: string;
   kind: Product["kind"];
@@ -139,7 +140,7 @@ type ApiFulfillmentTradeEvent = {
   id: string;
   itemId: string;
   orderNumber: string;
-  status: "completed" | "pending" | "processing";
+  status: "completed" | "pending" | "processing" | "trade_protection";
   title: string;
 };
 
@@ -295,6 +296,14 @@ function isApiOrderLine(value: unknown): value is ApiOrderLine {
   if (!isRecord(value)) return false;
   return (
     typeof value.id === "string" &&
+    (
+      value.fulfillmentStage === "pending" ||
+      value.fulfillmentStage === "trade_offer_sent" ||
+      value.fulfillmentStage === "trade_protection" ||
+      value.fulfillmentStage === "delivered" ||
+      value.fulfillmentStage === "failed" ||
+      value.fulfillmentStage === "needs_review"
+    ) &&
     typeof value.productSlug === "string" &&
     (value.kind === "skins" || value.kind === "steam") &&
     typeof value.title === "string" &&
@@ -372,7 +381,7 @@ function isApiFulfillmentTradeEvent(value: unknown): value is ApiFulfillmentTrad
     typeof value.id === "string" &&
     typeof value.itemId === "string" &&
     typeof value.orderNumber === "string" &&
-    (value.status === "completed" || value.status === "pending" || value.status === "processing") &&
+    (value.status === "completed" || value.status === "pending" || value.status === "processing" || value.status === "trade_protection") &&
     typeof value.title === "string" &&
     !("provider" in value) &&
     !("providerOrderId" in value) &&
@@ -437,10 +446,15 @@ function fulfillmentModeForKind(kind: Product["kind"]): Product["fulfillmentMode
   return kind === "skins" ? "steam-trade" : "automatic";
 }
 
-function deliveryStatusForStatus(status: ApiOrder["status"]): OrderDeliveryStatus {
+function deliveryStatusForLine(status: ApiOrder["status"], stage: ApiOrderLine["fulfillmentStage"]): OrderDeliveryStatus {
   if (status === "fulfilled") return "delivered";
   if (status === "failed") return "failed";
   if (status === "manual_review" || status === "partially_fulfilled") return "needs-review";
+  if (stage === "trade_offer_sent") return "trade-offer-sent";
+  if (stage === "trade_protection") return "trade-protection";
+  if (stage === "delivered") return "delivered";
+  if (stage === "failed") return "failed";
+  if (stage === "needs_review") return "needs-review";
   return "pending";
 }
 
@@ -469,7 +483,7 @@ function mapApiOrder(order: ApiOrder): MarketplaceOrder {
       kind: line.kind,
       priceCoins: coinMinorToCoins(line.unitPriceCoinMinor),
       fulfillmentMode: fulfillmentModeForKind(line.kind),
-      deliveryStatus: deliveryStatusForStatus(order.status),
+      deliveryStatus: deliveryStatusForLine(order.status, line.fulfillmentStage),
     })),
   };
 }
@@ -612,7 +626,10 @@ export function createApiClient(options: ApiClientOptions = {}) {
     async getFulfillmentTradeHistory(): Promise<TradeEvent[]> {
       const body = await requestJson("/fulfillment/me/trades");
       if (!isFulfillmentTradeHistoryResponse(body)) throw new Error("Fulfillment trade history response is malformed.");
-      return body.events.map((event) => ({ ...event }));
+      return body.events.map((event) => ({
+        ...event,
+        status: event.status === "trade_protection" ? "trade-protection" : event.status,
+      }));
     },
 
     async createInventoryWithdrawal(input: { idempotencyKey: string; itemId: string }): Promise<ApiInventoryWithdrawal> {

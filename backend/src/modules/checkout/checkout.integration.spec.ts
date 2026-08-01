@@ -381,6 +381,48 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     });
     await pool.query("UPDATE orders SET created_at = $1 WHERE id = $2", ["2026-07-28T07:00:00.000Z", olderOrder.id]);
     await pool.query("UPDATE orders SET created_at = $1 WHERE id = $2", ["2026-07-28T08:00:00.000Z", newerOrder.id]);
+    const newerFulfillment = await pool.query<{ command_id: string; line_id: string }>(
+      `
+        SELECT fulfillment_commands.id AS command_id, order_lines.id AS line_id
+        FROM fulfillment_commands
+        JOIN order_lines ON order_lines.id = fulfillment_commands.order_line_id
+        WHERE fulfillment_commands.order_id = $1
+      `,
+      [newerOrder.id],
+    );
+    const newerFulfillmentRow = newerFulfillment.rows[0];
+    if (newerFulfillmentRow === undefined) throw new Error("Expected newer fulfillment command");
+    await pool.query("UPDATE order_lines SET status = 'supplier_sent' WHERE id = $1", [newerFulfillmentRow.line_id]);
+    await pool.query(
+      `
+        INSERT INTO fulfillment_provider_attempts (
+          command_id,
+          order_id,
+          order_line_id,
+          provider,
+          operation,
+          status,
+          idempotency_key,
+          provider_order_id,
+          request_snapshot,
+          response_snapshot,
+          created_at,
+          finished_at
+        )
+        VALUES ($1, $2, $3, 'sih', 'get_order', 'succeeded', 'checkout-history-newer-protection', '42', '{}'::jsonb, $4::jsonb, '2026-07-28T08:01:00.000Z', '2026-07-28T08:01:01.000Z')
+      `,
+      [
+        newerFulfillmentRow.command_id,
+        newerOrder.id,
+        newerFulfillmentRow.line_id,
+        JSON.stringify({
+          status: "finished",
+          offerId: "9272838196",
+          protection: { status: "processing", error: null },
+          providerOrderId: "42",
+        }),
+      ],
+    );
 
     const otherSteamId64 = "76561198000000003";
     const otherUserId = `user_${otherSteamId64}`;
@@ -426,6 +468,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
               title: "Desert Eagle | Printstream",
               quantity: 1,
               unitPriceCoinMinor: 318_000,
+              fulfillmentStage: "trade_protection",
               recipientSnapshot: {
                 kind: "steam-trade",
                 steamId64,

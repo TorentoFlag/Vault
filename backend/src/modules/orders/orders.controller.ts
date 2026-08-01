@@ -26,9 +26,10 @@ const orderHistorySchema = {
             type: "array",
             items: {
               type: "object",
-              required: ["id", "productSlug", "kind", "title", "quantity", "unitPriceCoinMinor", "recipientSnapshot"],
+              required: ["id", "fulfillmentStage", "productSlug", "kind", "title", "quantity", "unitPriceCoinMinor", "recipientSnapshot"],
               properties: {
                 id: { type: "string", format: "uuid" },
+                fulfillmentStage: { type: "string", enum: ["pending", "trade_offer_sent", "trade_protection", "delivered", "failed", "needs_review"] },
                 productSlug: { type: "string" },
                 kind: { type: "string", enum: ["steam", "skins"] },
                 title: { type: "string" },

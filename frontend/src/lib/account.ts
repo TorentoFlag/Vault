@@ -41,7 +41,15 @@ function isOrderItem(value: unknown): value is OrderItemSnapshot {
     Number.isSafeInteger(value.priceCoins) &&
     value.priceCoins >= 0 &&
     (value.fulfillmentMode === "automatic" || value.fulfillmentMode === "steam-trade" || value.fulfillmentMode === "manual") &&
-    (value.deliveryStatus === "delivered" || value.deliveryStatus === "inventory-ready" || value.deliveryStatus === "pending") &&
+    (
+      value.deliveryStatus === "delivered" ||
+      value.deliveryStatus === "failed" ||
+      value.deliveryStatus === "inventory-ready" ||
+      value.deliveryStatus === "needs-review" ||
+      value.deliveryStatus === "pending" ||
+      value.deliveryStatus === "trade-offer-sent" ||
+      value.deliveryStatus === "trade-protection"
+    ) &&
     (value.image === undefined || typeof value.image === "string") &&
     (value.imageAlt === undefined || typeof value.imageAlt === "string")
   );
@@ -246,11 +254,24 @@ export function getOrderItemDeliveryStatusLabel(status: OrderItemSnapshot["deliv
   if (status === "failed") return "Выдача не выполнена";
   if (status === "inventory-ready") return "Доступно в инвентаре";
   if (status === "needs-review") return "Требуется проверка поддержки";
+  if (status === "trade-offer-sent") return "Ожидает принятия в Steam";
+  if (status === "trade-protection") return "Трейд принят, завершаем проверку";
   return "Ожидает обработки";
+}
+
+export function getOrderStatusLabel(order: Pick<MarketplaceOrder, "status" | "items">) {
+  if (order.status === "completed") return "Выполнен";
+  if (order.status === "cancelled") return "Отменён";
+  if (order.status === "failed") return "Не выполнен";
+  if (order.status === "needs_review") return "На проверке";
+  if (order.items.some((item) => item.deliveryStatus === "trade-protection")) return "Проверка защиты";
+  if (order.items.some((item) => item.deliveryStatus === "trade-offer-sent")) return "Ожидает Steam";
+  return "В обработке";
 }
 
 export function getTradeStatusLabel(status: TradeEvent["status"]) {
   if (status === "completed") return "Завершено";
+  if (status === "trade-protection") return "Трейд принят, идет проверка";
   if (status === "processing") return "В обработке";
   return "Ожидает обработки";
 }

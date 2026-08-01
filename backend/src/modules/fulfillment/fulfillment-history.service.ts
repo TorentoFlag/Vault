@@ -7,7 +7,7 @@ type Queryable = {
   query: <Row extends QueryResultRow = QueryResultRow>(text: string, values?: readonly unknown[]) => Promise<QueryResult<Row>>;
 };
 
-export type FulfillmentTradeEventStatus = "completed" | "pending" | "processing";
+export type FulfillmentTradeEventStatus = "completed" | "pending" | "processing" | "trade_protection";
 
 export type FulfillmentTradeEventDto = {
   createdAt: string;
@@ -29,6 +29,7 @@ type FulfillmentTradeEventRow = {
   direction: "purchase" | "withdrawal";
   event_created_at: Date;
   last_attempt_id: string | null;
+  latest_response_snapshot: Record<string, unknown> | null;
   line_id: string;
   line_status: string;
   order_id: string;
@@ -39,9 +40,24 @@ function orderNumberFromId(id: string): string {
   return `VLT-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 }
 
-function eventStatus(lineStatus: string, commandStatus: string): FulfillmentTradeEventStatus {
+function nestedString(value: Record<string, unknown> | null, path: readonly string[]): string | null {
+  let current: unknown = value;
+  for (const key of path) {
+    if (typeof current !== "object" || current === null || !(key in current)) return null;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return typeof current === "string" ? current : null;
+}
+
+function eventStatus(lineStatus: string, commandStatus: string, latestResponseSnapshot: Record<string, unknown> | null): FulfillmentTradeEventStatus {
   if (lineStatus === "supplier_finished") return "completed";
   if (lineStatus === "held" || commandStatus === "pending") return "pending";
+  if (
+    nestedString(latestResponseSnapshot, ["status"]) === "finished" &&
+    nestedString(latestResponseSnapshot, ["protection", "status"]) === "processing"
+  ) {
+    return "trade_protection";
+  }
   return "processing";
 }
 
@@ -68,6 +84,7 @@ export class FulfillmentHistoryService {
           'purchase' AS direction,
           COALESCE(last_attempt.created_at, fulfillment_commands.updated_at, fulfillment_commands.created_at) AS event_created_at,
           last_attempt.id AS last_attempt_id,
+          last_attempt.response_snapshot AS latest_response_snapshot,
           order_lines.id AS line_id,
           order_lines.status AS line_status,
           orders.id AS order_id,
@@ -76,7 +93,7 @@ export class FulfillmentHistoryService {
         JOIN orders ON orders.id = fulfillment_commands.order_id
         JOIN order_lines ON order_lines.id = fulfillment_commands.order_line_id
         LEFT JOIN LATERAL (
-          SELECT id, created_at
+          SELECT id, created_at, response_snapshot
           FROM fulfillment_provider_attempts
           WHERE fulfillment_provider_attempts.command_id = fulfillment_commands.id
           ORDER BY created_at DESC, id DESC
@@ -92,6 +109,7 @@ export class FulfillmentHistoryService {
           'withdrawal' AS direction,
           fulfillment_commands.created_at AS event_created_at,
           NULL AS last_attempt_id,
+          NULL AS latest_response_snapshot,
           order_lines.id AS line_id,
           order_lines.status AS line_status,
           orders.id AS order_id,
@@ -117,7 +135,7 @@ export class FulfillmentHistoryService {
         orderNumber: orderNumberFromId(row.order_id),
         status: row.direction === "withdrawal"
           ? withdrawalStatus(row.command_status)
-          : eventStatus(row.line_status, row.command_status),
+          : eventStatus(row.line_status, row.command_status, row.latest_response_snapshot),
         title: row.title,
       })),
     };

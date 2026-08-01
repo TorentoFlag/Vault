@@ -12,6 +12,7 @@ import { SupportCenter } from "@/features/support/SupportCenter";
 import {
   getOverviewTransactions,
   getOrderItemDeliveryStatusLabel,
+  getOrderStatusLabel,
   getRelevantOrderRecipient,
   getTradeStatusLabel,
   getTransactionStatusLabel,
@@ -91,7 +92,7 @@ function OrderTable({ orders, compact = false }: { orders: MarketplaceOrder[]; c
                 <td data-label="Заказ"><span className={styles.cellStack}><strong>{order.number}</strong><time dateTime={order.createdAt}>{formatDate(order.createdAt)}</time></span></td>
                 <td data-label="Товар"><div className={styles.orderItems}>{order.items.map((item) => <Link key={item.id} href={`/catalog/${item.slug}`}>{item.title}</Link>)}</div></td>
                 <td data-label="Стоимость" className={styles.coinCell}><span className={styles.coinValue}><strong>{formatCoins(order.totalCoins)}</strong> Coins</span></td>
-                <td data-label="Статус"><StatusBadge tone={status.tone}>{status.label}</StatusBadge></td>
+                <td data-label="Статус"><StatusBadge tone={status.tone}>{getOrderStatusLabel(order)}</StatusBadge></td>
                 <td data-label="Действие">
                   <button className={styles.detailsButton} type="button" aria-expanded={isExpanded} aria-controls={`order-details-${order.id}`} onClick={() => setExpandedOrder(isExpanded ? null : order.id)}>
                     {isExpanded ? "Скрыть" : "Детали"}

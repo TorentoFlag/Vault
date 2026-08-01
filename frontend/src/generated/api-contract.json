@@ -744,6 +744,7 @@
                             "enum": [
                               "pending",
                               "processing",
+                              "trade_protection",
                               "completed"
                             ]
                           },
@@ -2291,6 +2292,7 @@
                               "type": "object",
                               "required": [
                                 "id",
+                                "fulfillmentStage",
                                 "productSlug",
                                 "kind",
                                 "title",
@@ -2302,6 +2304,17 @@
                                 "id": {
                                   "type": "string",
                                   "format": "uuid"
+                                },
+                                "fulfillmentStage": {
+                                  "type": "string",
+                                  "enum": [
+                                    "pending",
+                                    "trade_offer_sent",
+                                    "trade_protection",
+                                    "delivered",
+                                    "failed",
+                                    "needs_review"
+                                  ]
                                 },
                                 "productSlug": {
                                   "type": "string"
