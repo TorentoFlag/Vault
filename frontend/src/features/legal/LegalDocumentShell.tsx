@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Breadcrumbs, Container } from "@/components/ui/UI";
 import { getLegalDocument, legalDocuments, type LegalDocumentId } from "@/config/legal";
+import { siteConfig } from "@/config/site";
 
 import styles from "./legal-shell.module.css";
 
@@ -32,7 +33,9 @@ export function LegalDocumentShell({
             </header>
 
             <dl className={styles.documentMeta}>
-              <div><dt>Область действия</dt><dd>Локальная версия Vault в браузере</dd></div>
+              <div><dt>Компания</dt><dd>{siteConfig.company.legalName}</dd></div>
+              <div><dt>Регистрационный номер</dt><dd>{siteConfig.company.registrationNumber}</dd></div>
+              <div><dt>Область действия</dt><dd>Сайт https://vaultapp24.com</dd></div>
             </dl>
 
             <section className={styles.pendingNotice}>
@@ -40,10 +43,18 @@ export function LegalDocumentShell({
               <div><h2>Основные положения</h2><p>{document.summary}</p></div>
             </section>
 
+            <div className={styles.documentIntro}>
+              {document.intro.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+            </div>
+
             {document.sections.map((section) => (
               <section className={styles.demoFacts} key={section.title}>
                 <h2>{section.title}</h2>
-                <ul>{section.bullets.map((item) => <li key={item}>{item}</li>)}</ul>
+                <div className={styles.sectionContent}>
+                  {section.blocks.map((block, index) => block.type === "paragraph"
+                    ? <p key={`${section.title}-paragraph-${index}`}>{block.text}</p>
+                    : <ul key={`${section.title}-list-${index}`}>{block.items.map((item) => <li key={item}>{item}</li>)}</ul>)}
+                </div>
               </section>
             ))}
 

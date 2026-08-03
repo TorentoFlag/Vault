@@ -5,9 +5,17 @@ export function publicAssetPath(path: string) {
   return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}${path}`;
 }
 
+const supportEmail = "support@vaultapp24.com";
+
 export const siteConfig = {
   name: "Vault",
   description: "Маркетплейс Steam, игровых предметов и цифровых товаров.",
+  company: {
+    legalName: "SECURE KEYS - FZCO",
+    registrationNumber: "52124",
+    legalAddress: "Объединенные Арабские Эмираты, эмират Дубай, район Dubai Silicon Oasis, бизнес-парк IFZA Business Park, здание IFZA Properties, помещение DSO-IFZA, почтовый ящик 342001.",
+    supportEmail,
+  },
   coin: {
     name: "Coins",
     rate: 1.5,
@@ -15,7 +23,7 @@ export const siteConfig = {
   } satisfies CoinConfig,
   notice: "Все товары и операции оплачиваются в Coins. Для игровых предметов требуется Steam.",
   support: {
-    email: "support@vaultapp24.com",
+    email: supportEmail,
     hours: "Ежедневно, 10:00–22:00 (МСК)",
   },
   paymentMethods: [

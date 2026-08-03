@@ -137,9 +137,9 @@
 
 - [ ] **Step 3: Inspect the built route list and confirm obsolete routes are absent.**
 
-  Run: `rg -n '/legal/(privacy|terms|refund|provably-fair)' frontend/.next frontend/out 2>/dev/null`
+  Run: `find frontend/.next/server/app -type d -path '*/legal*' | sort`
 
-  Expected: privacy and terms remain in the generated output; refund and provably-fair do not have generated route directories or page entries.
+  Expected: the generated output contains only `legal/privacy` and `legal/terms`; `frontend/out` is an older ignored export artifact and is not used as the current Next.js build route list.
 
 - [ ] **Step 4: Inspect the final diff and whitespace.**
 

@@ -180,11 +180,24 @@
 }
 
 .pendingNotice p,
-.documentFooter p {
+.documentFooter p,
+.documentIntro p,
+.sectionContent p {
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.74rem;
-  line-height: 1.55;
+  line-height: 1.65;
+}
+
+.documentIntro {
+  display: grid;
+  gap: 12px;
+  margin: 0 clamp(24px, 4vw, 42px) clamp(24px, 4vw, 42px);
+}
+
+.documentIntro p:first-child {
+  color: #dbe2ec;
+  font-weight: 700;
 }
 
 .demoFacts {
@@ -200,6 +213,16 @@
   padding-left: 20px;
   color: #c8d0dc;
   font-size: 0.76rem;
+  line-height: 1.65;
+}
+
+.sectionContent {
+  display: grid;
+  gap: 12px;
+}
+
+.sectionContent ul {
+  margin-top: 0;
 }
 
 .documentFooter {

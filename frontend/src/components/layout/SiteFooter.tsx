@@ -45,17 +45,15 @@ export function SiteFooter() {
         </div>
         <div className={styles.footerColumn}>
           <h2>Реквизиты</h2>
-          <p>Наименование компании</p>
-          <p>ИНН</p>
-          <p>Юридический адрес</p>
-          <p>Контакты: {siteConfig.support.email}</p>
+          <p><strong>{siteConfig.company.legalName}</strong></p>
+          <p>Registration Number: {siteConfig.company.registrationNumber}</p>
+          <p>{siteConfig.company.legalAddress}</p>
+          <p>Контакты: {siteConfig.company.supportEmail}</p>
         </div>
         <div className={styles.footerColumn}>
           <h2>Документы</h2>
           <Link href="/legal/terms">Пользовательское соглашение</Link>
           <Link href="/legal/privacy">Политика конфиденциальности</Link>
-          <Link href="/legal/refund">Политика возвратов</Link>
-          <Link href="/legal/provably-fair">Provably Fair</Link>
         </div>
       </div>
       <div className={styles.disclaimer}>

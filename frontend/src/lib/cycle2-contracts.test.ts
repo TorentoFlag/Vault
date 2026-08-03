@@ -90,5 +90,5 @@ test("top-up page creates backend sessions without local payment confirmation", 
 test("privacy policy only claims controls that exist in the editable interface", () => {
   const legal = source("src/config/legal.ts");
   assert.doesNotMatch(legal, /Контактные данные .* можно изменить/);
-  assert.match(legal, /Steam Trade URL можно изменить/);
+  assert.match(legal, /Steam Trade URL \(ссылку на обмен Steam\)/);
 });
