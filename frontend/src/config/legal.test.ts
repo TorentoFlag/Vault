@@ -54,3 +54,8 @@ test("футер использует реквизиты компании и н�
   assert.match(footer, /siteConfig\.company\.legalAddress/);
   assert.doesNotMatch(footer, /legal\/(refund|provably-fair)|Политика возвратов|Provably Fair/);
 });
+
+test("политика доступна по URL, указанному в тексте документа", () => {
+  const privacyAlias = readFileSync("src/app/privacy/page.tsx", "utf8");
+  assert.match(privacyAlias, /legal\/privacy/);
+});

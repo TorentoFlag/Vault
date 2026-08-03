@@ -7,6 +7,7 @@ Publish the supplied Russian Privacy Policy and User Agreement on Vault, show th
 ## Approved scope
 
 - `/legal/privacy` renders the supplied Privacy Policy and Personal Data Processing Policy.
+- `/privacy` is an alias for the privacy document because that is the publication URL included in the supplied policy text.
 - `/legal/terms` renders the supplied User Agreement.
 - The User Agreement section `9. ВОЗВРАТ СРЕДСТВ` is removed as requested. Later section numbers are renumbered sequentially from 9 through 18.
 - The standalone `/legal/refund` and `/legal/provably-fair` routes, document navigation entries, and footer links are removed.

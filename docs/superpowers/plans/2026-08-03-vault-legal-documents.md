@@ -11,6 +11,7 @@
 ## Global Constraints
 
 - Preserve the supplied legal wording except for the explicitly approved removal of the refund section, sequential renumbering, typographic spacing, and removal of the accidental sentence.
+- Keep the `/privacy` publication URL from the supplied policy reachable through an explicit alias to `/legal/privacy`.
 - Customer-facing prices and balances remain in Coins; this task does not change commerce behavior.
 - No backend, provider, secret, deployment, production-data, or unrelated support changes.
 - Use `apply_patch` for hand edits and preserve unrelated working-tree changes.
