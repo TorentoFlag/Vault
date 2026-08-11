@@ -1,0 +1,82 @@
+import { describe, expect, it } from "vitest";
+
+import { renderEmailVerificationEmail } from "./email-templates";
+import { NotificationDispatcher } from "./notification-dispatcher";
+import { NotificationOutboxService } from "./notification-outbox.service";
+import type { ResendSendInput } from "./resend.client";
+
+describe("notifications", () => {
+  it("renders the approved OTP text in plain text and escaped HTML", () => {
+    const message = renderEmailVerificationEmail({ code: "123456", expireMinutes: 10 });
+
+    expect(message.subject).toBe("Подтверждение адреса электронной почты — Vault");
+    expect(message.text).toContain("Код подтверждения: 123456");
+    expect(message.html).toContain("Команда Vault");
+  });
+
+  it("does not create a second notification for the same idempotency key", async () => {
+    const outbox = new NotificationOutboxService({ isConfigured: () => false } as never);
+
+    const first = await outbox.enqueue({
+      channel: "email",
+      entityId: "challenge_1",
+      eventType: "email.verification",
+      idempotencyKey: "email-verification/challenge_1",
+      payload: { challengeId: "challenge_1" },
+    });
+    const second = await outbox.enqueue({
+      channel: "email",
+      entityId: "challenge_1",
+      eventType: "email.verification",
+      idempotencyKey: "email-verification/challenge_1",
+      payload: { challengeId: "challenge_1" },
+    });
+
+    expect(second).toEqual(first);
+  });
+
+  it("refuses gift-card code material in a generic outbox payload", async () => {
+    const outbox = new NotificationOutboxService({ isConfigured: () => false } as never);
+    await expect(outbox.enqueue({
+      channel: "email",
+      entityId: "line_1",
+      eventType: "apple-card.delivery",
+      idempotencyKey: "apple-card-delivery/line_1/1",
+      payload: { giftCardCode: "ABCD-1234-EFGH" },
+    })).rejects.toThrow("NOTIFICATION_OUTBOX_SENSITIVE_PAYLOAD_FORBIDDEN");
+  });
+
+  it("claims one notification and records an accepted send", async () => {
+    const outbox = new NotificationOutboxService({ isConfigured: () => false } as never);
+    const queued = await outbox.enqueue({
+      channel: "email",
+      entityId: "challenge_2",
+      eventType: "email.verification",
+      idempotencyKey: "email-verification/challenge_2",
+      payload: { challengeId: "challenge_2", email: "buyer@example.com", otp: "123456", expireMinutes: 10 },
+    });
+
+    expect((await outbox.claimNext())?.id).toBe(queued.id);
+    await outbox.markAccepted(queued.id, "re_123");
+    expect(await outbox.claimNext()).toBeNull();
+  });
+
+  it("sends a queued OTP email with the durable application idempotency key", async () => {
+    const outbox = new NotificationOutboxService({ isConfigured: () => false } as never);
+    await outbox.enqueue({
+      channel: "email",
+      entityId: "challenge_3",
+      eventType: "email.verification",
+      idempotencyKey: "email-verification/challenge_3",
+      payload: { challengeId: "challenge_3", email: "buyer@example.com", otp: "123456", expireMinutes: 10 },
+    });
+    const send = (input: ResendSendInput) => {
+      expect(input).toMatchObject({ to: "buyer@example.com", idempotencyKey: "email-verification/challenge_3" });
+      return Promise.resolve({ emailId: "re_123" });
+    };
+
+    const result = await new NotificationDispatcher(outbox, { send }, "Vault <noreply@vault.example>").processNext();
+    expect(result.status).toBe("accepted");
+    if (result.status === "accepted") expect(typeof result.notificationId).toBe("string");
+  });
+});

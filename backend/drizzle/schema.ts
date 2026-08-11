@@ -4,7 +4,7 @@ export const users = pgTable(
   "users",
   {
     id: text("id").primaryKey(),
-    steamId64: text("steam_id64").notNull(),
+    steamId64: text("steam_id64"),
     displayName: text("display_name"),
     avatarUrl: text("avatar_url"),
     disabled: boolean("disabled").default(false).notNull(),
@@ -511,4 +511,136 @@ export const walletHolds = pgTable(
     uniqueIndex("wallet_holds_order_uidx").on(table.orderId),
     index("wallet_holds_user_status_idx").on(table.userId, table.status),
   ],
+);
+
+export const emailIdentities = pgTable(
+  "email_identities",
+  {
+    email: text("email").primaryKey(),
+    userId: text("user_id").notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("email_identities_user_uidx").on(table.userId),
+    index("email_identities_verified_idx").on(table.verifiedAt),
+  ],
+);
+
+export const emailVerificationChallenges = pgTable(
+  "email_verification_challenges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    purpose: text("purpose").notNull(),
+    codeDigest: text("code_digest").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    resendAvailableAt: timestamp("resend_available_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("email_verification_challenges_email_idx").on(table.email, table.createdAt),
+    index("email_verification_challenges_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const notificationOutbox = pgTable(
+  "notification_outbox",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    channel: text("channel").notNull(),
+    eventType: text("event_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    payload: jsonb("payload").default({}).notNull(),
+    status: text("status").default("pending").notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    availableAt: timestamp("available_at", { withTimezone: true }).defaultNow().notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    lastErrorCode: text("last_error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("notification_outbox_channel_idempotency_uidx").on(table.channel, table.idempotencyKey),
+    index("notification_outbox_status_available_idx").on(table.status, table.availableAt),
+    index("notification_outbox_entity_idx").on(table.entityId, table.eventType),
+  ],
+);
+
+export const notificationAttempts = pgTable(
+  "notification_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    notificationId: uuid("notification_id").notNull(),
+    channel: text("channel").notNull(),
+    status: text("status").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestSnapshot: jsonb("request_snapshot").default({}).notNull(),
+    responseSnapshot: jsonb("response_snapshot").default({}).notNull(),
+    errorCode: text("error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("notification_attempts_channel_idempotency_uidx").on(table.channel, table.idempotencyKey),
+    index("notification_attempts_notification_idx").on(table.notificationId),
+    index("notification_attempts_status_idx").on(table.status),
+  ],
+);
+
+export const notificationWebhookEvents = pgTable(
+  "notification_webhook_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    provider: text("provider").notNull(),
+    providerEventId: text("provider_event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    status: text("status").notNull(),
+    signatureStatus: text("signature_status").notNull(),
+    payloadSnapshot: jsonb("payload_snapshot").default({}).notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("notification_webhook_events_provider_event_uidx").on(table.provider, table.providerEventId),
+    index("notification_webhook_events_status_idx").on(table.status),
+  ],
+);
+
+export const appleGiftCardFulfillments = pgTable(
+  "apple_gift_card_fulfillments",
+  {
+    orderLineId: uuid("order_line_id").primaryKey(),
+    deliveryEmail: text("delivery_email").notNull(),
+    regionCode: text("region_code").notNull(),
+    currency: text("currency").notNull(),
+    nominalMinor: integer("nominal_minor").notNull(),
+    codeCiphertext: text("code_ciphertext"),
+    codeNonce: text("code_nonce"),
+    codeAuthTag: text("code_auth_tag"),
+    codeVersion: text("code_version"),
+    deliveryVersion: integer("delivery_version").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("apple_gift_card_fulfillments_delivery_email_idx").on(table.deliveryEmail),
+    index("apple_gift_card_fulfillments_region_idx").on(table.regionCode, table.currency),
+  ],
+);
+
+export const orderPublicNumbers = pgTable(
+  "order_public_numbers",
+  {
+    orderId: uuid("order_id").primaryKey(),
+    publicNumber: text("public_number").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("order_public_numbers_value_uidx").on(table.publicNumber)],
 );

@@ -38,6 +38,11 @@ export type CheckoutRecipientSnapshot =
   | {
     kind: "steam-refill";
     steamLogin: string;
+  }
+  | {
+    kind: "delivery-email";
+    email: string;
+    verificationId: string;
   };
 
 export type CheckoutOrderLineDto = {
@@ -60,6 +65,7 @@ export type CheckoutOrderDto = {
 };
 
 type PreparedLine = Omit<CheckoutOrderLineDto, "id"> & {
+  appleGiftCard?: NonNullable<CatalogProductDto["details"]["appleGiftCard"]>;
   productId: string;
   lineIndex: number;
 };
@@ -105,6 +111,30 @@ export class CheckoutSteamTradeUrlRequiredError extends BadRequestException {
       statusCode: 400,
       code: "STEAM_TRADE_URL_REQUIRED",
       message: "Steam Trade URL is required for skin checkout",
+    });
+  }
+}
+
+export class CheckoutSteamIdentityRequiredError extends BadRequestException {
+  readonly code = "STEAM_IDENTITY_REQUIRED";
+
+  constructor() {
+    super({
+      statusCode: 400,
+      code: "STEAM_IDENTITY_REQUIRED",
+      message: "Steam identity is required for skin checkout",
+    });
+  }
+}
+
+export class CheckoutDeliveryEmailRequiredError extends BadRequestException {
+  readonly code = "DELIVERY_EMAIL_REQUIRED";
+
+  constructor() {
+    super({
+      statusCode: 400,
+      code: "DELIVERY_EMAIL_REQUIRED",
+      message: "A verified delivery email is required for Apple gift-card checkout",
     });
   }
 }
@@ -187,7 +217,7 @@ export class CheckoutService {
       return this.loadOrder(this.database, existingBeforeQuote.id);
     }
     const user = await this.users.requireUser(command.userId);
-    const lines = await this.prepareLines(command.userId, user.steam.steamId64, command.items);
+    const lines = await this.prepareLines(command.userId, user.steam.steamId64, user.email?.address, command.items);
     const totalCoinMinor = lines.reduce((total, line) => total + line.unitPriceCoinMinor, 0);
     if (!Number.isSafeInteger(totalCoinMinor) || totalCoinMinor <= 0) {
       throw new BadRequestException("Cart total is invalid");
@@ -268,6 +298,7 @@ export class CheckoutService {
           title: line.title,
           unitPriceCoinMinor: line.unitPriceCoinMinor,
           recipientSnapshot: line.recipientSnapshot,
+          ...(line.appleGiftCard ? { appleGiftCard: line.appleGiftCard } : {}),
         });
       }
       await this.fulfillment.enqueueOrderLineCommands(client, { orderId, lines: persistedLines });
@@ -276,7 +307,12 @@ export class CheckoutService {
     });
   }
 
-  private async prepareLines(userId: string, steamId64: string, items: CheckoutCartItem[]): Promise<PreparedLine[]> {
+  private async prepareLines(
+    userId: string,
+    steamId64: string | undefined,
+    verifiedEmail: string | undefined,
+    items: CheckoutCartItem[],
+  ): Promise<PreparedLine[]> {
     const lines: PreparedLine[] = [];
     const products = await Promise.all(items.map(async (item) => {
       assertQuantity(item.quantity);
@@ -287,13 +323,16 @@ export class CheckoutService {
       const product = products[itemIndex];
       if (product === undefined) throw new BadRequestException("Cart item is invalid");
       if (product.availability !== "available") throw new BadRequestException("Product is not available");
+      if (product.kind === "skins" && steamId64 === undefined) throw new CheckoutSteamIdentityRequiredError();
       const recipientSnapshot: CheckoutRecipientSnapshot = product.kind === "skins"
         ? {
           kind: "steam-trade",
-          steamId64,
+          steamId64: steamId64 ?? "",
           steamTradePartnerAccountId: tradeCredential?.partner ?? "",
         }
-        : this.steamRefillRecipient(item);
+        : product.kind === "apple_gift_card"
+          ? this.deliveryEmailRecipient(userId, verifiedEmail)
+          : this.steamRefillRecipient(item);
       if (recipientSnapshot.kind === "steam-trade" && recipientSnapshot.steamTradePartnerAccountId === "") {
         throw new CheckoutSteamTradeUrlRequiredError();
       }
@@ -307,6 +346,7 @@ export class CheckoutService {
           quantity: 1,
           unitPriceCoinMinor: product.price.amountMinor,
           recipientSnapshot,
+          ...(product.kind === "apple_gift_card" && product.details.appleGiftCard ? { appleGiftCard: product.details.appleGiftCard } : {}),
         });
       }
     }
@@ -326,6 +366,11 @@ export class CheckoutService {
     const steamLogin = item.recipient?.steamLogin?.trim();
     if (!steamLogin) throw new BadRequestException("Steam login is required for Steam refill checkout");
     return { kind: "steam-refill", steamLogin };
+  }
+
+  private deliveryEmailRecipient(userId: string, email: string | undefined): CheckoutRecipientSnapshot {
+    if (!email) throw new CheckoutDeliveryEmailRequiredError();
+    return { kind: "delivery-email", email, verificationId: userId };
   }
 
   private async findOrderByIdempotencyKey(client: Queryable, userId: string, idempotencyKey: string): Promise<OrderRow | null> {

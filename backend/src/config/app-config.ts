@@ -35,6 +35,13 @@ export type AppConfig = {
   catalog: {
     publicGames: CatalogGame[];
   };
+  notifications: {
+    resendApiKeyFile?: string;
+    resendFrom?: string;
+    resendWebhookSecretFile?: string;
+    slackAppleOrdersWebhookUrlFile?: string;
+    appleGiftCardEncryptionKeyFile?: string;
+  };
   corsOrigins: string[];
 };
 
@@ -151,6 +158,15 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const sihApiKeyFile = optionalString(env.SIH_API_KEY_FILE);
   const sihSteamRefillApiKeyFile = optionalString(env.SIH_STEAM_REFILL_API_KEY_FILE);
   const adminApiTokenFile = optionalString(env.ADMIN_API_TOKEN_FILE);
+  const resendApiKeyFile = optionalString(env.RESEND_API_KEY_FILE);
+  const resendFrom = optionalString(env.RESEND_FROM);
+  const resendWebhookSecretFile = optionalString(env.RESEND_WEBHOOK_SECRET_FILE);
+  const slackAppleOrdersWebhookUrlFile = optionalString(env.SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE);
+  const appleGiftCardEncryptionKeyFile = optionalString(env.APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE);
+
+  if (nodeEnv === "production" && resendApiKeyFile !== undefined && (resendFrom === undefined || resendWebhookSecretFile === undefined)) {
+    throw new Error("RESEND_FROM and RESEND_WEBHOOK_SECRET_FILE are required when RESEND_API_KEY_FILE is configured in production.");
+  }
 
   return {
     nodeEnv,
@@ -181,6 +197,13 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     },
     catalog: {
       publicGames: parseCatalogPublicGames(env.CATALOG_PUBLIC_GAMES),
+    },
+    notifications: {
+      ...(resendApiKeyFile ? { resendApiKeyFile } : {}),
+      ...(resendFrom ? { resendFrom } : {}),
+      ...(resendWebhookSecretFile ? { resendWebhookSecretFile } : {}),
+      ...(slackAppleOrdersWebhookUrlFile ? { slackAppleOrdersWebhookUrlFile } : {}),
+      ...(appleGiftCardEncryptionKeyFile ? { appleGiftCardEncryptionKeyFile } : {}),
     },
     corsOrigins: parseCorsOrigins(env.CORS_ORIGINS),
   };

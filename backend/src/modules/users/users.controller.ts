@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Put, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Inject, Put, UseGuards } from "@nestjs/common";
 
 import { CsrfGuard } from "../sessions/csrf.guard";
 import { CurrentCustomerContext } from "../sessions/current-customer";
@@ -19,6 +19,9 @@ export class UsersController {
   ): Promise<{ configured: true }> {
     if (typeof body.tradeUrl !== "string") throw new Error("Invalid Steam Trade URL");
     const user = await this.users.requireUser(customer.userId);
+    if (!user.steam.connected || user.steam.steamId64 === undefined) {
+      throw new BadRequestException("Steam account is required");
+    }
     const credential = parseOwnedTradeUrl(body.tradeUrl, user.steam.steamId64);
     await this.users.saveSteamTradeCredential(customer.userId, credential);
     return { configured: true };

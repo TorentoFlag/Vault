@@ -1,4 +1,4 @@
-export type CatalogProductKind = "steam" | "skins";
+export type CatalogProductKind = "steam" | "skins" | "apple_gift_card";
 export type CatalogAvailability = "available" | "on-request";
 export type CatalogFulfillmentMode = "automatic" | "steam-trade" | "manual";
 export type CatalogSort = "relevance" | "price_asc" | "price_desc" | "newest" | "name_asc" | "name_desc";
@@ -17,6 +17,12 @@ export type CatalogFulfillmentDetails = {
 export type CatalogProductDetails = {
   specifications: CatalogProductSpecification[];
   fulfillment: CatalogFulfillmentDetails;
+  appleGiftCard?: {
+    currency: string;
+    nominalMinor: number;
+    regionCode: string;
+    regionLabel: string;
+  };
 };
 
 export type CatalogProduct = {

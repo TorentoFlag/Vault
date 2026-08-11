@@ -2358,6 +2358,134 @@
           "Orders"
         ]
       }
+    },
+    "/webhooks/resend": {
+      "post": {
+        "operationId": "ResendWebhookController_handle",
+        "parameters": [
+          {
+            "name": "svix-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "svix-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "svix-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "duplicate"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/admin/apple-gift-cards/pending": {
+      "get": {
+        "operationId": "AppleGiftCardsAdminController_pending",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AppleGiftCardsAdmin"
+        ]
+      }
+    },
+    "/admin/apple-gift-cards/{orderLineId}/deliveries": {
+      "post": {
+        "operationId": "AppleGiftCardsAdminController_deliver",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AppleGiftCardsAdmin"
+        ]
+      }
+    },
+    "/digital-goods/me": {
+      "get": {
+        "operationId": "DigitalGoodsController_mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "DigitalGoods"
+        ]
+      }
+    },
+    "/auth/email/challenges": {
+      "post": {
+        "operationId": "EmailAuthController_requestChallenge",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "EmailAuth"
+        ]
+      }
+    },
+    "/auth/email/challenges/{challengeId}/verify": {
+      "post": {
+        "operationId": "EmailAuthController_verifyChallenge",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "EmailAuth"
+        ]
+      }
     }
   },
   "info": {

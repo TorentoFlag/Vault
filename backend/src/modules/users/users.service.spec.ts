@@ -4,6 +4,21 @@ import type { DatabaseService } from "../../common/database/database.service";
 import { UsersService } from "./users.service";
 
 describe("UsersService", () => {
+  it("creates an email-only customer without pretending it has Steam", async () => {
+    const disabledDatabase = {
+      isConfigured: () => false,
+    } as unknown as DatabaseService;
+    const users = new UsersService(disabledDatabase);
+
+    const user = await users.upsertEmailUser(" Buyer@Example.com ");
+
+    expect(user).toMatchObject({
+      email: { address: "buyer@example.com", verified: true },
+      steam: { connected: false },
+    });
+    expect(user.id).toMatch(/^user_email_/);
+  });
+
   it("keeps Steam Trade URL credentials out of public user records", async () => {
     const disabledDatabase = {
       isConfigured: () => false,

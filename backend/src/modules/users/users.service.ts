@@ -8,8 +8,12 @@ import type { SteamTradeCredential } from "./steam-trade-url";
 export type CustomerUser = {
   id: string;
   steam: {
-    connected: true;
-    steamId64: string;
+    connected: boolean;
+    steamId64?: string;
+  };
+  email?: {
+    address: string;
+    verified: true;
   };
 };
 
@@ -57,6 +61,7 @@ function decryptCredential(envelope: EncryptedSteamTradeCredential): SteamTradeC
 export class UsersService {
   private readonly usersById = new Map<string, CustomerUser>();
   private readonly idsBySteamId64 = new Map<string, string>();
+  private readonly idsByEmail = new Map<string, string>();
   private readonly steamTradeCredentialsByUserId = new Map<string, EncryptedSteamTradeCredential>();
 
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
@@ -100,20 +105,72 @@ export class UsersService {
     return next;
   }
 
+  async upsertEmailUser(emailInput: string): Promise<CustomerUser> {
+    const email = emailInput.trim().toLocaleLowerCase("ru-RU");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new NotFoundException("Email is invalid");
+    if (this.database.isConfigured()) {
+      const userId = `user_email_${createHash("sha256").update(email, "utf8").digest("hex").slice(0, 32)}`;
+      const result = await this.database.query<{ id: string; steam_id64: string | null; email: string }>(
+        `
+          WITH inserted_user AS (
+            INSERT INTO users (id, steam_id64)
+            VALUES ($1, NULL)
+            ON CONFLICT (id) DO UPDATE
+            SET updated_at = clock_timestamp()
+            RETURNING id, steam_id64
+          ), upserted_identity AS (
+            INSERT INTO email_identities (email, user_id, verified_at)
+            VALUES ($2, $1, clock_timestamp())
+            ON CONFLICT (email) DO UPDATE
+            SET verified_at = clock_timestamp()
+            RETURNING user_id, email
+          )
+          SELECT users.id, users.steam_id64, upserted_identity.email
+          FROM upserted_identity
+          JOIN users ON users.id = upserted_identity.user_id
+        `,
+        [userId, email],
+      );
+      const row = result.rows[0];
+      if (!row) throw new Error("Email user was not stored");
+      return {
+        id: row.id,
+        email: { address: row.email, verified: true },
+        steam: row.steam_id64 === null ? { connected: false } : { connected: true, steamId64: row.steam_id64 },
+      };
+    }
+
+    const userId = this.idsByEmail.get(email) ?? `user_email_${createHash("sha256").update(email, "utf8").digest("hex").slice(0, 32)}`;
+    const existing = this.usersById.get(userId);
+    const next: CustomerUser = {
+      ...existing,
+      id: userId,
+      email: { address: email, verified: true },
+      steam: existing?.steam ?? { connected: false },
+    };
+    this.usersById.set(userId, next);
+    this.idsByEmail.set(email, userId);
+    return next;
+  }
+
   async requireUser(userId: string): Promise<CustomerUser> {
     if (this.database.isConfigured()) {
-      const result = await this.database.query<{ id: string; steam_id64: string }>(
-        "SELECT id, steam_id64 FROM users WHERE id = $1 AND disabled = false LIMIT 1",
+      const result = await this.database.query<{ id: string; steam_id64: string | null; email: string | null }>(
+        `
+          SELECT users.id, users.steam_id64, email_identities.email
+          FROM users
+          LEFT JOIN email_identities ON email_identities.user_id = users.id
+          WHERE users.id = $1 AND users.disabled = false
+          LIMIT 1
+        `,
         [userId],
       );
       const row = result.rows[0];
       if (!row) throw new NotFoundException("User not found");
       return {
         id: row.id,
-        steam: {
-          connected: true,
-          steamId64: row.steam_id64,
-        },
+        ...(row.email === null ? {} : { email: { address: row.email, verified: true as const } }),
+        steam: row.steam_id64 === null ? { connected: false } : { connected: true, steamId64: row.steam_id64 },
       };
     }
 

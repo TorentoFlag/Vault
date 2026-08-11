@@ -22,6 +22,7 @@ export class SessionsController {
     return {
       id: user.id,
       steam: user.steam,
+      ...(user.email ? { email: user.email } : {}),
     };
   }
 

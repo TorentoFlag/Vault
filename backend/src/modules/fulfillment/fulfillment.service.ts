@@ -15,6 +15,12 @@ type Queryable = {
 };
 
 export type FulfillmentOrderLineInput = {
+  appleGiftCard?: {
+    currency: string;
+    nominalMinor: number;
+    regionCode: string;
+    regionLabel: string;
+  };
   id: string;
   productSlug: string;
   kind: CatalogProductDto["kind"];
@@ -23,7 +29,7 @@ export type FulfillmentOrderLineInput = {
   recipientSnapshot: CheckoutRecipientSnapshot;
 };
 
-type FulfillmentCommandType = "sih_skin_purchase" | "sih_steam_refill";
+type FulfillmentCommandType = "manual_apple_gift_card" | "sih_skin_purchase" | "sih_steam_refill";
 
 type PendingSkinCommand = {
   attemptId: string;
@@ -118,6 +124,7 @@ export type FulfillmentSkinReconciliationBatchResultDto = {
 
 function commandTypeForLine(line: FulfillmentOrderLineInput): FulfillmentCommandType {
   if (line.kind === "skins") return "sih_skin_purchase";
+  if (line.kind === "apple_gift_card") return "manual_apple_gift_card";
   return "sih_steam_refill";
 }
 
@@ -161,6 +168,7 @@ export class FulfillmentService {
     for (const line of command.lines) {
       const commandType = commandTypeForLine(line);
       const idempotencyKey = `${command.orderId}:${line.id}:${commandType}`;
+      const isAppleGiftCard = line.kind === "apple_gift_card";
       await client.query(
         `
           INSERT INTO fulfillment_commands (
@@ -172,13 +180,15 @@ export class FulfillmentService {
             idempotency_key,
             payload_snapshot
           )
-          VALUES ($1, $2, 'sih', $3, 'pending', $4, $5::jsonb)
+          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
           ON CONFLICT (order_line_id, command_type) DO NOTHING
         `,
         [
           command.orderId,
           line.id,
+          isAppleGiftCard ? "manual" : "sih",
           commandType,
+          isAppleGiftCard ? "manual_review" : "pending",
           idempotencyKey,
           JSON.stringify({
             orderId: command.orderId,
@@ -191,6 +201,13 @@ export class FulfillmentService {
           }),
         ],
       );
+      if (isAppleGiftCard && line.appleGiftCard && line.recipientSnapshot.kind === "delivery-email") {
+        await client.query(`
+          INSERT INTO apple_gift_card_fulfillments (order_line_id, delivery_email, region_code, currency, nominal_minor)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (order_line_id) DO NOTHING
+        `, [line.id, line.recipientSnapshot.email, line.appleGiftCard.regionCode, line.appleGiftCard.currency, line.appleGiftCard.nominalMinor]);
+      }
     }
   }
 
@@ -278,6 +295,26 @@ export class FulfillmentService {
     }
 
     return result;
+  }
+
+  async completeManualAppleGiftCard(orderLineId: string): Promise<void> {
+    await this.database.transaction(async (client) => {
+      const result = await client.query<{ order_id: string; user_id: string }>(`
+        SELECT order_lines.order_id, orders.user_id
+        FROM order_lines JOIN orders ON orders.id = order_lines.order_id
+        WHERE order_lines.id = $1 AND order_lines.kind = 'apple_gift_card'
+        FOR UPDATE
+      `, [orderLineId]);
+      const pending = result.rows[0];
+      if (!pending) throw new Error("APPLE_GIFT_CARD_ORDER_LINE_NOT_FOUND");
+      await client.query(`
+        UPDATE fulfillment_commands
+        SET status = 'completed', finished_at = clock_timestamp(), updated_at = clock_timestamp()
+        WHERE order_line_id = $1 AND command_type = 'manual_apple_gift_card' AND status <> 'completed'
+      `, [orderLineId]);
+      await client.query("UPDATE order_lines SET status = 'supplier_finished' WHERE id = $1", [orderLineId]);
+      await this.settleOrderIfTerminal(client, { orderId: pending.order_id, userId: pending.user_id });
+    });
   }
 
   private async claimNextSkinCommand(command: ProcessFulfillmentCommand): Promise<PendingSkinCommand | null> {

@@ -3,6 +3,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from "@nes
 import { DatabaseService } from "../../common/database/database.service";
 import { CATALOG_GAMES, getCatalogGameDefinition, parseCatalogGame, type CatalogGame } from "./catalog-game";
 import { CatalogPricingService } from "./catalog-pricing.service";
+import { parseAppleGiftCardDetails } from "./apple-gift-card";
 import type {
   CatalogFacetOption,
   CatalogFacetsDto,
@@ -15,7 +16,7 @@ import type {
 } from "./catalog.types";
 import { buildSteamRefillProduct } from "./steam-refill-product";
 
-const allowedKinds = new Set<CatalogProductKind>(["skins", "steam"]);
+const allowedKinds = new Set<CatalogProductKind>(["apple_gift_card", "skins", "steam"]);
 const defaultCatalogLimit = 120;
 const maxCatalogLimit = 240;
 const supplierPricingJoin = `
@@ -72,6 +73,7 @@ const effectivePriceCoinMinorSql = `
           )
 `;
 const relatedTerms: Record<CatalogProductKind, string[]> = {
+  apple_gift_card: ["apple", "app store", "itunes", "подарочная карта", "подарочный код"],
   steam: ["steam", "стим", "пополнение", "баланс", "кошелек"],
   skins: ["скин", "скины", "предмет", "предметы", "cs2", "rust", "раст", "tf2", "team fortress"],
 };
@@ -159,6 +161,10 @@ function priceCoinMinor(product: LoadedCatalogProduct): number {
 }
 
 function productDto(product: LoadedCatalogProduct): CatalogProductDto {
+  const details = product.kind === "apple_gift_card"
+    ? parseAppleGiftCardDetails(product.details)
+    : product.details;
+  if (details === null) throw new Error("APPLE_GIFT_CARD_DETAILS_INVALID");
   return {
     id: product.id,
     slug: product.slug,
@@ -176,7 +182,7 @@ function productDto(product: LoadedCatalogProduct): CatalogProductDto {
     ...(product.imageAlt === undefined ? {} : { imageAlt: product.imageAlt }),
     meta: product.meta,
     keywords: product.keywords,
-    details: product.details,
+    details,
     price: priceDto(priceCoinMinor(product)),
   };
 }

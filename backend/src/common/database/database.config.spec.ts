@@ -18,6 +18,7 @@ const baseConfig: AppConfig = {
   catalog: {
     publicGames: ["cs2"],
   },
+  notifications: {},
   corsOrigins: [],
 };
 
