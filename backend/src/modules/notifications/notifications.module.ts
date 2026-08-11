@@ -9,6 +9,7 @@ import { ResendClient } from "./resend.client";
 import { ResendWebhookController } from "./resend-webhook.controller";
 import { AppleGiftCardsModule } from "../apple-gift-cards/apple-gift-cards.module";
 import { AppleGiftCardsService } from "../apple-gift-cards/apple-gift-cards.service";
+import { SlackClient } from "./slack.client";
 
 @Module({
   imports: [DatabaseModule, forwardRef(() => AppleGiftCardsModule)],
@@ -21,10 +22,15 @@ import { AppleGiftCardsService } from "../apple-gift-cards/apple-gift-cards.serv
       useFactory: (config: AppConfig) => new ResendClient(config),
     },
     {
+      provide: SlackClient,
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig) => new SlackClient(config),
+    },
+    {
       provide: NotificationDispatcher,
-      inject: [NotificationOutboxService, ResendClient, APP_CONFIG, AppleGiftCardsService],
-      useFactory: (outbox: NotificationOutboxService, resend: ResendClient, config: AppConfig, appleCards: AppleGiftCardsService) => {
-        return new NotificationDispatcher(outbox, resend, config.notifications.resendFrom ?? "", appleCards);
+      inject: [NotificationOutboxService, ResendClient, APP_CONFIG, AppleGiftCardsService, SlackClient],
+      useFactory: (outbox: NotificationOutboxService, resend: ResendClient, config: AppConfig, appleCards: AppleGiftCardsService, slack: SlackClient) => {
+        return new NotificationDispatcher(outbox, resend, config.notifications.resendFrom ?? "", appleCards, slack);
       },
     },
   ],

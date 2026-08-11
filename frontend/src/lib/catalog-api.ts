@@ -14,7 +14,7 @@ type ApiCoinPrice = {
 type ApiCatalogProduct = {
   id: string;
   slug: string;
-  kind: "steam" | "skins";
+  kind: "steam" | "skins" | "apple_gift_card";
   category: string;
   game?: string;
   productType: string;
@@ -106,6 +106,7 @@ function isCoinPrice(value: unknown): value is ApiCoinPrice {
 
 function isProductDetails(value: unknown): value is ProductDetails {
   if (!isRecord(value) || !Array.isArray(value.specifications) || !isRecord(value.fulfillment)) return false;
+  const appleGiftCard = value.appleGiftCard;
   return (
     value.specifications.every((item) => (
       isRecord(item) && typeof item.label === "string" && typeof item.value === "string"
@@ -113,6 +114,15 @@ function isProductDetails(value: unknown): value is ProductDetails {
     && typeof value.fulfillment.title === "string"
     && typeof value.fulfillment.description === "string"
     && isStringArray(value.fulfillment.requirements)
+    && (appleGiftCard === undefined || (
+      isRecord(appleGiftCard)
+      && typeof appleGiftCard.currency === "string"
+      && typeof appleGiftCard.nominalMinor === "number"
+      && Number.isSafeInteger(appleGiftCard.nominalMinor)
+      && appleGiftCard.nominalMinor > 0
+      && typeof appleGiftCard.regionCode === "string"
+      && typeof appleGiftCard.regionLabel === "string"
+    ))
   );
 }
 
@@ -121,7 +131,7 @@ function isApiCatalogProduct(value: unknown): value is ApiCatalogProduct {
   return (
     typeof value.id === "string"
     && typeof value.slug === "string"
-    && (value.kind === "steam" || value.kind === "skins")
+    && (value.kind === "steam" || value.kind === "skins" || value.kind === "apple_gift_card")
     && typeof value.category === "string"
     && (value.game === undefined || typeof value.game === "string")
     && typeof value.productType === "string"

@@ -168,14 +168,20 @@ function mapProviderInventoryItem(item: ApiMappedInventoryItem): MarketplaceInve
 
 function sessionFromApiUser(user: ApiUser): MarketplaceSession {
   return {
-    emailAccount: null,
-    steamAccount: {
+    emailAccount: user.email ? {
+      id: `email:${user.email.address}`,
+      method: "email",
+      displayName: user.email.address.split("@")[0] || "Покупатель",
+      email: user.email.address,
+      steamConnected: false,
+    } : null,
+    steamAccount: user.steam.connected && user.steam.steamId64 ? {
       id: `steam:${user.steam.steamId64}`,
       method: "steam",
       displayName: "Steam user",
       steamId: user.steam.steamId64,
       steamConnected: true,
-    },
+    } : null,
   };
 }
 

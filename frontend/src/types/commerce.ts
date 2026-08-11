@@ -17,6 +17,12 @@ export type ProductFulfillmentDetails = {
 export type ProductDetails = {
   specifications: ProductSpecification[];
   fulfillment: ProductFulfillmentDetails;
+  appleGiftCard?: {
+    currency: string;
+    nominalMinor: number;
+    regionCode: string;
+    regionLabel: string;
+  };
 };
 
 export type Product = {

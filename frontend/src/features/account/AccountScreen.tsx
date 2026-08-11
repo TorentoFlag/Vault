@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { useMarketplace } from "@/components/marketplace/MarketplaceProvider";
 import { Button, StatusBadge } from "@/components/ui/UI";
@@ -19,11 +19,12 @@ import {
   sortOrdersNewestFirst,
 } from "@/lib/account";
 import type { CoinTransaction, MarketplaceOrder, TradeEvent } from "@/types/account";
+import { createApiClient, type ApiDigitalGood } from "@/lib/api";
 
 import styles from "./account.module.css";
 import { SteamTradeUrlForm } from "./SteamTradeUrlForm";
 
-export type AccountSection = "overview" | "purchases" | "payments" | "inventory" | "steam" | "settings" | "support";
+export type AccountSection = "overview" | "purchases" | "digital-goods" | "payments" | "inventory" | "steam" | "settings" | "support";
 
 const orderStatus = {
   completed: { label: "Выполнен", tone: "success" as const },
@@ -220,6 +221,22 @@ function Purchases() {
   return <section className={styles.panel}><SectionHeading label="Заказы" title="История покупок" description={`${ordersCountLabel(orders.length)} в истории покупок.`} action={<Link href="/catalog">Открыть каталог</Link>} /><OrderTable orders={sortedOrders} /></section>;
 }
 
+function DigitalGoods() {
+  const [items, setItems] = useState<ApiDigitalGood[]>([]);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  useEffect(() => {
+    let cancelled = false;
+    void createApiClient().getDigitalGoods().then((next) => {
+      if (!cancelled) { setItems(next); setState("ready"); }
+    }).catch(() => { if (!cancelled) setState("error"); });
+    return () => { cancelled = true; };
+  }, []);
+  return <section className={styles.panel}>
+    <SectionHeading label="Подарочные карты" title="Цифровые товары" description="Коды не отображаются в личном кабинете: после ручной проверки они приходят на подтверждённый email." />
+    {state === "loading" ? <p>Загружаем товары…</p> : state === "error" ? <p>Не удалось загрузить цифровые товары. Обновите страницу или обратитесь в поддержку.</p> : !items.length ? <div className={styles.emptyState}><span aria-hidden="true">0</span><div><h3>Цифровых товаров пока нет</h3><p>После оформления подарочная карта появится здесь со статусом выдачи.</p><Link className={styles.primaryLink} href="/catalog">Открыть каталог</Link></div></div> : <div className={styles.orderCards}>{items.map((item) => <article key={item.id} className={styles.orderCard}><div><span>{item.orderNumber}</span><h3>{item.title}</h3><p>{item.regionLabel} · {item.nominalDisplay}</p></div><StatusBadge tone={item.status === "sent_to_email" ? "success" : item.status === "failed" ? "neutral" : "warning"}>{item.status === "sent_to_email" ? "Отправлено на email" : item.status === "awaiting_manual_delivery" ? "Готовится к выдаче" : item.status === "needs_review" ? "Нужна проверка" : "Не выполнен"}</StatusBadge><details><summary>Как активировать подарочную карту</summary><p><strong>iPhone или iPad:</strong> App Store → профиль → «Погасить подарочную карту или код» → «Введите код вручную».</p><p><strong>Mac:</strong> App Store → имя в левом нижнем углу → «Погасить подарочную карту» → введите код.</p><p>Регион Apple ID должен соответствовать региону карты. Храните код до успешной активации и не передавайте его третьим лицам.</p></details></article>)}</div>}
+  </section>;
+}
+
 function Payments() {
   const { transactions } = useMarketplace();
   return <section className={styles.panel}><SectionHeading label="Баланс" title="Все операции Coins" description="Зачисления и списания без банковских реквизитов и фиатных сумм." action={<Link href="/balance/top-up">Пополнить</Link>} /><TransactionsTable transactions={transactions} /></section>;
@@ -326,6 +343,7 @@ function Settings() {
 
 export function AccountScreen({ section, returnTo }: { section: AccountSection; returnTo?: "/checkout" | "/cart" | null }) {
   if (section === "purchases") return <Purchases />;
+  if (section === "digital-goods") return <DigitalGoods />;
   if (section === "payments") return <Payments />;
   if (section === "inventory") return <Inventory />;
   if (section === "steam") return <SteamSettings returnTo={returnTo} />;

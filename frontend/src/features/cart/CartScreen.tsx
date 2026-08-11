@@ -18,6 +18,7 @@ const kindLabel: Record<Product["kind"], string> = {
   skins: "Игровой предмет",
   steam: "Steam",
   gpt: "GPT",
+  apple_gift_card: "Подарочная карта Apple",
 };
 
 function formatCoins(value: number) {

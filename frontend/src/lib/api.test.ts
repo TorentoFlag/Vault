@@ -14,6 +14,8 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/session/me",
     "/session/csrf",
     "/session/logout",
+    "/auth/email/challenges",
+    "/auth/email/challenges/{challengeId}/verify",
     "/me/steam-trade-url",
     "/me/steam-trade-url/status",
     "/wallet/me",
@@ -29,6 +31,7 @@ test("frontend API transport is constrained to backend OpenAPI paths", () => {
     "/inventory/me/items/{itemId}/withdrawals",
     "/fulfillment/me/trades",
     "/payments/top-up/sessions",
+    "/digital-goods/me",
   ]);
 });
 

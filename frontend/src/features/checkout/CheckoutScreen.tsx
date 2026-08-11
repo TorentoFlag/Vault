@@ -25,6 +25,7 @@ const kindLabel: Record<Product["kind"], string> = {
   skins: "Игровой предмет",
   steam: "Steam",
   gpt: "GPT",
+  apple_gift_card: "Подарочная карта Apple",
 };
 
 const resultMessage: Record<Exclude<CheckoutResult["status"], "success" | "busy">, string> = {

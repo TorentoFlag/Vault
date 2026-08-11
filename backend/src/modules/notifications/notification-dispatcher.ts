@@ -3,6 +3,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { renderAppleOrderAcceptedEmail, renderEmailVerificationEmail, type RenderedEmail } from "./email-templates";
 import { NotificationOutboxService, type NotificationOutboxRecord } from "./notification-outbox.service";
 import { ResendClient } from "./resend.client";
+import { SlackClient } from "./slack.client";
 import type { AppleGiftCardsService } from "../apple-gift-cards/apple-gift-cards.service";
 
 export type NotificationDispatchResult =
@@ -28,12 +29,19 @@ export class NotificationDispatcher {
     @Inject(ResendClient) private readonly resend: Pick<ResendClient, "send">,
     private readonly from: string,
     private readonly appleCards?: Pick<AppleGiftCardsService, "completeDeliveryAfterAcceptedSend" | "deliveryEmailForNotification">,
+    @Inject(SlackClient) private readonly slack?: Pick<SlackClient, "send">,
   ) {}
 
   async processNext(): Promise<NotificationDispatchResult> {
     const notification = await this.outbox.claimNext();
     if (notification === null) return { status: "none" };
     try {
+      if (notification.channel === "slack") {
+        if (!this.slack) throw new Error("SLACK_CLIENT_NOT_AVAILABLE");
+        await this.slack.send({ blocks: this.resolveSlackBlocks(notification) });
+        await this.outbox.markAccepted(notification.id, "slack-webhook");
+        return { status: "accepted", notificationId: notification.id };
+      }
       const email = await this.resolveEmail(notification);
       const accepted = await this.resend.send({ ...email.message, from: this.from, to: email.to, idempotencyKey: notification.idempotencyKey });
       await this.outbox.markAccepted(notification.id, accepted.emailId);
@@ -44,6 +52,23 @@ export class NotificationDispatcher {
       await this.outbox.markRetryableFailure(notification.id, errorCode);
       return { status: "retry_scheduled", notificationId: notification.id };
     }
+  }
+
+  private resolveSlackBlocks(notification: NotificationOutboxRecord): unknown[] {
+    if (notification.eventType !== "apple-card.slack-alert") throw new Error("SLACK_NOTIFICATION_EVENT_UNSUPPORTED");
+    const payload = notification.payload;
+    if (typeof payload.orderNumber !== "string" || typeof payload.productName !== "string" || typeof payload.regionLabel !== "string" || typeof payload.nominalDisplay !== "string" || typeof payload.amount !== "string" || typeof payload.maskedEmail !== "string") throw new Error("SLACK_NOTIFICATION_PAYLOAD_INVALID");
+    return [
+      { type: "header", text: { type: "plain_text", text: "Новый заказ Apple Gift Card" } },
+      { type: "section", fields: [
+        { type: "mrkdwn", text: `*Заказ:* ${payload.orderNumber}` },
+        { type: "mrkdwn", text: `*Товар:* ${payload.productName}` },
+        { type: "mrkdwn", text: `*Регион:* ${payload.regionLabel}` },
+        { type: "mrkdwn", text: `*Номинал:* ${payload.nominalDisplay}` },
+        { type: "mrkdwn", text: `*Сумма:* ${payload.amount}` },
+        { type: "mrkdwn", text: `*Email:* ${payload.maskedEmail}` },
+      ] },
+    ];
   }
 
   private async resolveEmail(notification: NotificationOutboxRecord): Promise<{ to: string; message: RenderedEmail }> {

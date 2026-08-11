@@ -1,4 +1,4 @@
-export type ProductKind = "steam" | "skins" | "gpt";
+export type ProductKind = "steam" | "skins" | "gpt" | "apple_gift_card";
 
 export type SearchableProduct = {
   id: string;
@@ -27,6 +27,7 @@ const relatedTerms: Record<ProductKind, string[]> = {
     "team fortress",
   ],
   gpt: ["gpt", "chatgpt", "чат", "подписка", "сервис"],
+  apple_gift_card: ["apple", "app store", "itunes", "подарочная карта", "подарочный код"],
 };
 
 function normalize(value: string) {
@@ -61,6 +62,7 @@ export function searchProducts<T extends SearchableProduct>(products: T[], query
     return queryTerms.every((term) => {
       if (term === "steam") return product.kind === "steam";
       if (term === "gpt") return product.kind === "gpt";
+      if (term === "apple" || term === "itunes") return product.kind === "apple_gift_card";
       return haystack.includes(term);
     });
   });

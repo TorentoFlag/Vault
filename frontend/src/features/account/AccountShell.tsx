@@ -14,6 +14,7 @@ import styles from "./account.module.css";
 const accountNav = [
   { href: "/account", label: "Обзор", icon: "grid" },
   { href: "/account/purchases", label: "Мои покупки", icon: "bag" },
+  { href: "/account/digital-goods", label: "Цифровые товары", icon: "bag" },
   { href: "/account/payments", label: "История платежей", icon: "coin" },
   { href: "/account/inventory", label: "Инвентарь", icon: "grid" },
   { href: "/account/steam", label: "Steam", icon: "steam" },
@@ -24,6 +25,7 @@ const accountNav = [
 const pageTitles: Record<string, { title: string; description: string }> = {
   "/account": { title: "Личный кабинет", description: "Покупки, баланс Coins и настройки Steam в одном месте." },
   "/account/purchases": { title: "Мои покупки", description: "Все заказы, их статусы и доступные действия." },
+  "/account/digital-goods": { title: "Цифровые товары", description: "Подарочные карты и инструкция по их активации." },
   "/account/payments": { title: "История Coins", description: "Зачисления и списания внутреннего баланса Vault." },
   "/account/inventory": { title: "Инвентарь", description: "Предметы из выполненных заказов и настройка данных Steam." },
   "/account/steam": { title: "Steam", description: "Профиль и Steam Trade URL, сохранённые для заказов игровых предметов." },

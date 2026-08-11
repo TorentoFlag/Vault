@@ -9,9 +9,11 @@ import { Breadcrumbs, Button, Container, Skeleton } from "@/components/ui/UI";
 import { Icon } from "@/components/ui/Icon";
 import {
   buildSteamAuthStartUrl,
+  validateEmail,
   type AuthMethod,
   type AuthReturnPath,
 } from "@/lib/auth";
+import { createApiClient } from "@/lib/api";
 
 import styles from "./auth.module.css";
 
@@ -53,6 +55,9 @@ export function AuthScreen({
   const [method, setMethod] = useState<AuthMethod>(initialMethod);
   const [status, setStatus] = useState<AuthStatus>("idle");
   const [formError, setFormError] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailChallengeId, setEmailChallengeId] = useState<string | null>(null);
+  const [otp, setOtp] = useState("");
   const submitLock = useRef(false);
   const steamTabRef = useRef<HTMLButtonElement>(null);
   const emailTabRef = useRef<HTMLButtonElement>(null);
@@ -109,6 +114,43 @@ export function AuthScreen({
     setStatus("idle");
     setFormError("");
     notify("Вы вышли из аккаунта Vault.");
+  }
+
+  async function requestEmailCode() {
+    const error = validateEmail(email);
+    if (error) { setFormError(error); return; }
+    if (submitLock.current) return;
+    submitLock.current = true;
+    setStatus("loading");
+    setFormError("");
+    try {
+      const challenge = await createApiClient().requestEmailChallenge(email);
+      setEmailChallengeId(challenge.id);
+      setStatus("idle");
+      notify("Код подтверждения отправлен на указанный email.");
+    } catch {
+      setStatus("error");
+      setFormError("Не удалось отправить код. Проверьте email и повторите попытку.");
+    } finally { submitLock.current = false; }
+  }
+
+  async function verifyEmailCode() {
+    if (!emailChallengeId || !/^\d{6}$/.test(otp)) { setFormError("Введите шестизначный код из письма."); return; }
+    if (submitLock.current) return;
+    submitLock.current = true;
+    setStatus("loading");
+    setFormError("");
+    try {
+      await createApiClient().verifyEmailChallenge(emailChallengeId, otp);
+      setStatus("success");
+      notify("Email подтверждён.");
+      if (returnTo) router.replace(returnTo);
+      else router.replace("/account");
+      router.refresh();
+    } catch {
+      setStatus("error");
+      setFormError("Код недействителен или срок его действия истёк. Запросите новый код.");
+    } finally { submitLock.current = false; }
   }
 
   return (
@@ -227,7 +269,7 @@ export function AuthScreen({
                 <div id="auth-panel-email" role="tabpanel" aria-labelledby="auth-tab-email" className={styles.panel}>
                   <div className={styles.panelHeading}>
                     <span className={styles.emailMark}>@</span>
-                    <div><h3>Email-вход недоступен</h3><p>Серверная email-авторизация не подключена в текущем релизе.</p></div>
+                    <div><h3>Вход по email</h3><p>Подтвердите адрес одноразовым кодом — он нужен для доставки цифровых товаров.</p></div>
                   </div>
                   {session?.emailAccount ? (
                     <>
@@ -242,13 +284,25 @@ export function AuthScreen({
                       </div>
                       <p className={styles.panelFootnote}>Выйти или сменить аккаунт можно в блоке состояния справа.</p>
                     </>
+                  ) : emailChallengeId ? (
+                    <>
+                      {formError ? <p className={styles.formError} role="alert">{formError}</p> : null}
+                      <label className={styles.fieldLabel} htmlFor="email-otp">Код из письма</label>
+                      <input id="email-otp" className={styles.fieldInput} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, ""))} disabled={isLoading} />
+                      <Button className={styles.mainButton} type="button" onClick={() => void verifyEmailCode()} disabled={isLoading}>
+                        Подтвердить email
+                      </Button>
+                      <button className={styles.textButton} type="button" onClick={() => { setEmailChallengeId(null); setOtp(""); setFormError(""); }}>Изменить email</button>
+                    </>
                   ) : (
                     <>
                       {formError ? <p className={styles.formError} role="alert">{formError}</p> : null}
-                      <Button className={styles.mainButton} type="button" disabled>
-                        Email-вход скоро появится
+                      <label className={styles.fieldLabel} htmlFor="auth-email">Email</label>
+                      <input id="auth-email" className={styles.fieldInput} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={isLoading} />
+                      <Button className={styles.mainButton} type="button" onClick={() => void requestEmailCode()} disabled={isLoading}>
+                        Получить код
                       </Button>
-                      <p className={styles.panelFootnote}>Для покупок игровых предметов используйте Steam-вход.</p>
+                      <p className={styles.panelFootnote}>Для игровых предметов дополнительно потребуется Steam-вход.</p>
                     </>
                   )}
                 </div>

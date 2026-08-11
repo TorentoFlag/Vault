@@ -196,6 +196,12 @@ function uniqueSnapshots(lines: PreparedLine[]): CheckoutRecipientSnapshot[] {
   return snapshots;
 }
 
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "[masked]";
+  return `${local.slice(0, 1)}***@${domain}`;
+}
+
 @Injectable()
 export class CheckoutService {
   constructor(
@@ -302,6 +308,25 @@ export class CheckoutService {
         });
       }
       await this.fulfillment.enqueueOrderLineCommands(client, { orderId, lines: persistedLines });
+      for (const line of persistedLines) {
+        if (!line.appleGiftCard || line.recipientSnapshot.kind !== "delivery-email") continue;
+        await client.query(`
+          INSERT INTO notification_outbox (channel, event_type, entity_id, idempotency_key, payload)
+          VALUES ('slack', 'apple-card.slack-alert', $1, $2, $3::jsonb)
+          ON CONFLICT (channel, idempotency_key) DO NOTHING
+        `, [
+          line.id,
+          `apple-card-order-accepted/${orderId}/${line.id}`,
+          JSON.stringify({
+            amount: `${(line.unitPriceCoinMinor / 100).toLocaleString("ru-RU")} Coins`,
+            maskedEmail: maskEmail(line.recipientSnapshot.email),
+            nominalDisplay: `${line.appleGiftCard.nominalMinor / 100} ${line.appleGiftCard.currency}`,
+            orderNumber: `VLT-${orderId.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
+            productName: line.title,
+            regionLabel: line.appleGiftCard.regionLabel,
+          }),
+        ]);
+      }
 
       return this.loadOrder(client, orderId);
     });

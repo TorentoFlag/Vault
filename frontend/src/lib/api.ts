@@ -8,6 +8,8 @@ export const apiPaths = [
   "/session/me",
   "/session/csrf",
   "/session/logout",
+  "/auth/email/challenges",
+  "/auth/email/challenges/{challengeId}/verify",
   "/me/steam-trade-url",
   "/me/steam-trade-url/status",
   "/wallet/me",
@@ -23,6 +25,7 @@ export const apiPaths = [
   "/inventory/me/items/{itemId}/withdrawals",
   "/fulfillment/me/trades",
   "/payments/top-up/sessions",
+  "/digital-goods/me",
 ] as const satisfies readonly ServerApiPath[];
 
 type ApiPath = typeof apiPaths[number];
@@ -40,9 +43,23 @@ export type ApiProblem = {
 export type ApiUser = {
   id: string;
   steam: {
-    connected: true;
-    steamId64: string;
+    connected: boolean;
+    steamId64?: string;
   };
+  email?: { address: string; verified: true };
+};
+
+export type ApiEmailChallenge = { id: string; resendAvailableAt: string };
+export type ApiDigitalGood = {
+  id: string;
+  orderNumber: string;
+  productSlug: string;
+  title: string;
+  regionLabel: string;
+  nominalDisplay: string;
+  status: "awaiting_manual_delivery" | "sent_to_email" | "needs_review" | "failed";
+  purchasedAt: string;
+  activationGuide: "apple_app_store_itunes_v1";
 };
 
 export type ApiSteamTradeUrlStatus = {
@@ -85,6 +102,11 @@ type ApiOrderRecipientSnapshot =
   | {
     kind: "steam-refill";
     steamLogin: string;
+  }
+  | {
+    kind: "delivery-email";
+    email: string;
+    verificationId: string;
   };
 
 type ApiOrderLine = {
@@ -223,18 +245,14 @@ export function isApiProblem(value: unknown): value is ApiProblem {
 export function isApiUser(value: unknown): value is ApiUser {
   if (!isRecord(value)) return false;
   const keys = Object.keys(value);
-  if (keys.length !== 2 || !keys.includes("id") || !keys.includes("steam")) return false;
+  if (!keys.includes("id") || !keys.includes("steam") || keys.some((key) => key !== "id" && key !== "steam" && key !== "email")) return false;
   if (typeof value.id !== "string") return false;
   if (!isRecord(value.steam)) return false;
   const steamKeys = Object.keys(value.steam);
-  return (
-    steamKeys.length === 2 &&
-    steamKeys.includes("connected") &&
-    steamKeys.includes("steamId64") &&
-    value.steam.connected === true &&
-    typeof value.steam.steamId64 === "string" &&
-    /^(?:0|[1-9][0-9]{0,19})$/.test(value.steam.steamId64)
-  );
+  if (!steamKeys.includes("connected") || steamKeys.some((key) => key !== "connected" && key !== "steamId64") || typeof value.steam.connected !== "boolean") return false;
+  if (value.steam.connected && (typeof value.steam.steamId64 !== "string" || !/^(?:0|[1-9][0-9]{0,19})$/.test(value.steam.steamId64))) return false;
+  if (!value.steam.connected && value.steam.steamId64 !== undefined) return false;
+  return value.email === undefined || (isRecord(value.email) && Object.keys(value.email).length === 2 && typeof value.email.address === "string" && value.email.verified === true);
 }
 
 function isWalletBalanceResponse(value: unknown): value is {
@@ -289,6 +307,7 @@ function isApiOrderRecipientSnapshot(value: unknown): value is ApiOrderRecipient
       && !("token" in value)
       && !("tradeUrl" in value);
   }
+  if (value.kind === "delivery-email") return typeof value.email === "string" && typeof value.verificationId === "string";
   return value.kind === "steam-refill" && typeof value.steamLogin === "string";
 }
 
@@ -305,7 +324,7 @@ function isApiOrderLine(value: unknown): value is ApiOrderLine {
       value.fulfillmentStage === "needs_review"
     ) &&
     typeof value.productSlug === "string" &&
-    (value.kind === "skins" || value.kind === "steam") &&
+    (value.kind === "skins" || value.kind === "steam" || value.kind === "apple_gift_card") &&
     typeof value.title === "string" &&
     value.quantity === 1 &&
     typeof value.unitPriceCoinMinor === "number" &&
@@ -443,7 +462,9 @@ function orderNumberFromId(id: string) {
 }
 
 function fulfillmentModeForKind(kind: Product["kind"]): Product["fulfillmentMode"] {
-  return kind === "skins" ? "steam-trade" : "automatic";
+  if (kind === "skins") return "steam-trade";
+  if (kind === "apple_gift_card") return "manual";
+  return "automatic";
 }
 
 function deliveryStatusForLine(status: ApiOrder["status"], stage: ApiOrderLine["fulfillmentStage"]): OrderDeliveryStatus {
@@ -564,6 +585,19 @@ export function createApiClient(options: ApiClientOptions = {}) {
   }
 
   return {
+    async requestEmailChallenge(email: string): Promise<ApiEmailChallenge> {
+      const body = await requestJson("/auth/email/challenges", { method: "POST", body: JSON.stringify({ email }) });
+      if (!isRecord(body) || typeof body.id !== "string" || typeof body.resendAvailableAt !== "string") throw new Error("Email challenge response is malformed.");
+      return { id: body.id, resendAvailableAt: body.resendAvailableAt };
+    },
+
+    async verifyEmailChallenge(challengeId: string, code: string): Promise<Pick<ApiUser, "id" | "email">> {
+      const path = `/auth/email/challenges/${encodePathSegment(challengeId)}/verify`;
+      const body = await requestJson(path, { method: "POST", body: JSON.stringify({ code }) });
+      if (!isRecord(body) || typeof body.id !== "string" || !isRecord(body.email) || typeof body.email.address !== "string" || body.email.verified !== true) throw new Error("Email verification response is malformed.");
+      return { id: body.id, email: { address: body.email.address, verified: true } };
+    },
+
     async getCurrentUser(): Promise<ApiUser> {
       const body = await requestJson("/session/me");
       if (!isApiUser(body)) throw new Error("Session response is malformed.");
@@ -615,6 +649,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const body = await requestJson("/orders/me");
       if (!isOrderHistoryResponse(body)) throw new Error("Order history response is malformed.");
       return body.orders.map(mapApiOrder);
+    },
+
+    async getDigitalGoods(): Promise<ApiDigitalGood[]> {
+      const body = await requestJson("/digital-goods/me");
+      if (!isRecord(body) || !Array.isArray(body.items)) throw new Error("Digital goods response is malformed.");
+      return body.items.map((item) => {
+        if (!isRecord(item) || typeof item.id !== "string" || typeof item.orderNumber !== "string" || typeof item.productSlug !== "string" || typeof item.title !== "string" || typeof item.regionLabel !== "string" || typeof item.nominalDisplay !== "string" || typeof item.purchasedAt !== "string" || item.activationGuide !== "apple_app_store_itunes_v1" || !["awaiting_manual_delivery", "sent_to_email", "needs_review", "failed"].includes(String(item.status)) || "code" in item || "ciphertext" in item || "nonce" in item || "authTag" in item) throw new Error("Digital goods response is malformed.");
+        return item as ApiDigitalGood;
+      });
     },
 
     async getInventory(): Promise<ApiMappedInventoryItem[]> {

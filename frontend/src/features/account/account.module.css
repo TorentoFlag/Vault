@@ -1392,6 +1392,36 @@
   }
 }
 
+.orderCards {
+  display: grid;
+  gap: 12px;
+}
+
+.orderCard {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(15, 24, 43, 0.46);
+}
+
+.orderCard h3,
+.orderCard p {
+  margin: 0;
+}
+
+.orderCard > div > span,
+.orderCard details {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.orderCard summary {
+  color: #aec1f8;
+  cursor: pointer;
+}
+
 @media (max-width: 460px) {
   .overviewStrip > dl,
   .readinessPanel dl {
