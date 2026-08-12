@@ -86,7 +86,15 @@ describe("loadAppConfig", () => {
     expect(() => loadAppConfig({ SIH_REQUEST_TIMEOUT_MS: "499" })).toThrow("SIH_REQUEST_TIMEOUT_MS must be between 500 and 120000.");
     expect(() => loadAppConfig({ SIH_RESPONSE_MAX_BYTES: "1023" })).toThrow("SIH_RESPONSE_MAX_BYTES must be between 1024 and 16777216.");
     expect(() => loadAppConfig({ CATALOG_PUBLIC_GAMES: "cs2,dota2" })).toThrow("CATALOG_PUBLIC_GAMES contains unsupported game: dota2.");
-    expect(() => loadAppConfig({ NODE_ENV: "production", RESEND_API_KEY_FILE: "/run/secrets/resend" })).toThrow("RESEND_FROM and RESEND_WEBHOOK_SECRET_FILE are required");
+    expect(() => loadAppConfig({ NODE_ENV: "production", RESEND_API_KEY_FILE: "/run/secrets/resend" })).toThrow("RESEND_FROM is required");
+    expect(loadAppConfig({
+      NODE_ENV: "production",
+      RESEND_API_KEY_FILE: "/run/secrets/resend",
+      RESEND_FROM: "Vault <noreply@turkeyplanners.com>",
+    }).notifications).toMatchObject({
+      resendApiKeyFile: "/run/secrets/resend",
+      resendFrom: "Vault <noreply@turkeyplanners.com>",
+    });
   });
 
   it("loads DATABASE_URL from a secret file without requiring the value in env", () => {

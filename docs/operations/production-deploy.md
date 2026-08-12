@@ -32,7 +32,7 @@ The frontend container uses two API origins:
 
 The backend `PUBLIC_BASE_URL` should also be `https://vaultapp24.com` so Steam OpenID callback cookies are issued on the same host the browser uses for frontend API requests. Keep `api.vaultapp24.com` available for direct provider webhooks and health checks.
 
-The production Compose stack runs a dedicated `fulfillment-worker` service from the backend image. It claims pending SIH fulfillment commands, executes Steam refill and skin submission commands, and reconciles submitted skin commands. Do not scale it manually without confirming provider rate limits and database lock behavior.
+The production Compose stack runs dedicated `fulfillment-worker` and `notifications-worker` services from the backend image. The fulfillment worker claims pending SIH fulfillment commands, executes Steam refill and skin submission commands, and reconciles submitted skin commands. The notifications worker polls the durable notification outbox and delivers email/Slack notifications. Do not scale either worker manually without confirming provider rate limits and database lock behavior.
 
 Runtime config lives outside git:
 
@@ -44,8 +44,22 @@ Runtime config lives outside git:
 - `/opt/vault/secrets/arc-pay-webhook-secret`
 - `/opt/vault/secrets/sih-api-key`
 - `/opt/vault/secrets/sih-steam-refill-api-key`
+- `/opt/vault/secrets/resend-api-key`
+- `/opt/vault/secrets/slack-apple-orders-webhook`
+- `/opt/vault/secrets/apple-gift-card-encryption-key`
 
 Never commit, echo, screenshot, or paste secret file contents.
+
+Apple gift-card notifications require these backend environment entries:
+
+```dotenv
+RESEND_API_KEY_FILE=/run/secrets/vault/resend-api-key
+RESEND_FROM=Vault <noreply@turkeyplanners.com>
+SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE=/run/secrets/vault/slack-apple-orders-webhook
+APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE=/run/secrets/vault/apple-gift-card-encryption-key
+```
+
+Resend delivery webhooks are intentionally disabled for the current release, so do not set `RESEND_WEBHOOK_SECRET_FILE` or expose a public Resend webhook endpoint. The worker treats Resend API acceptance as the send result; final mailbox delivery events are not collected until a signed webhook is enabled later.
 
 When deriving `/opt/vault/secrets/database-url` from `/opt/vault/secrets/postgres-password`, URL-encode the password. Raw generated passwords may contain characters that are invalid inside a PostgreSQL connection URL.
 

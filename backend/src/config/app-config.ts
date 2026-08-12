@@ -164,8 +164,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const slackAppleOrdersWebhookUrlFile = optionalString(env.SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE);
   const appleGiftCardEncryptionKeyFile = optionalString(env.APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE);
 
-  if (nodeEnv === "production" && resendApiKeyFile !== undefined && (resendFrom === undefined || resendWebhookSecretFile === undefined)) {
-    throw new Error("RESEND_FROM and RESEND_WEBHOOK_SECRET_FILE are required when RESEND_API_KEY_FILE is configured in production.");
+  if (nodeEnv === "production" && resendApiKeyFile !== undefined && resendFrom === undefined) {
+    throw new Error("RESEND_FROM is required when RESEND_API_KEY_FILE is configured in production.");
   }
 
   return {

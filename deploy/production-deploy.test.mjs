@@ -57,6 +57,11 @@ test("production compose runs a dedicated fulfillment worker", () => {
   assert.match(compose, /DATABASE_URL_FILE: \/run\/secrets\/vault\/database-url/);
 });
 
+test("production compose runs a persistent notifications worker", () => {
+  assert.match(compose, /\n  notifications-worker:\n/);
+  assert.match(compose, /command:\s+\["node", "dist\/notifications-worker\.js", "--watch"\]/);
+});
+
 test("frontend Dockerfile does not require generated gitignored Next.js files", () => {
   assert.doesNotMatch(frontendDockerfile, /COPY[^\n]*next-env\.d\.ts/);
 });
