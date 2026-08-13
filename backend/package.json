@@ -21,6 +21,7 @@
     "catalog:sync-cs2-images": "tsx src/catalog-sync-cs2-images.ts",
     "fulfillment:worker": "tsx src/fulfillment-worker.ts",
     "notifications:worker": "tsx src/notifications-worker.ts",
+    "vv-admin:dispatcher": "tsx src/vv-admin-dispatcher-worker.ts",
     "payments:reconcile": "tsx src/payments-reconcile.ts",
     "wallet:reconcile": "tsx src/wallet-reconcile.ts",
     "openapi:generate": "tsx src/openapi.ts",
