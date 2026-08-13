@@ -53,11 +53,15 @@ function digestOtp(challengeId: string, code: string): string {
   return createHmac("sha256", otpSecret()).update(`${challengeId}:${code}`, "utf8").digest("hex");
 }
 
-function defaultRuntime(): EmailAuthRuntime {
-  return {
-    createCode: () => String(randomInt(100_000, 1_000_000)),
-    now: () => new Date(),
-  };
+@Injectable()
+export class EmailAuthRuntimeProvider implements EmailAuthRuntime {
+  createCode(): string {
+    return String(randomInt(100_000, 1_000_000));
+  }
+
+  now(): Date {
+    return new Date();
+  }
 }
 
 @Injectable()
@@ -69,8 +73,8 @@ export class EmailAuthService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(UsersService) private readonly users: UsersService,
     @Inject(SessionsService) private readonly sessions: SessionsService,
+    @Inject(EmailAuthRuntimeProvider) runtime: EmailAuthRuntime,
     @Optional() @Inject(NotificationOutboxService) private readonly notifications?: NotificationOutboxService,
-    runtime: EmailAuthRuntime = defaultRuntime(),
   ) {
     this.runtime = runtime;
   }

@@ -10,10 +10,10 @@ function createService() {
   const users = new UsersService(database);
   const sessions = new SessionsService(database);
   let now = new Date("2026-08-11T12:00:00.000Z");
-  const service = new EmailAuthService(database, users, sessions, undefined, {
+  const service = new EmailAuthService(database, users, sessions, {
     createCode: () => "123456",
     now: () => now,
-  });
+  }, undefined);
   return {
     advance: (milliseconds: number) => { now = new Date(now.getTime() + milliseconds); },
     service,
