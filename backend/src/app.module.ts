@@ -13,6 +13,7 @@ import { CheckoutModule } from "./modules/checkout/checkout.module";
 import { FulfillmentModule } from "./modules/fulfillment/fulfillment.module";
 import { HealthModule } from "./modules/health/health.module";
 import { InventoryModule } from "./modules/inventory/inventory.module";
+import { IntegrationModule } from "./modules/integration/integration.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
@@ -21,7 +22,7 @@ import { AppleGiftCardsModule } from "./modules/apple-gift-cards/apple-gift-card
 import { WalletModule } from "./modules/wallet/wallet.module";
 
 @Module({
-  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AdminModule, AuthModule, CatalogModule, WalletModule, CartModule, CheckoutModule, FulfillmentModule, InventoryModule, OrdersModule, PaymentsModule, NotificationsModule, EmailAuthModule, AppleGiftCardsModule],
+  imports: [AppConfigModule, DatabaseModule, QueueModule, HealthModule, AuditModule, AdminModule, AuthModule, CatalogModule, WalletModule, CartModule, CheckoutModule, FulfillmentModule, InventoryModule, IntegrationModule, OrdersModule, PaymentsModule, NotificationsModule, EmailAuthModule, AppleGiftCardsModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

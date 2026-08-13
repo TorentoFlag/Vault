@@ -42,6 +42,10 @@ export type AppConfig = {
     slackAppleOrdersWebhookUrlFile?: string;
     appleGiftCardEncryptionKeyFile?: string;
   };
+  integration: {
+    publicOrigin: string;
+    adminOrigin: string;
+  };
   corsOrigins: string[];
 };
 
@@ -163,6 +167,12 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const resendWebhookSecretFile = optionalString(env.RESEND_WEBHOOK_SECRET_FILE);
   const slackAppleOrdersWebhookUrlFile = optionalString(env.SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE);
   const appleGiftCardEncryptionKeyFile = optionalString(env.APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE);
+  const integrationPublicOrigin =
+    parseHttpsPublicBaseUrl("VV_ADMIN_PUBLIC_ORIGIN", env.VV_ADMIN_PUBLIC_ORIGIN) ??
+    "https://vault.example";
+  const integrationAdminOrigin =
+    parseHttpsPublicBaseUrl("VV_ADMIN_API_ORIGIN", env.VV_ADMIN_API_ORIGIN) ??
+    integrationPublicOrigin;
 
   if (nodeEnv === "production" && resendApiKeyFile !== undefined && resendFrom === undefined) {
     throw new Error("RESEND_FROM is required when RESEND_API_KEY_FILE is configured in production.");
@@ -204,6 +214,10 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       ...(resendWebhookSecretFile ? { resendWebhookSecretFile } : {}),
       ...(slackAppleOrdersWebhookUrlFile ? { slackAppleOrdersWebhookUrlFile } : {}),
       ...(appleGiftCardEncryptionKeyFile ? { appleGiftCardEncryptionKeyFile } : {}),
+    },
+    integration: {
+      publicOrigin: integrationPublicOrigin,
+      adminOrigin: integrationAdminOrigin,
     },
     corsOrigins: parseCorsOrigins(env.CORS_ORIGINS),
   };

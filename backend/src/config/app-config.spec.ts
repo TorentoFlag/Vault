@@ -31,6 +31,8 @@ describe("loadAppConfig", () => {
       RESEND_WEBHOOK_SECRET_FILE: "/run/secrets/resend-webhook-secret",
       SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE: "/run/secrets/slack-apple-orders",
       APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE: "/run/secrets/apple-gift-card-encryption-key",
+      VV_ADMIN_PUBLIC_ORIGIN: "https://vault.example",
+      VV_ADMIN_API_ORIGIN: "https://api.vault.example",
       CATALOG_PUBLIC_GAMES: "cs2,rust,tf2",
       CORS_ORIGINS: "https://vault.example, https://admin.vault.example",
     })).toEqual({
@@ -70,6 +72,10 @@ describe("loadAppConfig", () => {
         slackAppleOrdersWebhookUrlFile: "/run/secrets/slack-apple-orders",
         appleGiftCardEncryptionKeyFile: "/run/secrets/apple-gift-card-encryption-key",
       },
+      integration: {
+        publicOrigin: "https://vault.example",
+        adminOrigin: "https://api.vault.example",
+      },
       corsOrigins: ["https://vault.example", "https://admin.vault.example"],
     });
   });
@@ -83,6 +89,7 @@ describe("loadAppConfig", () => {
     expect(() => loadAppConfig({ ARC_PAY_FAKE_CHECKOUT_BASE_URL: "not-url" })).toThrow("ARC_PAY_FAKE_CHECKOUT_BASE_URL must be a valid HTTP(S) URL.");
     expect(() => loadAppConfig({ ARC_PAY_PUBLIC_ORIGIN: "http://vault.example" })).toThrow("ARC_PAY_PUBLIC_ORIGIN must be a valid HTTPS base URL.");
     expect(() => loadAppConfig({ ARC_PAY_PUBLIC_ORIGIN: "https://vault.example/path?query=1" })).toThrow("ARC_PAY_PUBLIC_ORIGIN must be a valid HTTPS base URL.");
+    expect(() => loadAppConfig({ VV_ADMIN_PUBLIC_ORIGIN: "http://vault.example" })).toThrow("VV_ADMIN_PUBLIC_ORIGIN must be a valid HTTPS base URL.");
     expect(() => loadAppConfig({ SIH_REQUEST_TIMEOUT_MS: "499" })).toThrow("SIH_REQUEST_TIMEOUT_MS must be between 500 and 120000.");
     expect(() => loadAppConfig({ SIH_RESPONSE_MAX_BYTES: "1023" })).toThrow("SIH_RESPONSE_MAX_BYTES must be between 1024 and 16777216.");
     expect(() => loadAppConfig({ CATALOG_PUBLIC_GAMES: "cs2,dota2" })).toThrow("CATALOG_PUBLIC_GAMES contains unsupported game: dota2.");

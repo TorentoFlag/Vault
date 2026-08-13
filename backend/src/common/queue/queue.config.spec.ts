@@ -19,6 +19,10 @@ const baseConfig: AppConfig = {
     publicGames: ["cs2"],
   },
   notifications: {},
+  integration: {
+    publicOrigin: "https://vault.example",
+    adminOrigin: "https://vault.example",
+  },
   corsOrigins: [],
 };
 

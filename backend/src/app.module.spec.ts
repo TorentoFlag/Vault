@@ -40,4 +40,18 @@ describe("AppModule", () => {
       .expect(200)
       .expect("x-request-id", /^[0-9a-f-]{36}$/);
   });
+
+  it("mounts the public VV Admin integration manifest", async () => {
+    await request(httpServer)
+      .get("/.well-known/vv-admin/manifest.json")
+      .expect(200)
+      .expect(({ body }) => {
+        if (body.protocolVersion !== 1) {
+          throw new Error("manifest protocolVersion must be 1");
+        }
+        if (body.site?.key !== "vault") {
+          throw new Error("manifest site key must be vault");
+        }
+      });
+  });
 });
