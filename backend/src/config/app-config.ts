@@ -45,6 +45,9 @@ export type AppConfig = {
   integration: {
     publicOrigin: string;
     adminOrigin: string;
+    vvAdminWebhookUrl?: string;
+    vvAdminSiteKey?: string;
+    vvAdminWebhookSecretFile?: string;
   };
   corsOrigins: string[];
 };
@@ -173,6 +176,14 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const integrationAdminOrigin =
     parseHttpsPublicBaseUrl("VV_ADMIN_API_ORIGIN", env.VV_ADMIN_API_ORIGIN) ??
     integrationPublicOrigin;
+  const vvAdminWebhookUrl = parseHttpsPublicBaseUrl(
+    "VV_ADMIN_WEBHOOK_URL",
+    env.VV_ADMIN_WEBHOOK_URL,
+  );
+  const vvAdminSiteKey = optionalString(env.VV_ADMIN_SITE_KEY);
+  const vvAdminWebhookSecretFile = optionalString(
+    env.VV_ADMIN_WEBHOOK_SECRET_FILE,
+  );
 
   if (nodeEnv === "production" && resendApiKeyFile !== undefined && resendFrom === undefined) {
     throw new Error("RESEND_FROM is required when RESEND_API_KEY_FILE is configured in production.");
@@ -218,6 +229,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     integration: {
       publicOrigin: integrationPublicOrigin,
       adminOrigin: integrationAdminOrigin,
+      ...(vvAdminWebhookUrl ? { vvAdminWebhookUrl } : {}),
+      ...(vvAdminSiteKey ? { vvAdminSiteKey } : {}),
+      ...(vvAdminWebhookSecretFile ? { vvAdminWebhookSecretFile } : {}),
     },
     corsOrigins: parseCorsOrigins(env.CORS_ORIGINS),
   };

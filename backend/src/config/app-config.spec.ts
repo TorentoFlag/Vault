@@ -33,6 +33,9 @@ describe("loadAppConfig", () => {
       APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE: "/run/secrets/apple-gift-card-encryption-key",
       VV_ADMIN_PUBLIC_ORIGIN: "https://vault.example",
       VV_ADMIN_API_ORIGIN: "https://api.vault.example",
+      VV_ADMIN_WEBHOOK_URL: "https://admin.example/commerce/webhook",
+      VV_ADMIN_SITE_KEY: "vault-site-key",
+      VV_ADMIN_WEBHOOK_SECRET_FILE: "/run/secrets/vv-admin-webhook-secret",
       CATALOG_PUBLIC_GAMES: "cs2,rust,tf2",
       CORS_ORIGINS: "https://vault.example, https://admin.vault.example",
     })).toEqual({
@@ -75,6 +78,9 @@ describe("loadAppConfig", () => {
       integration: {
         publicOrigin: "https://vault.example",
         adminOrigin: "https://api.vault.example",
+        vvAdminWebhookUrl: "https://admin.example/commerce/webhook",
+        vvAdminSiteKey: "vault-site-key",
+        vvAdminWebhookSecretFile: "/run/secrets/vv-admin-webhook-secret",
       },
       corsOrigins: ["https://vault.example", "https://admin.vault.example"],
     });

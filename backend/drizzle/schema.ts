@@ -613,6 +613,50 @@ export const notificationWebhookEvents = pgTable(
   ],
 );
 
+export const vvAdminIntegrationOutbox = pgTable(
+  "vv_admin_integration_outbox",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: text("event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    subjectType: text("subject_type").notNull(),
+    subjectExternalId: text("subject_external_id").notNull(),
+    payload: jsonb("payload").default({}).notNull(),
+    status: text("status").default("pending").notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    availableAt: timestamp("available_at", { withTimezone: true }).defaultNow().notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    lastErrorCode: text("last_error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("vv_admin_integration_outbox_event_uidx").on(table.eventId),
+    index("vv_admin_integration_outbox_status_available_idx").on(table.status, table.availableAt),
+    index("vv_admin_integration_outbox_subject_idx").on(table.subjectType, table.subjectExternalId),
+  ],
+);
+
+export const vvAdminIntegrationAttempts = pgTable(
+  "vv_admin_integration_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    outboxId: uuid("outbox_id").notNull(),
+    status: text("status").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestSnapshot: jsonb("request_snapshot").default({}).notNull(),
+    responseSnapshot: jsonb("response_snapshot").default({}).notNull(),
+    errorCode: text("error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("vv_admin_integration_attempts_idempotency_uidx").on(table.idempotencyKey),
+    index("vv_admin_integration_attempts_outbox_idx").on(table.outboxId),
+  ],
+);
+
 export const appleGiftCardFulfillments = pgTable(
   "apple_gift_card_fulfillments",
   {
