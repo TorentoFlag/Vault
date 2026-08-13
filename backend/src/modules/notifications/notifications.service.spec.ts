@@ -79,4 +79,32 @@ describe("notifications", () => {
     expect(result.status).toBe("accepted");
     if (result.status === "accepted") expect(typeof result.notificationId).toBe("string");
   });
+
+  it("sends a generic order Slack alert for any checkout order", async () => {
+    const outbox = new NotificationOutboxService({ isConfigured: () => false } as never);
+    await outbox.enqueue({
+      channel: "slack",
+      entityId: "order_1",
+      eventType: "order.slack-alert",
+      idempotencyKey: "order-slack-alert/order_1",
+      payload: {
+        amount: "6 360 Coins",
+        itemSummary: "2x Desert Eagle | Printstream",
+        orderNumber: "VLT-ORDER1",
+      },
+    });
+    const sent: unknown[] = [];
+
+    const result = await new NotificationDispatcher(
+      outbox,
+      { send: () => Promise.resolve({ emailId: "unused" }) },
+      "Vault <noreply@vault.example>",
+      undefined,
+      { send: (input) => { sent.push(input); return Promise.resolve(); } },
+    ).processNext();
+
+    expect(result.status).toBe("accepted");
+    expect(JSON.stringify(sent)).toContain("Новый заказ Vault");
+    expect(JSON.stringify(sent)).toContain("2x Desert Eagle | Printstream");
+  });
 });

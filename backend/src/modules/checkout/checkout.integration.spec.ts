@@ -47,6 +47,8 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     if (app) await app.close();
     await pool.query(`
       TRUNCATE
+        notification_attempts,
+        notification_outbox,
         vv_admin_integration_attempts,
         vv_admin_integration_outbox,
         fulfillment_commands,
@@ -136,11 +138,12 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     );
     expect(postedTransactionBalance.rows[0]?.balance).toBe("0");
 
-    const persisted = await pool.query<{ line_count: string; hold_count: string; vv_admin_events: string }>(
+    const persisted = await pool.query<{ line_count: string; hold_count: string; slack_events: string; vv_admin_events: string }>(
       `
         SELECT
           (SELECT count(*) FROM order_lines WHERE order_id = $1) AS line_count,
           (SELECT count(*) FROM wallet_holds WHERE order_id = $1 AND status = 'active') AS hold_count,
+          (SELECT count(*) FROM notification_outbox WHERE entity_id = $1 AND channel = 'slack' AND event_type = 'order.slack-alert') AS slack_events,
           (SELECT count(*) FROM vv_admin_integration_outbox WHERE subject_external_id = $1 AND event_type = 'order.created') AS vv_admin_events
       `,
       [order.id],
@@ -148,6 +151,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     expect(persisted.rows[0]).toEqual({
       line_count: "2",
       hold_count: "1",
+      slack_events: "1",
       vv_admin_events: "1",
     });
     const outbox = await pool.query<{ payload: unknown }>(

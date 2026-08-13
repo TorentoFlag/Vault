@@ -55,6 +55,7 @@ export class NotificationDispatcher {
   }
 
   private resolveSlackBlocks(notification: NotificationOutboxRecord): unknown[] {
+    if (notification.eventType === "order.slack-alert") return this.resolveOrderSlackBlocks(notification);
     if (notification.eventType !== "apple-card.slack-alert") throw new Error("SLACK_NOTIFICATION_EVENT_UNSUPPORTED");
     const payload = notification.payload;
     if (typeof payload.orderNumber !== "string" || typeof payload.productName !== "string" || typeof payload.regionLabel !== "string" || typeof payload.nominalDisplay !== "string" || typeof payload.amount !== "string" || typeof payload.maskedEmail !== "string") throw new Error("SLACK_NOTIFICATION_PAYLOAD_INVALID");
@@ -68,6 +69,25 @@ export class NotificationDispatcher {
         { type: "mrkdwn", text: `*Сумма:* ${payload.amount}` },
         { type: "mrkdwn", text: `*Email:* ${payload.maskedEmail}` },
       ] },
+    ];
+  }
+
+  private resolveOrderSlackBlocks(notification: NotificationOutboxRecord): unknown[] {
+    const payload = notification.payload;
+    if (typeof payload.orderNumber !== "string" || typeof payload.amount !== "string" || typeof payload.itemSummary !== "string") {
+      throw new Error("SLACK_NOTIFICATION_PAYLOAD_INVALID");
+    }
+    const fields = [
+      { type: "mrkdwn", text: `*Заказ:* ${payload.orderNumber}` },
+      { type: "mrkdwn", text: `*Сумма:* ${payload.amount}` },
+      { type: "mrkdwn", text: `*Товары:* ${payload.itemSummary}` },
+    ];
+    if (typeof payload.recipientSummary === "string" && payload.recipientSummary.length > 0) {
+      fields.push({ type: "mrkdwn", text: `*Получатель:* ${payload.recipientSummary}` });
+    }
+    return [
+      { type: "header", text: { type: "plain_text", text: "Новый заказ Vault" } },
+      { type: "section", fields },
     ];
   }
 

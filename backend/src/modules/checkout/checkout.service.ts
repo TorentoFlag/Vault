@@ -202,6 +202,33 @@ function maskEmail(email: string): string {
   return `${local.slice(0, 1)}***@${domain}`;
 }
 
+function formatCoins(amountCoinMinor: number): string {
+  return `${(amountCoinMinor / 100).toLocaleString("ru-RU")} Coins`;
+}
+
+function orderNumberFromId(orderId: string): string {
+  return `VLT-${orderId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
+function recipientSlackLabel(snapshot: CheckoutRecipientSnapshot): string {
+  if (snapshot.kind === "delivery-email") return maskEmail(snapshot.email);
+  if (snapshot.kind === "steam-refill") return `Steam login ${snapshot.steamLogin}`;
+  return `Steam ${snapshot.steamId64}`;
+}
+
+function summarizeOrderLinesForSlack(lines: readonly FulfillmentOrderLineInput[]): string {
+  const counts = new Map<string, number>();
+  for (const line of lines) counts.set(line.title, (counts.get(line.title) ?? 0) + 1);
+  const summary = [...counts.entries()].map(([title, count]) => `${count}x ${title}`);
+  const visible = summary.slice(0, 5);
+  const hiddenCount = summary.length - visible.length;
+  return hiddenCount > 0 ? `${visible.join(", ")} +${hiddenCount}` : visible.join(", ");
+}
+
+function summarizeRecipientsForSlack(lines: readonly FulfillmentOrderLineInput[]): string {
+  return [...new Set(lines.map((line) => recipientSlackLabel(line.recipientSnapshot)))].slice(0, 3).join(", ");
+}
+
 @Injectable()
 export class CheckoutService {
   constructor(
@@ -314,25 +341,20 @@ export class CheckoutService {
         totalCoinMinor,
         lines: persistedLines,
       });
-      for (const line of persistedLines) {
-        if (!line.appleGiftCard || line.recipientSnapshot.kind !== "delivery-email") continue;
-        await client.query(`
-          INSERT INTO notification_outbox (channel, event_type, entity_id, idempotency_key, payload)
-          VALUES ('slack', 'apple-card.slack-alert', $1, $2, $3::jsonb)
-          ON CONFLICT (channel, idempotency_key) DO NOTHING
-        `, [
-          line.id,
-          `apple-card-order-accepted/${orderId}/${line.id}`,
-          JSON.stringify({
-            amount: `${(line.unitPriceCoinMinor / 100).toLocaleString("ru-RU")} Coins`,
-            maskedEmail: maskEmail(line.recipientSnapshot.email),
-            nominalDisplay: `${line.appleGiftCard.nominalMinor / 100} ${line.appleGiftCard.currency}`,
-            orderNumber: `VLT-${orderId.replace(/-/g, "").slice(0, 8).toUpperCase()}`,
-            productName: line.title,
-            regionLabel: line.appleGiftCard.regionLabel,
-          }),
-        ]);
-      }
+      await client.query(`
+        INSERT INTO notification_outbox (channel, event_type, entity_id, idempotency_key, payload)
+        VALUES ('slack', 'order.slack-alert', $1, $2, $3::jsonb)
+        ON CONFLICT (channel, idempotency_key) DO NOTHING
+      `, [
+        orderId,
+        `order-slack-alert/${orderId}`,
+        JSON.stringify({
+          amount: formatCoins(totalCoinMinor),
+          itemSummary: summarizeOrderLinesForSlack(persistedLines),
+          orderNumber: orderNumberFromId(orderId),
+          recipientSummary: summarizeRecipientsForSlack(persistedLines),
+        }),
+      ]);
 
       return this.loadOrder(client, orderId);
     });
