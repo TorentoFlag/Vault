@@ -14,7 +14,7 @@ services:
       timeout: 5s
       retries: 20
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - /opt/vault/volumes/postgres_data:/var/lib/postgresql/data
       - /opt/vault/secrets/postgres-password:/run/secrets/postgres_password:ro
 
   redis:
@@ -27,7 +27,7 @@ services:
       timeout: 5s
       retries: 20
     volumes:
-      - redis-data:/data
+      - /opt/vault/volumes/redis_data:/data
 
   backend:
     build:
@@ -44,8 +44,8 @@ services:
       DATABASE_URL_FILE: /run/secrets/vault/database-url
     volumes:
       - /opt/vault/secrets:/run/secrets/vault:ro
-    expose:
-      - "3000"
+    ports:
+      - "127.0.0.1:3001:3000"
 
   fulfillment-worker:
     build:
@@ -95,25 +95,5 @@ services:
     depends_on:
       backend:
         condition: service_started
-    expose:
-      - "3000"
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on:
-      - backend
-      - frontend
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-
-volumes:
-  postgres-data:
-  redis-data:
-  caddy-data:
-  caddy-config:
+      - "127.0.0.1:3000:3000"
