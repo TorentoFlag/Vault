@@ -12,8 +12,6 @@ export class VvAdminDispatcher {
   constructor(
     @Inject(VvAdminOutboxService) private readonly outbox: VvAdminOutboxService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
-    private readonly fetchImpl: typeof fetch = fetch,
-    private readonly now: () => Date = () => new Date(),
   ) {}
 
   async processNext(): Promise<"idle" | "accepted" | "retry"> {
@@ -23,8 +21,8 @@ export class VvAdminDispatcher {
     try {
       const settings = this.requireSettings();
       const rawBody = JSON.stringify(record.payload);
-      const timestamp = this.now().toISOString();
-      const response = await this.fetchImpl(settings.webhookUrl, {
+      const timestamp = new Date().toISOString();
+      const response = await fetch(settings.webhookUrl, {
         method: "POST",
         headers: {
           "content-type": "application/json",

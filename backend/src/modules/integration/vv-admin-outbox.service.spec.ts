@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AppConfig } from "../../config/app-config";
 import { VvAdminDispatcher } from "./vv-admin-dispatcher";
@@ -89,6 +89,16 @@ describe("VvAdminOutboxService", () => {
 });
 
 describe("VvAdminDispatcher", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-13T12:01:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
   it("sends a signed event to VV Admin and marks it accepted", async () => {
     const outbox = createOutbox();
     await outbox.enqueue(event);
@@ -97,12 +107,8 @@ describe("VvAdminDispatcher", () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(null, { status: 202 }));
-    const dispatcher = new VvAdminDispatcher(
-      outbox,
-      createConfig(secretFile),
-      fetchImpl,
-      () => new Date("2026-08-13T12:01:00.000Z"),
-    );
+    vi.stubGlobal("fetch", fetchImpl);
+    const dispatcher = new VvAdminDispatcher(outbox, createConfig(secretFile));
 
     await expect(dispatcher.processNext()).resolves.toBe("accepted");
 
