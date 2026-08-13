@@ -24,13 +24,12 @@ export type IntegrationSyntheticScenarioResult = {
 export class IntegrationSyntheticScenarioService {
   constructor(
     @Inject(PaymentsService) private readonly payments: Pick<PaymentsService, "createTopUpSession">,
-    private readonly now: () => Date = () => new Date(),
   ) {}
 
   async runCheckoutPaymentReached(input: {
     readonly runId: string;
   }): Promise<IntegrationSyntheticScenarioResult> {
-    const startedAt = this.now().toISOString();
+    const startedAt = new Date().toISOString();
     const topUp = await this.payments.createTopUpSession({
       userId: SYNTHETIC_USER_ID,
       idempotencyKey: `vv-admin-synthetic-${input.runId}`,
@@ -56,7 +55,7 @@ export class IntegrationSyntheticScenarioService {
           key: "top_up_session",
           status: topUp.status,
           startedAt,
-          finishedAt: this.now().toISOString(),
+          finishedAt: new Date().toISOString(),
         },
       ],
       artifacts: topUp.checkoutUrl

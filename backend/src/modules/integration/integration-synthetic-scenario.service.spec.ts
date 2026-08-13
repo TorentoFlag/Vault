@@ -1,9 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IntegrationSyntheticScenarioService } from "./integration-synthetic-scenario.service";
 import type { PaymentsService, TopUpSessionDto } from "../payments/payments.service";
 
 describe("IntegrationSyntheticScenarioService", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-13T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("passes only when the synthetic top-up reaches a hosted payment URL", async () => {
     const payments: Pick<PaymentsService, "createTopUpSession"> = {
       createTopUpSession: vi.fn().mockResolvedValue(
@@ -14,10 +23,7 @@ describe("IntegrationSyntheticScenarioService", () => {
         }),
       ),
     };
-    const service = new IntegrationSyntheticScenarioService(
-      payments,
-      () => new Date("2026-08-13T12:00:00.000Z"),
-    );
+    const service = new IntegrationSyntheticScenarioService(payments);
 
     await expect(
       service.runCheckoutPaymentReached({ runId: "run-1" }),
@@ -56,7 +62,6 @@ describe("IntegrationSyntheticScenarioService", () => {
           }),
         ),
       },
-      () => new Date("2026-08-13T12:00:00.000Z"),
     );
 
     await expect(
