@@ -47,6 +47,8 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     if (app) await app.close();
     await pool.query(`
       TRUNCATE
+        vv_admin_integration_attempts,
+        vv_admin_integration_outbox,
         fulfillment_commands,
         cart_items,
         carts,
@@ -134,15 +136,25 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
     );
     expect(postedTransactionBalance.rows[0]?.balance).toBe("0");
 
-    const persisted = await pool.query<{ line_count: string; hold_count: string }>(
+    const persisted = await pool.query<{ line_count: string; hold_count: string; vv_admin_events: string }>(
       `
         SELECT
           (SELECT count(*) FROM order_lines WHERE order_id = $1) AS line_count,
-          (SELECT count(*) FROM wallet_holds WHERE order_id = $1 AND status = 'active') AS hold_count
+          (SELECT count(*) FROM wallet_holds WHERE order_id = $1 AND status = 'active') AS hold_count,
+          (SELECT count(*) FROM vv_admin_integration_outbox WHERE subject_external_id = $1 AND event_type = 'order.created') AS vv_admin_events
       `,
       [order.id],
     );
-    expect(persisted.rows[0]).toEqual({ line_count: "2", hold_count: "1" });
+    expect(persisted.rows[0]).toEqual({
+      line_count: "2",
+      hold_count: "1",
+      vv_admin_events: "1",
+    });
+    const outbox = await pool.query<{ payload: unknown }>(
+      "SELECT payload FROM vv_admin_integration_outbox WHERE subject_external_id = $1",
+      [order.id],
+    );
+    expect(JSON.stringify(outbox.rows[0]?.payload)).not.toContain("secretToken");
   });
 
   it("creates pending SIH fulfillment commands atomically with order lines", async () => {

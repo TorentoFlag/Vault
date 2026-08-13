@@ -308,6 +308,12 @@ export class CheckoutService {
         });
       }
       await this.fulfillment.enqueueOrderLineCommands(client, { orderId, lines: persistedLines });
+      await this.enqueueVvAdminOrderCreatedEvent(client, {
+        orderId,
+        userId: command.userId,
+        totalCoinMinor,
+        lines: persistedLines,
+      });
       for (const line of persistedLines) {
         if (!line.appleGiftCard || line.recipientSnapshot.kind !== "delivery-email") continue;
         await client.query(`
@@ -330,6 +336,68 @@ export class CheckoutService {
 
       return this.loadOrder(client, orderId);
     });
+  }
+
+  private async enqueueVvAdminOrderCreatedEvent(
+    client: Queryable,
+    input: {
+      orderId: string;
+      userId: string;
+      totalCoinMinor: number;
+      lines: FulfillmentOrderLineInput[];
+    },
+  ): Promise<void> {
+    const event = {
+      schemaVersion: 1,
+      eventId: `vault.order.${input.orderId}.created`,
+      eventType: "order.created",
+      source: "customer",
+      occurredAt: new Date().toISOString(),
+      site: { externalSiteKey: "vault", domain: "vault.example" },
+      subject: { type: "order", externalId: input.orderId },
+      data: {
+        order: {
+          externalOrderId: input.orderId,
+          displayNumber: null,
+          status: "created",
+          total: { amountMinor: input.totalCoinMinor, currency: "FC", scale: 100 },
+          createdAt: new Date().toISOString(),
+          paidAt: null,
+          completedAt: null,
+        },
+        items: input.lines.map((line) => ({
+          externalItemId: line.id,
+          title: line.title,
+          kind: line.kind,
+          quantity: 1,
+          unitPrice: {
+            amountMinor: line.unitPriceCoinMinor,
+            currency: "FC",
+            scale: 100,
+          },
+          attributes: {
+            productSlug: line.productSlug,
+          },
+        })),
+        attributes: {
+          externalUserId: input.userId,
+        },
+      },
+    };
+    await client.query(
+      `
+        INSERT INTO vv_admin_integration_outbox (
+          event_id,
+          event_type,
+          subject_type,
+          subject_external_id,
+          payload
+        )
+        VALUES ($1, 'order.created', 'order', $2, $3::jsonb)
+        ON CONFLICT (event_id) DO NOTHING
+      `,
+      [event.eventId, input.orderId, JSON.stringify(event)],
+    );
   }
 
   private async prepareLines(
