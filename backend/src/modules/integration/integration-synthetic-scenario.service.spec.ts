@@ -1,18 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { IntegrationSyntheticScenarioService } from "./integration-synthetic-scenario.service";
+import type { PaymentsService, TopUpSessionDto } from "../payments/payments.service";
 
 describe("IntegrationSyntheticScenarioService", () => {
   it("passes only when the synthetic top-up reaches a hosted payment URL", async () => {
-    const payments = {
-      createTopUpSession: vi.fn().mockResolvedValue({
-        id: "top-up-1",
-        status: "checkout_pending",
-        checkoutUrl: "https://pay.example/checkout/session-1",
-      }),
+    const payments: Pick<PaymentsService, "createTopUpSession"> = {
+      createTopUpSession: vi.fn().mockResolvedValue(
+        createTopUp({
+          id: "top-up-1",
+          status: "checkout_pending",
+          checkoutUrl: "https://pay.example/checkout/session-1",
+        }),
+      ),
     };
     const service = new IntegrationSyntheticScenarioService(
-      payments as never,
+      payments,
       () => new Date("2026-08-13T12:00:00.000Z"),
     );
 
@@ -45,12 +48,14 @@ describe("IntegrationSyntheticScenarioService", () => {
   it("fails when the top-up session does not reach payment", async () => {
     const service = new IntegrationSyntheticScenarioService(
       {
-        createTopUpSession: vi.fn().mockResolvedValue({
-          id: "top-up-1",
-          status: "provider_configuration_required",
-          checkoutUrl: null,
-        }),
-      } as never,
+        createTopUpSession: vi.fn().mockResolvedValue(
+          createTopUp({
+            id: "top-up-1",
+            status: "provider_configuration_required",
+            checkoutUrl: null,
+          }),
+        ),
+      },
       () => new Date("2026-08-13T12:00:00.000Z"),
     );
 
@@ -63,3 +68,22 @@ describe("IntegrationSyntheticScenarioService", () => {
     });
   });
 });
+
+function createTopUp(
+  input: Pick<TopUpSessionDto, "id" | "status" | "checkoutUrl">,
+): TopUpSessionDto {
+  return {
+    id: input.id,
+    userId: "synthetic:vv-admin",
+    status: input.status,
+    provider: "arc_pay",
+    coinAmountMinor: 10_000,
+    fiatAmountMinor: 6_667,
+    fiatCurrency: "RUB",
+    rate: {
+      fiatMinor: 100,
+      coinMinor: 150,
+    },
+    checkoutUrl: input.checkoutUrl,
+  };
+}

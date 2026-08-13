@@ -45,13 +45,32 @@ describe("AppModule", () => {
     await request(httpServer)
       .get("/.well-known/vv-admin/manifest.json")
       .expect(200)
-      .expect(({ body }) => {
+      .expect((response: { body: unknown }) => {
+        const body = readManifestBody(response.body);
         if (body.protocolVersion !== 1) {
           throw new Error("manifest protocolVersion must be 1");
         }
-        if (body.site?.key !== "vault") {
+        if (body.site.key !== "vault") {
           throw new Error("manifest site key must be vault");
         }
       });
   });
 });
+
+function readManifestBody(value: unknown): {
+  readonly protocolVersion: unknown;
+  readonly site: { readonly key: unknown };
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("manifest body must be an object");
+  }
+  const body = value as Record<string, unknown>;
+  const site = body.site;
+  if (!site || typeof site !== "object" || Array.isArray(site)) {
+    throw new Error("manifest site must be an object");
+  }
+  return {
+    protocolVersion: body.protocolVersion,
+    site: { key: (site as Record<string, unknown>).key },
+  };
+}

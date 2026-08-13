@@ -64,7 +64,7 @@ export class IntegrationSyntheticScenarioService {
         : null,
       metadata: {
         topUpPaymentId: topUp.id,
-        coinAmountMinor: topUp.coinAmountMinor ?? SYNTHETIC_TOP_UP_COIN_MINOR,
+        coinAmountMinor: topUp.coinAmountMinor,
       },
     };
   }

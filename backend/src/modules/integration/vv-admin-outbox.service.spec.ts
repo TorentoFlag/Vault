@@ -94,7 +94,9 @@ describe("VvAdminDispatcher", () => {
     await outbox.enqueue(event);
     const secretFile = join(mkdtempSync(join(tmpdir(), "vv-admin-")), "secret");
     writeFileSync(secretFile, "shared-secret\n", "utf8");
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 202 });
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 202 }));
     const dispatcher = new VvAdminDispatcher(
       outbox,
       createConfig(secretFile),
@@ -104,17 +106,14 @@ describe("VvAdminDispatcher", () => {
 
     await expect(dispatcher.processNext()).resolves.toBe("accepted");
 
-    expect(fetchImpl).toHaveBeenCalledWith(
-      "https://admin.example/commerce/webhook",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          "x-vv-site-key": "vault-site-key",
-          "x-vv-event-id": "evt_vault_order_1",
-          "x-vv-signature": expect.stringMatching(/^sha256=/),
-        }),
-      }),
-    );
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(url).toBe("https://admin.example/commerce/webhook");
+    expect(init?.method).toBe("POST");
+    const headers = init?.headers as Record<string, string>;
+    expect(headers["x-vv-site-key"]).toBe("vault-site-key");
+    expect(headers["x-vv-event-id"]).toBe("evt_vault_order_1");
+    expect(headers["x-vv-signature"]).toMatch(/^sha256=/);
     await expect(outbox.claimNext()).resolves.toBeNull();
   });
 });
