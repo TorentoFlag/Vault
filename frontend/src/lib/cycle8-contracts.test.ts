@@ -16,6 +16,15 @@ test("auth uses server Steam start and cannot log out while loading", () => {
   assert.doesNotMatch(provider, /activateSession|connectSteamDemo/);
 });
 
+test("email auth completion refreshes server session before returning to checkout", () => {
+  const auth = source("src/features/auth/AuthScreen.tsx");
+  const provider = source("src/components/marketplace/MarketplaceProvider.tsx");
+  assert.match(provider, /refreshSession:\s*\(\)\s*=>\s*Promise<boolean>/);
+  assert.match(provider, /refreshSession\(\)\s*\{/);
+  assert.match(auth, /refreshSession/);
+  assert.match(auth, /verifyEmailChallenge\([\s\S]*await refreshSession\(\)/);
+});
+
 test("query-driven auth and top-up pages are not forced static", () => {
   assert.doesNotMatch(source("src/app/auth/page.tsx"), /dynamic\s*=\s*["']force-static["']/);
   assert.doesNotMatch(source("src/app/balance/top-up/page.tsx"), /dynamic\s*=\s*["']force-static["']/);

@@ -113,6 +113,7 @@ type MarketplaceContextValue = {
   saveSteamTradeUrl: (value: string) => Promise<boolean>;
   sellInventoryItem: (itemId: string) => Promise<boolean>;
   withdrawInventoryItem: (itemId: string) => Promise<boolean>;
+  refreshSession: () => Promise<boolean>;
   signOut: () => Promise<boolean>;
   notice: string;
   clearNotice: () => void;
@@ -314,42 +315,48 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     return token;
   }, []);
 
+  const refreshServerState = useCallback(async (isCurrent: () => boolean = () => true) => {
+    const client = createApiClient();
+    try {
+      const user = await client.getCurrentUser();
+      const [wallet, walletTransactions, tradeUrlStatus, cartResponse, orderHistory, inventory, tradeHistory] = await Promise.all([
+        client.getWalletBalance(),
+        client.getWalletTransactions(),
+        client.getSteamTradeUrlStatus(),
+        fetchHydratedCart(),
+        client.getOrderHistory(),
+        client.getInventory(),
+        client.getFulfillmentTradeHistory(),
+      ]);
+      if (!isCurrent()) return false;
+      setServerSyncStatus("authenticated");
+      setSession(sessionFromApiUser(user));
+      setBalanceCoins(wallet.availableCoins);
+      setOrders(orderHistory);
+      setInventoryItems(inventory);
+      setTransactions(walletTransactions);
+      setTradeEvents(tradeHistory);
+      setSteamTradeUrl("");
+      setServerSteamTradeUrlConfigured(tradeUrlStatus.configured);
+      setHasSeedData(false);
+      applyServerCart(cartResponse);
+      return true;
+    } catch {
+      if (!isCurrent()) return false;
+      setServerSyncStatus("fallback");
+      setServerCart(null);
+      setInventoryItems([]);
+      setServerSteamTradeUrlConfigured(false);
+      return false;
+    }
+  }, [applyServerCart]);
+
   useEffect(() => {
     if (!isHydrated) return;
     let cancelled = false;
 
     async function synchronizeServerState() {
-      const client = createApiClient();
-      try {
-        const user = await client.getCurrentUser();
-        const [wallet, walletTransactions, tradeUrlStatus, cartResponse, orderHistory, inventory, tradeHistory] = await Promise.all([
-          client.getWalletBalance(),
-          client.getWalletTransactions(),
-          client.getSteamTradeUrlStatus(),
-          fetchHydratedCart(),
-          client.getOrderHistory(),
-          client.getInventory(),
-          client.getFulfillmentTradeHistory(),
-        ]);
-        if (cancelled) return;
-        setServerSyncStatus("authenticated");
-        setSession(sessionFromApiUser(user));
-        setBalanceCoins(wallet.availableCoins);
-        setOrders(orderHistory);
-        setInventoryItems(inventory);
-        setTransactions(walletTransactions);
-        setTradeEvents(tradeHistory);
-        setSteamTradeUrl("");
-        setServerSteamTradeUrlConfigured(tradeUrlStatus.configured);
-        setHasSeedData(false);
-        applyServerCart(cartResponse);
-      } catch {
-        if (cancelled) return;
-        setServerSyncStatus("fallback");
-        setServerCart(null);
-        setInventoryItems([]);
-        setServerSteamTradeUrlConfigured(false);
-      }
+      await refreshServerState(() => !cancelled);
     }
 
     void synchronizeServerState();
@@ -357,7 +364,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [applyServerCart, isHydrated]);
+  }, [isHydrated, refreshServerState]);
 
   const persistCurrentState = useCallback(async (overrides: {
     cartIds?: string[] | ((current: string[]) => string[]);
@@ -615,6 +622,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         setNotice("Вывод предметов доступен только через серверную Steam-сессию.");
         return false;
       },
+      refreshSession() {
+        return refreshServerState();
+      },
       async signOut() {
         if (isServerBacked) {
           try {
@@ -663,6 +673,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       notice,
       orders,
       persistCurrentState,
+      refreshServerState,
       requiresSteam,
       requiresEmail,
       serverCart,

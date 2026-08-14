@@ -48,6 +48,7 @@ export function AuthScreen({
     isHydrated,
     isAuthenticated,
     hasSteam,
+    refreshSession,
     signOut,
     notify,
   } = useMarketplace();
@@ -142,6 +143,12 @@ export function AuthScreen({
     setFormError("");
     try {
       await createApiClient().verifyEmailChallenge(emailChallengeId, otp);
+      const refreshed = await refreshSession();
+      if (!refreshed) {
+        setStatus("error");
+        setFormError("Email подтверждён, но данные аккаунта не обновились. Обновите страницу и повторите оформление.");
+        return;
+      }
       setStatus("success");
       notify("Email подтверждён.");
       if (returnTo) router.replace(returnTo);
