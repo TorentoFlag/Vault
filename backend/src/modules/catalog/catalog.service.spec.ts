@@ -103,7 +103,36 @@ describe("CatalogService", () => {
 
     const product = await service.getBySlug("apple-ru-500");
 
-    expect(product.price.amountMinor).toBe(50_000);
-    expect(product.price.display).toBe("500 Coins");
+    expect(product.price.amountMinor).toBe(75_000);
+    expect(product.price.display).toBe("750 Coins");
+  });
+
+  it("converts foreign Apple gift-card nominals through RUB before displaying Coins", async () => {
+    const service = createService({
+      ...appleRow,
+      id: "apple-in-200",
+      slug: "apple-in-200",
+      meta: ["Индия", "200 INR"],
+      price_coin_minor: 1,
+      effective_price_coin_minor: "1",
+      details: {
+        ...appleRow.details,
+        specifications: [
+          { label: "Регион", value: "Индия" },
+          { label: "Номинал", value: "200 INR" },
+        ],
+        appleGiftCard: {
+          currency: "INR",
+          nominalMinor: 20_000,
+          regionCode: "IN",
+          regionLabel: "Индия",
+        },
+      },
+    });
+
+    const product = await service.getBySlug("apple-in-200");
+
+    expect(product.price.amountMinor).toBe(26_352);
+    expect(product.price.display).toBe("263,52 Coins");
   });
 });

@@ -127,6 +127,13 @@
       "when": 1786715700000,
       "tag": "0017_delete_duplicate_apple_gift_card_variants",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786717500000,
+      "tag": "0018_price_apple_gift_cards_by_fx",
+      "breakpoints": true
     }
   ]
 }

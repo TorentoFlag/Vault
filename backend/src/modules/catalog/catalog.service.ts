@@ -19,6 +19,24 @@ import { buildSteamRefillProduct } from "./steam-refill-product";
 const allowedKinds = new Set<CatalogProductKind>(["apple_gift_card", "skins", "steam"]);
 const defaultCatalogLimit = 120;
 const maxCatalogLimit = 240;
+const coinRateFiatMinor = 100;
+const coinRateCoinMinor = 150;
+const appleGiftCardRubRates: Record<string, { rateRubScaled: number; unit: number }> = {
+  AED: { rateRubScaled: 228_198, unit: 1 },
+  BRL: { rateRubScaled: 162_303, unit: 1 },
+  CAD: { rateRubScaled: 601_621, unit: 1 },
+  CNY: { rateRubScaled: 124_175, unit: 1 },
+  EUR: { rateRubScaled: 967_538, unit: 1 },
+  GBP: { rateRubScaled: 1_132_133, unit: 1 },
+  INR: { rateRubScaled: 878_377, unit: 100 },
+  JPY: { rateRubScaled: 525_956, unit: 100 },
+  KZT: { rateRubScaled: 180_154, unit: 100 },
+  NZD: { rateRubScaled: 490_725, unit: 1 },
+  PLN: { rateRubScaled: 224_308, unit: 1 },
+  RUB: { rateRubScaled: 10_000, unit: 1 },
+  TRY: { rateRubScaled: 175_654, unit: 10 },
+  USD: { rateRubScaled: 838_058, unit: 1 },
+};
 const supplierPricingJoin = `
         LEFT JOIN LATERAL (
           SELECT
@@ -161,9 +179,13 @@ function priceCoinMinor(product: LoadedCatalogProduct): number {
 }
 
 function appleGiftCardPriceCoinMinor(amountMinor: number, details: NonNullable<CatalogProduct["details"]>): number {
-  const nominalMinor = details.appleGiftCard?.nominalMinor;
-  if (nominalMinor === undefined) return amountMinor;
-  return Math.max(amountMinor, nominalMinor);
+  const card = details.appleGiftCard;
+  if (card === undefined) return amountMinor;
+  const rate = appleGiftCardRubRates[card.currency];
+  if (rate === undefined) return Math.max(amountMinor, card.nominalMinor);
+  const rubMinor = Math.ceil((card.nominalMinor * rate.rateRubScaled) / (rate.unit * 10_000));
+  const minimumCoinMinor = Math.ceil((rubMinor * coinRateCoinMinor) / coinRateFiatMinor);
+  return Math.max(amountMinor, minimumCoinMinor);
 }
 
 function productDescription(product: LoadedCatalogProduct): string {
