@@ -154,9 +154,12 @@ export class EmailAuthService {
       throw new UnauthorizedException("Email verification code is invalid or expired");
     }
 
+    const currentCustomer = command.presentedSessionToken
+      ? await this.sessions.authenticate(command.presentedSessionToken)
+      : null;
     const consumed = await this.consumeChallenge(challenge.id, now);
     if (!consumed) throw new UnauthorizedException("Email verification code is invalid or expired");
-    const user = await this.users.upsertEmailUser(challenge.email);
+    const user = await this.users.upsertEmailUser(challenge.email, currentCustomer?.userId);
     const session = await this.sessions.createSession(user.id, command.presentedSessionToken);
     return {
       email: challenge.email,

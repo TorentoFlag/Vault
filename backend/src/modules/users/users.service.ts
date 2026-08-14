@@ -105,31 +105,48 @@ export class UsersService {
     return next;
   }
 
-  async upsertEmailUser(emailInput: string): Promise<CustomerUser> {
+  async upsertEmailUser(emailInput: string, targetUserId?: string): Promise<CustomerUser> {
     const email = emailInput.trim().toLocaleLowerCase("ru-RU");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new NotFoundException("Email is invalid");
     if (this.database.isConfigured()) {
       const userId = `user_email_${createHash("sha256").update(email, "utf8").digest("hex").slice(0, 32)}`;
       const result = await this.database.query<{ id: string; steam_id64: string | null; email: string }>(
         `
-          WITH inserted_user AS (
+          WITH target_user AS (
+            SELECT id, steam_id64
+            FROM users
+            WHERE id = $3
+              AND disabled = false
+              AND $3 IS NOT NULL
+          ), inserted_email_user AS (
             INSERT INTO users (id, steam_id64)
-            VALUES ($1, NULL)
+            SELECT $1, NULL
+            WHERE NOT EXISTS (SELECT 1 FROM target_user)
             ON CONFLICT (id) DO UPDATE
             SET updated_at = clock_timestamp()
             RETURNING id, steam_id64
+          ), selected_user AS (
+            SELECT id, steam_id64
+            FROM target_user
+            UNION ALL
+            SELECT id, steam_id64
+            FROM inserted_email_user
+            WHERE NOT EXISTS (SELECT 1 FROM target_user)
           ), upserted_identity AS (
             INSERT INTO email_identities (email, user_id, verified_at)
-            VALUES ($2, $1, clock_timestamp())
+            SELECT $2, selected_user.id, clock_timestamp()
+            FROM selected_user
             ON CONFLICT (email) DO UPDATE
-            SET verified_at = clock_timestamp()
+            SET user_id = EXCLUDED.user_id,
+                verified_at = clock_timestamp()
             RETURNING user_id, email
           )
-          SELECT users.id, users.steam_id64, upserted_identity.email
-          FROM upserted_identity
-          JOIN users ON users.id = upserted_identity.user_id
+          SELECT selected_user.id, selected_user.steam_id64, upserted_identity.email
+          FROM selected_user
+          JOIN upserted_identity ON upserted_identity.user_id = selected_user.id
+          LIMIT 1
         `,
-        [userId, email],
+        [userId, email, targetUserId ?? null],
       );
       const row = result.rows[0];
       if (!row) throw new Error("Email user was not stored");
@@ -140,7 +157,7 @@ export class UsersService {
       };
     }
 
-    const userId = this.idsByEmail.get(email) ?? `user_email_${createHash("sha256").update(email, "utf8").digest("hex").slice(0, 32)}`;
+    const userId = targetUserId ?? this.idsByEmail.get(email) ?? `user_email_${createHash("sha256").update(email, "utf8").digest("hex").slice(0, 32)}`;
     const existing = this.usersById.get(userId);
     const next: CustomerUser = {
       ...existing,
