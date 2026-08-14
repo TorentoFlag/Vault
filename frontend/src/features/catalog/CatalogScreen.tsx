@@ -20,7 +20,7 @@ import {
   type CatalogFilters,
   type CatalogSort,
 } from "@/lib/catalog";
-import { fetchCatalogList, type CatalogFacets, type CatalogPagination } from "@/lib/catalog-api";
+import { fetchAllCatalogProducts, fetchCatalogList, type CatalogFacets, type CatalogPagination } from "@/lib/catalog-api";
 import {
   CATALOG_FEED_BATCH_SIZE,
   createCatalogFeedEntries,
@@ -385,6 +385,45 @@ export function CatalogScreen({
       cancelled = true;
     };
   }, [filters, filtersKey, loadedFiltersKey, serverPagination.limit]);
+
+  useEffect(() => {
+    if (!isAppleGiftCardMode || !serverPagination.hasMore) return;
+    let cancelled = false;
+
+    async function loadAllAppleGiftCards() {
+      setLoadingMore(true);
+      setLoadMoreError("");
+      try {
+        const appleProducts = await fetchAllCatalogProducts({
+          filters,
+          limit: serverPagination.limit,
+          offset: 0,
+        });
+        if (cancelled) return;
+        setLoadedProducts(appleProducts);
+        setServerPagination({
+          limit: serverPagination.limit,
+          offset: 0,
+          total: appleProducts.length,
+          hasMore: false,
+        });
+        setFeedState({ key: filtersKey, count: CATALOG_FEED_BATCH_SIZE });
+        setLoadedFiltersKey(filtersKey);
+      } catch {
+        if (!cancelled) {
+          setLoadMoreError("Не удалось загрузить все номиналы Apple. Обновите страницу и повторите действие.");
+        }
+      } finally {
+        if (!cancelled) setLoadingMore(false);
+      }
+    }
+
+    void loadAllAppleGiftCards();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filters, filtersKey, isAppleGiftCardMode, serverPagination.hasMore, serverPagination.limit]);
 
   const loadMoreProducts = useCallback(async () => {
     if (hasMoreLocalProducts) {

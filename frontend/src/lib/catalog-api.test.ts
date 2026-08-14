@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mapApiCatalogProduct, fetchCatalogList } from "./catalog-api.ts";
+import { mapApiCatalogProduct, fetchAllCatalogProducts, fetchCatalogList } from "./catalog-api.ts";
 
 const apiProduct = {
   id: "deagle-printstream",
@@ -157,4 +157,65 @@ test("fetchCatalogList requests catalog pages with limit and offset", async () =
     total: 17_574,
     hasMore: true,
   });
+});
+
+test("fetchAllCatalogProducts follows catalog pagination until every Apple region is loaded", async () => {
+  const requested: string[] = [];
+  const appleProduct = (id: string, regionLabel: string) => ({
+    ...apiProduct,
+    id,
+    slug: id,
+    kind: "apple_gift_card",
+    category: "Подарочная карта Apple",
+    game: undefined,
+    productType: "App Store & iTunes",
+    details: {
+      ...apiProduct.details,
+      appleGiftCard: {
+        currency: "USD",
+        nominalMinor: 500,
+        regionCode: regionLabel,
+        regionLabel,
+      },
+    },
+  });
+  const pages = [
+    {
+      items: [appleProduct("apple-us", "US")],
+      pagination: { limit: 120, offset: 0, total: 2, hasMore: true },
+      facets: {},
+    },
+    {
+      items: [appleProduct("apple-uk", "UK")],
+      pagination: { limit: 120, offset: 120, total: 2, hasMore: false },
+      facets: {},
+    },
+  ];
+
+  const products = await fetchAllCatalogProducts({
+    baseUrl: "https://api.vault.example",
+    filters: {
+      query: "",
+      category: "apple_gift_card",
+      types: [],
+      conditions: [],
+      sort: "relevance",
+    },
+    limit: 120,
+    fetch: async (input) => {
+      requested.push(String(input));
+      const page = pages.shift();
+      assert.ok(page);
+      return new Response(JSON.stringify(page), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  assert.deepEqual(products.map((product) => product.details.appleGiftCard?.regionLabel), ["US", "UK"]);
+  assert.deepEqual(requested, [
+    "https://api.vault.example/catalog?category=apple_gift_card&limit=120&offset=0",
+    "https://api.vault.example/catalog?category=apple_gift_card&limit=120&offset=120",
+  ]);
 });

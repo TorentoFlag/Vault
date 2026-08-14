@@ -262,6 +262,26 @@ export async function fetchCatalogList(options: CatalogFetchOptions = {}): Promi
   };
 }
 
+export async function fetchAllCatalogProducts(options: CatalogFetchOptions = {}): Promise<Product[]> {
+  const limit = options.limit ?? 120;
+  const products: Product[] = [];
+  let offset = options.offset ?? 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const page = await fetchCatalogList({
+      ...options,
+      limit,
+      offset,
+    });
+    products.push(...page.items);
+    hasMore = page.pagination.hasMore && page.items.length > 0;
+    offset = page.pagination.offset + page.pagination.limit;
+  }
+
+  return products;
+}
+
 export async function fetchCatalogProductBySlug(slug: string, options: CatalogProductFetchOptions = {}): Promise<Product | null> {
   if (!slug.trim()) return null;
   const url = buildApiUrl(`/catalog/${encodeURIComponent(slug)}`, options.baseUrl);
