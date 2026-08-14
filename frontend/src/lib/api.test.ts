@@ -93,6 +93,29 @@ test("API client sends credentials and CSRF for state-changing requests", async 
   assert.equal((calls[0]?.headers as Record<string, string>)["x-csrf-token"], "csrf-token");
 });
 
+test("API client accepts email verification response returned by backend", async () => {
+  const requestedUrls: string[] = [];
+  const client = createApiClient({
+    baseUrl: "https://api.vault.example",
+    fetch: async (input) => {
+      requestedUrls.push(input.toString());
+      return new Response(JSON.stringify({
+        userId: "user_76561198000000001",
+        email: "buyer@example.com",
+      }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  assert.deepEqual(await client.verifyEmailChallenge("challenge-1", "123456"), {
+    id: "user_76561198000000001",
+    email: { address: "buyer@example.com", verified: true },
+  });
+  assert.deepEqual(requestedUrls, ["https://api.vault.example/auth/email/challenges/challenge-1/verify"]);
+});
+
 test("API client raises Problem errors without leaking response parsing details", async () => {
   const client = createApiClient({
     fetch: async () => new Response(JSON.stringify({

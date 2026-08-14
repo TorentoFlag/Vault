@@ -594,8 +594,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
     async verifyEmailChallenge(challengeId: string, code: string): Promise<Pick<ApiUser, "id" | "email">> {
       const path = `/auth/email/challenges/${encodePathSegment(challengeId)}/verify`;
       const body = await requestJson(path, { method: "POST", body: JSON.stringify({ code }) });
-      if (!isRecord(body) || typeof body.id !== "string" || !isRecord(body.email) || typeof body.email.address !== "string" || body.email.verified !== true) throw new Error("Email verification response is malformed.");
-      return { id: body.id, email: { address: body.email.address, verified: true } };
+      if (!isRecord(body) || typeof body.userId !== "string" || typeof body.email !== "string") throw new Error("Email verification response is malformed.");
+      return { id: body.userId, email: { address: body.email, verified: true } };
     },
 
     async getCurrentUser(): Promise<ApiUser> {
