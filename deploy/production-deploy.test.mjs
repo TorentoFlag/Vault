@@ -35,8 +35,9 @@ test("remote deploy script keeps exactly one rollback backup and never prunes vo
   assert.match(remoteScript, /cp -a "\$APP_DIR" "\$backup_dir"/);
   assert.match(remoteScript, /\[ "\$release_path" != "\$app_path" \]/);
   assert.match(remoteScript, /tail -n \+2[\s\S]*rm -rf --/);
-  assert.match(remoteScript, /docker system prune -af/);
+  assert.match(remoteScript, /docker image prune -f/);
   assert.match(remoteScript, /docker builder prune -af/);
+  assert.doesNotMatch(remoteScript, /docker system prune -af/);
   assert.doesNotMatch(remoteScript, /--volumes/);
 });
 
@@ -49,8 +50,9 @@ test("remote deploy script keeps only the latest rollback Docker images", () => 
   assert.match(remoteScript, /cleanup_old_rollback_images backend/);
   assert.match(remoteScript, /cleanup_old_rollback_images frontend/);
   assert.match(remoteScript, /docker image rm "\$old_image"/);
-  assert.match(remoteScript, /docker system prune -af/);
+  assert.match(remoteScript, /docker image prune -f/);
   assert.doesNotMatch(remoteScript, /docker image prune -af/);
+  assert.doesNotMatch(remoteScript, /docker system prune -af/);
 });
 
 test("remote deploy script gates deployment with migrations, compose wait, and public health checks", () => {

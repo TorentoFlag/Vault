@@ -79,7 +79,7 @@ The workflow:
 4. backs up the current `/opt/vault/app` into `/opt/vault/backups/app-<timestamp>-<sha>`;
 5. keeps only the newest rollback backup and deletes older app backups;
 6. tags the currently running backend and frontend images as the rollback image set;
-7. builds images, applies migrations, starts Compose with `--wait`, checks public health endpoints, keeps only the newest rollback image per app image, and then prunes unused Docker artifacts/build cache.
+7. builds images, applies migrations, starts Compose with `--wait`, checks public health endpoints, keeps only the newest rollback image per app image, and then prunes dangling Docker images/build cache.
 
 Required GitHub Secrets:
 
@@ -91,7 +91,7 @@ Required GitHub Secrets:
 
 The workflow does not store provider secrets. Runtime config stays outside git in `/opt/vault/env` and `/opt/vault/secrets`.
 
-Cleanup deliberately excludes Docker volumes. Postgres, Redis, Caddy data, `/opt/vault/env`, and `/opt/vault/secrets` must remain untouched. Successful deploys keep only the latest `vault-rollback-backend:*` and `vault-rollback-frontend:*` tags; older rollback tags and dangling/unused Docker artifacts are removed.
+Cleanup deliberately excludes Docker volumes. Postgres, Redis, Caddy data, `/opt/vault/env`, and `/opt/vault/secrets` must remain untouched. Successful deploys keep only the latest `vault-rollback-backend:*` and `vault-rollback-frontend:*` tags; older rollback tags, dangling images, and build cache are removed. Do not use `docker system prune -a` here because it also deletes tagged rollback images that are not attached to a running container.
 
 ## Manual commands
 

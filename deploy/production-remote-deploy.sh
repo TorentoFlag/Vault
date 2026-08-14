@@ -106,7 +106,7 @@ docker compose -f "$COMPOSE_FILE" ps
 
 cleanup_old_rollback_images backend
 cleanup_old_rollback_images frontend
-docker system prune -af
+docker image prune -f
 docker builder prune -af
 
 if command -v apt-get >/dev/null 2>&1; then
