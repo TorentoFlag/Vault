@@ -33,11 +33,12 @@ function ProductVisual({ product, priority = false }: { product: Product; priori
   }
 
   const isSteam = product.kind === "steam";
+  const isAppleGiftCard = product.kind === "apple_gift_card";
 
   return (
     <div className={`${styles.serviceVisual} ${styles[product.kind]}`} aria-hidden="true">
-      {isSteam ? <Icon name="steam" width="54" height="54" /> : <span>GPT</span>}
-      <small>{isSteam ? "Steam Wallet" : "Digital access"}</small>
+      {isSteam ? <Icon name="steam" width="54" height="54" /> : <span>{isAppleGiftCard ? "Apple" : "GPT"}</span>}
+      <small>{isSteam ? "Steam Wallet" : isAppleGiftCard ? "Gift Card" : "Digital access"}</small>
     </div>
   );
 }

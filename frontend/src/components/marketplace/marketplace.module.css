@@ -300,6 +300,12 @@
   background: radial-gradient(circle, rgb(104 120 158 / 0.2), transparent 60%);
 }
 
+.apple_gift_card {
+  background:
+    radial-gradient(circle at 35% 30%, rgb(245 245 247 / 0.2), transparent 28%),
+    radial-gradient(circle at 65% 68%, rgb(104 120 158 / 0.18), transparent 55%);
+}
+
 .skins {
   background: radial-gradient(circle, rgb(77 124 254 / 0.18), transparent 62%);
 }

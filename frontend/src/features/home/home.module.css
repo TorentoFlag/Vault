@@ -203,6 +203,31 @@
   padding: 4px 8px;
 }
 
+.quickSearches a strong {
+  font: inherit;
+  font-weight: 700;
+}
+
+.quickSearches a.quickSearchFeatured {
+  width: min(330px, 48vw);
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  text-align: left;
+}
+
+.quickSearchFeatured span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #8995a6;
+  font-size: 0.68rem;
+  line-height: 1.28;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .inventory {
   align-self: start;
   min-width: 0;
