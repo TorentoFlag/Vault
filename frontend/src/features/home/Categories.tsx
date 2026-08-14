@@ -15,7 +15,7 @@ export function Categories() {
             <Link key={category.id} href={category.href} className={`${styles.categoryCard} ${styles[category.id]}`}>
               <div className={styles.categoryCopy}>
                 <span className={styles.categoryType}>
-                  {category.id === "steam" ? "STEAM WALLET" : category.id === "skins" ? "CS2 / RUST / TF2" : "DIGITAL ACCESS"}
+                  {category.id === "apple_gift_card" ? "APP STORE & ITUNES" : category.id === "steam" ? "STEAM WALLET" : category.id === "skins" ? "CS2 / RUST / TF2" : "DIGITAL ACCESS"}
                 </span>
                 <h3>{category.title}</h3>
                 <p>{category.description}</p>
@@ -25,7 +25,9 @@ export function Categories() {
                 </span>
               </div>
               <div className={styles.categoryVisual} aria-hidden="true">
-                {category.id === "steam" ? (
+                {category.id === "apple_gift_card" ? (
+                  <span className={styles.appleGlyph}>Apple</span>
+                ) : category.id === "steam" ? (
                   <Icon name="steam" width="82" height="82" />
                 ) : category.id === "skins" ? (
                   <span className={styles.weaponGlyph}>AK</span>

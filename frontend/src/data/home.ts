@@ -3,6 +3,13 @@ import { siteConfig } from "../config/site.ts";
 
 export const categories: Category[] = [
   {
+    id: "apple_gift_card",
+    title: "Подарочные карты Apple",
+    description: "App Store & iTunes для пополнения баланса Apple ID.",
+    action: "Выбрать карту",
+    href: "/catalog?category=apple_gift_card",
+  },
+  {
     id: "steam",
     title: "Steam",
     description: "Пополнение аккаунта Steam.",

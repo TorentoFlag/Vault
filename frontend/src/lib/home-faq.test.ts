@@ -32,6 +32,8 @@ test("FAQ explicitly says that physical merchandise has no shipping services", (
 });
 
 test("карточки категорий открывают каталог с выбранным фильтром", () => {
+  assert.equal(categories[0]?.id, "apple_gift_card");
+  assert.equal(categories[0]?.href, "/catalog?category=apple_gift_card");
   assert.equal(categories.find((category) => category.id === "steam")?.href, "/catalog?category=steam");
   assert.equal(categories.find((category) => category.id === "skins")?.href, "/catalog?category=skins&game=cs2");
   assert.equal(categories.some((category) => category.id === "gpt"), false);
