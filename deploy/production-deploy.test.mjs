@@ -40,6 +40,19 @@ test("remote deploy script keeps exactly one rollback backup and never prunes vo
   assert.doesNotMatch(remoteScript, /--volumes/);
 });
 
+test("remote deploy script keeps only the latest rollback Docker images", () => {
+  assert.match(remoteScript, /ROLLBACK_IMAGE_PREFIX=/);
+  assert.match(remoteScript, /tag_current_image_for_rollback\(\)/);
+  assert.match(remoteScript, /tag_current_image_for_rollback backend/);
+  assert.match(remoteScript, /tag_current_image_for_rollback frontend/);
+  assert.match(remoteScript, /cleanup_old_rollback_images\(\)/);
+  assert.match(remoteScript, /cleanup_old_rollback_images backend/);
+  assert.match(remoteScript, /cleanup_old_rollback_images frontend/);
+  assert.match(remoteScript, /docker image rm "\$old_image"/);
+  assert.match(remoteScript, /docker system prune -af/);
+  assert.doesNotMatch(remoteScript, /docker image prune -af/);
+});
+
 test("remote deploy script gates deployment with migrations, compose wait, and public health checks", () => {
   assert.match(remoteScript, /docker compose -f "\$COMPOSE_FILE" config/);
   assert.match(remoteScript, /npm run db:migrate/);

@@ -11,6 +11,7 @@ PUBLIC_HEALTH_SLEEP_SECONDS="${PUBLIC_HEALTH_SLEEP_SECONDS:-2}"
 JOURNAL_VACUUM_SIZE="${JOURNAL_VACUUM_SIZE:-50M}"
 DEPLOY_SHA="${VAULT_DEPLOY_SHA:-manual}"
 RELEASE_DIR="${VAULT_RELEASE_DIR:?VAULT_RELEASE_DIR is required}"
+ROLLBACK_IMAGE_PREFIX="${ROLLBACK_IMAGE_PREFIX:-vault-rollback}"
 
 wait_for_url() {
   url="$1"
@@ -29,6 +30,35 @@ wait_for_url() {
   done
 
   curl -fsS "$url" >/dev/null
+}
+
+tag_current_image_for_rollback() {
+  service="$1"
+  container_id="$(docker compose -f "$COMPOSE_FILE" ps -q "$service" || true)"
+  if [ -z "$container_id" ]; then
+    return 0
+  fi
+
+  image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
+  if [ -z "$image_id" ]; then
+    return 0
+  fi
+
+  docker tag "$image_id" "$ROLLBACK_IMAGE_PREFIX-$service:$timestamp-$short_sha"
+}
+
+cleanup_old_rollback_images() {
+  service="$1"
+  repository="$ROLLBACK_IMAGE_PREFIX-$service"
+
+  docker image ls "$repository" --format '{{.Repository}}:{{.Tag}}' \
+    | sort -r \
+    | tail -n +2 \
+    | while IFS= read -r old_image; do
+        if [ -n "$old_image" ]; then
+          docker image rm "$old_image" || true
+        fi
+      done
 }
 
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -61,6 +91,8 @@ rm -rf "$APP_DIR/.secrets"
 cd "$APP_DIR"
 
 docker compose -f "$COMPOSE_FILE" config | grep -q 'DATABASE_URL_FILE'
+tag_current_image_for_rollback backend
+tag_current_image_for_rollback frontend
 docker compose -f "$COMPOSE_FILE" build
 docker compose -f "$COMPOSE_FILE" up -d postgres redis
 docker compose -f "$COMPOSE_FILE" run --rm backend npm run db:migrate
@@ -72,6 +104,8 @@ wait_for_url https://vaultapp24.com/
 
 docker compose -f "$COMPOSE_FILE" ps
 
+cleanup_old_rollback_images backend
+cleanup_old_rollback_images frontend
 docker system prune -af
 docker builder prune -af
 

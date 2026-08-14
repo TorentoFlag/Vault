@@ -78,7 +78,8 @@ The workflow:
 3. runs `deploy/production-remote-deploy.sh` on the server;
 4. backs up the current `/opt/vault/app` into `/opt/vault/backups/app-<timestamp>-<sha>`;
 5. keeps only the newest rollback backup and deletes older app backups;
-6. builds images, applies migrations, starts Compose with `--wait`, checks public health endpoints, and then prunes unused Docker artifacts/build cache.
+6. tags the currently running backend and frontend images as the rollback image set;
+7. builds images, applies migrations, starts Compose with `--wait`, checks public health endpoints, keeps only the newest rollback image per app image, and then prunes unused Docker artifacts/build cache.
 
 Required GitHub Secrets:
 
@@ -90,7 +91,7 @@ Required GitHub Secrets:
 
 The workflow does not store provider secrets. Runtime config stays outside git in `/opt/vault/env` and `/opt/vault/secrets`.
 
-Cleanup deliberately excludes Docker volumes. Postgres, Redis, Caddy data, `/opt/vault/env`, and `/opt/vault/secrets` must remain untouched.
+Cleanup deliberately excludes Docker volumes. Postgres, Redis, Caddy data, `/opt/vault/env`, and `/opt/vault/secrets` must remain untouched. Successful deploys keep only the latest `vault-rollback-backend:*` and `vault-rollback-frontend:*` tags; older rollback tags and dangling/unused Docker artifacts are removed.
 
 ## Manual commands
 
@@ -126,7 +127,9 @@ docker compose -f compose.prod.yaml exec backend npm run fulfillment:worker -- -
 
 ## Rollback
 
-The deploy keeps exactly one previous app backup under `/opt/vault/backups`. To rollback code:
+The deploy keeps exactly one previous app backup under `/opt/vault/backups` and one previous Docker image set under `vault-rollback-backend:*` and `vault-rollback-frontend:*`.
+
+To rollback code from the source backup:
 
 ```sh
 latest_backup="$(find /opt/vault/backups -mindepth 1 -maxdepth 1 -type d -name 'app-*' | sort -r | head -n 1)"
@@ -134,6 +137,15 @@ rsync -a --delete "$latest_backup"/ /opt/vault/app/
 cd /opt/vault/app
 docker compose -f compose.prod.yaml build
 docker compose -f compose.prod.yaml up -d --wait --wait-timeout 180
+```
+
+For an emergency image-only rollback without rebuilding, inspect the rollback tag, retag it to the Compose image names, and restart without build:
+
+```sh
+rollback_tag="$(docker image ls vault-rollback-backend --format '{{.Tag}}' | sort -r | head -n 1)"
+docker tag "vault-rollback-backend:$rollback_tag" vault-backend
+docker tag "vault-rollback-frontend:$rollback_tag" vault-frontend
+docker compose -f compose.prod.yaml up -d --no-build --wait --wait-timeout 180
 ```
 
 Do not rollback database migrations without a written data plan.
