@@ -160,6 +160,12 @@ function priceCoinMinor(product: LoadedCatalogProduct): number {
   return product.priceCoinMinor ?? product.priceCoins * 100;
 }
 
+function appleGiftCardPriceCoinMinor(amountMinor: number, details: NonNullable<CatalogProduct["details"]>): number {
+  const nominalMinor = details.appleGiftCard?.nominalMinor;
+  if (nominalMinor === undefined) return amountMinor;
+  return Math.max(amountMinor, nominalMinor);
+}
+
 function productDescription(product: LoadedCatalogProduct): string {
   if (product.kind !== "apple_gift_card") return product.description;
   return product.description
@@ -172,6 +178,9 @@ function productDto(product: LoadedCatalogProduct): CatalogProductDto {
     ? parseAppleGiftCardDetails(product.details)
     : product.details;
   if (details === null) throw new Error("APPLE_GIFT_CARD_DETAILS_INVALID");
+  const amountMinor = product.kind === "apple_gift_card"
+    ? appleGiftCardPriceCoinMinor(priceCoinMinor(product), details)
+    : priceCoinMinor(product);
   return {
     id: product.id,
     slug: product.slug,
@@ -190,7 +199,7 @@ function productDto(product: LoadedCatalogProduct): CatalogProductDto {
     meta: product.meta,
     keywords: product.keywords,
     details,
-    price: priceDto(priceCoinMinor(product)),
+    price: priceDto(amountMinor),
   };
 }
 

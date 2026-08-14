@@ -45,7 +45,7 @@ const appleRow = {
 };
 
 describe("CatalogService", () => {
-  function createService() {
+  function createService(row = appleRow) {
     const database = {
       query<Row>(sql: string): Promise<QueryResult<Row>> {
         const isConstrainedToSkins = sql.includes("catalog_products.kind = 'skins'");
@@ -59,7 +59,7 @@ describe("CatalogService", () => {
         }
 
         if (sql.includes("catalog_products.id")) {
-          return Promise.resolve({ rows: (isConstrainedToSkins ? [] : [appleRow]) as Row[] });
+          return Promise.resolve({ rows: (isConstrainedToSkins ? [] : [row]) as Row[] });
         }
 
         return Promise.resolve({ rows: [] });
@@ -92,5 +92,18 @@ describe("CatalogService", () => {
     expect(result.items[0]?.description).toBe("Пополняйте баланс Apple ID подарочной картой App Store & iTunes.");
     expect(result.items[0]?.description).not.toContain("Код вручную отправит");
     expect(result.pagination.total).toBe(1);
+  });
+
+  it("does not expose a sub-nominal Apple gift-card price from malformed catalog data", async () => {
+    const service = createService({
+      ...appleRow,
+      price_coin_minor: 1,
+      effective_price_coin_minor: "1",
+    });
+
+    const product = await service.getBySlug("apple-ru-500");
+
+    expect(product.price.amountMinor).toBe(50_000);
+    expect(product.price.display).toBe("500 Coins");
   });
 });
