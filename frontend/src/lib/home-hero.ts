@@ -13,8 +13,9 @@ export type HomeHeroModel = {
   heroCards: Product[];
 };
 
-export function buildHomeHeroModel(products: Product[]): HomeHeroModel {
-  const appleCard = products.find((product) => product.kind === "apple_gift_card");
+export function buildHomeHeroModel(products: Product[], featuredProducts: Product[] = []): HomeHeroModel {
+  const appleCard = featuredProducts.find((product) => product.kind === "apple_gift_card")
+    ?? products.find((product) => product.kind === "apple_gift_card");
   const skinProducts = products.filter((product) => product.kind === "skins");
   const steam = products.find((product) => product.kind === "steam");
   const heroCards = [
@@ -28,8 +29,7 @@ export function buildHomeHeroModel(products: Product[]): HomeHeroModel {
     subtitle: "Подарочные карты Apple, пополнение Steam, покупка игровых предметов с ценами в Coins.",
     quickSearches: [
       {
-        title: "Подарочные карты apple",
-        description: "Приобретайте подарочные карты App Store & iTunes для пополнения баланса Apple ID",
+        title: "Подарочные карты Apple",
         href: "/catalog?category=apple_gift_card",
       },
       { title: "Steam", href: "/catalog?category=steam" },

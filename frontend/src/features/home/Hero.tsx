@@ -7,8 +7,8 @@ import type { Product } from "@/types/commerce";
 
 import styles from "./home.module.css";
 
-export function Hero({ products }: { products: Product[] }) {
-  const hero = buildHomeHeroModel(products);
+export function Hero({ products, featuredProducts = [] }: { products: Product[]; featuredProducts?: Product[] }) {
+  const hero = buildHomeHeroModel(products, featuredProducts);
 
   return (
     <section className={styles.hero} id="top">
@@ -42,7 +42,13 @@ export function Hero({ products }: { products: Product[] }) {
           </div>
           <div className={styles.inventoryGrid}>
             {hero.heroCards.map((product, index) => (
-              <ProductCard key={product.id} product={product} compact priority={index < 2} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                compact
+                priority={index < 2}
+                showDescription={product.kind === "apple_gift_card"}
+              />
             ))}
           </div>
         </div>

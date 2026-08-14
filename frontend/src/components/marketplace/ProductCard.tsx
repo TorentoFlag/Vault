@@ -49,12 +49,14 @@ export function ProductCard({
   priority = false,
   headingLevel = 3,
   returnHref,
+  showDescription = false,
 }: {
   product: Product;
   compact?: boolean;
   priority?: boolean;
   headingLevel?: 2 | 3;
   returnHref?: string;
+  showDescription?: boolean;
 }) {
   const { cart, addToCart } = useMarketplace();
   const pathname = usePathname();
@@ -94,7 +96,7 @@ export function ProductCard({
             {product.title}
           </Link>
         </ProductTitle>
-        {!compact ? <p>{product.description}</p> : null}
+        {(!compact || showDescription) ? <p>{product.description}</p> : null}
         <div className={styles.productState}>
           <StatusBadge tone={product.availability === "on-request" ? "warning" : "success"}>
             {getProductStatusLabel(product)}

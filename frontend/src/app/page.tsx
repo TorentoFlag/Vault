@@ -6,6 +6,7 @@ import { HowItWorks } from "@/features/home/HowItWorks";
 import { NewProducts } from "@/features/home/NewProducts";
 import { ProductCollection } from "@/features/home/ProductCollection";
 import { SteamTopUp } from "@/features/home/SteamTopUp";
+import { createDefaultCatalogFilters } from "@/lib/catalog";
 import { fetchCatalogList } from "@/lib/catalog-api";
 import { orderMerchandisingProducts } from "@/lib/home-merchandising";
 
@@ -18,13 +19,16 @@ function selectNewProducts<T extends { createdAt?: string }>(products: T[], limi
 }
 
 export default async function Home() {
-  const catalog = await fetchCatalogList();
+  const [catalog, appleCatalog] = await Promise.all([
+    fetchCatalogList(),
+    fetchCatalogList({ filters: { ...createDefaultCatalogFilters(), category: "apple_gift_card" }, limit: 1 }),
+  ]);
   const popularProducts = orderMerchandisingProducts(catalog.items, "popular").slice(0, 8);
   const newProducts = selectNewProducts(catalog.items, 4);
 
   return (
     <main id="main-content">
-      <Hero products={catalog.items} />
+      <Hero products={catalog.items} featuredProducts={appleCatalog.items} />
       <Categories />
       <ProductCollection products={popularProducts} />
       <SteamTopUp />
