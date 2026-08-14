@@ -13,7 +13,7 @@ const appleRow = {
   game: null,
   product_type: "Подарочная карта App Store & iTunes",
   title: "Подарочная карта Apple",
-  description: "Пополняйте баланс Apple ID подарочной картой App Store & iTunes.",
+  description: "Пополняйте баланс Apple ID подарочной картой App Store & iTunes. Код вручную отправит команда Vault после оплаты.",
   price_coin_minor: 75000,
   effective_price_coin_minor: "75000",
   availability: "available",
@@ -89,6 +89,8 @@ describe("CatalogService", () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0]?.kind).toBe("apple_gift_card");
     expect(result.items[0]?.slug).toBe("apple-ru-500");
+    expect(result.items[0]?.description).toBe("Пополняйте баланс Apple ID подарочной картой App Store & iTunes.");
+    expect(result.items[0]?.description).not.toContain("Код вручную отправит");
     expect(result.pagination.total).toBe(1);
   });
 });

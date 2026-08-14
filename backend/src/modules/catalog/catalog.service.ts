@@ -160,6 +160,13 @@ function priceCoinMinor(product: LoadedCatalogProduct): number {
   return product.priceCoinMinor ?? product.priceCoins * 100;
 }
 
+function productDescription(product: LoadedCatalogProduct): string {
+  if (product.kind !== "apple_gift_card") return product.description;
+  return product.description
+    .replace(/\s*Код вручную отправит команда Vault(?: на подтверждённый email)? после оплаты\./u, "")
+    .trim();
+}
+
 function productDto(product: LoadedCatalogProduct): CatalogProductDto {
   const details = product.kind === "apple_gift_card"
     ? parseAppleGiftCardDetails(product.details)
@@ -173,7 +180,7 @@ function productDto(product: LoadedCatalogProduct): CatalogProductDto {
     ...(product.game === undefined ? {} : { game: product.game }),
     productType: product.productType,
     title: product.title,
-    description: product.description,
+    description: productDescription(product),
     availability: product.availability,
     fulfillmentMode: product.fulfillmentMode,
     createdAt: product.createdAt,
