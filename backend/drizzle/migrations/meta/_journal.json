@@ -141,6 +141,13 @@
       "when": 1786721400000,
       "tag": "0019_sync_apple_gift_cards_from_plati",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786726800000,
+      "tag": "0020_rename_apple_gift_card_regions",
+      "breakpoints": true
     }
   ]
 }

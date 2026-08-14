@@ -621,7 +621,7 @@ export function CatalogScreen({
         {isSteamRefillMode ? (
           <SteamRefillForm />
         ) : isAppleGiftCardMode ? (
-          <AppleGiftCardForm products={products} />
+          <AppleGiftCardForm products={loadedProducts} />
         ) : (
           <>
             <div className={styles.toolbar}>

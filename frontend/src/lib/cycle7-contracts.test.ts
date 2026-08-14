@@ -42,3 +42,18 @@ test("Apple gift card summary shows delivery email without manual issuance row",
   assert.match(appleGiftCard, /Доставка[\s\S]*На подтвержд[её]нный email/);
   assert.doesNotMatch(appleGiftCard, /Выдача[\s\S]{0,80}Ручная/);
 });
+
+test("Apple gift card form receives the fully loaded catalog page set", () => {
+  const catalog = source("src/features/catalog/CatalogScreen.tsx");
+  assert.match(catalog, /<AppleGiftCardForm products=\{loadedProducts}/);
+  assert.doesNotMatch(catalog, /<AppleGiftCardForm products=\{products}/);
+});
+
+test("Apple gift card region migration stores readable labels instead of currency codes", () => {
+  const migration = source("../backend/drizzle/migrations/0020_rename_apple_gift_card_regions.sql");
+  for (const label of ["ОАЭ", "Бразилия", "Канада", "Китай", "Европа", "Индия", "Япония", "Казахстан", "Новая Зеландия", "Польша", "Россия", "Турция", "Великобритания", "США"]) {
+    assert.match(migration, new RegExp(label));
+  }
+  assert.doesNotMatch(migration, /'AE', 'AED'/);
+  assert.doesNotMatch(migration, /'CA', 'CAN'/);
+});

@@ -38,11 +38,7 @@ export function AppleGiftCardForm({ products }: { products: Product[] }) {
     isHydrated,
   } = useMarketplace();
   const appleProducts = useMemo(() => products
-    .filter((product) => product.kind === "apple_gift_card" && product.details.appleGiftCard)
-    .sort((left, right) => {
-      const regionCompare = productRegionLabel(left).localeCompare(productRegionLabel(right), "ru-RU");
-      return regionCompare || productNominalMinor(left) - productNominalMinor(right);
-    }), [products]);
+    .filter((product) => product.kind === "apple_gift_card" && product.details.appleGiftCard), [products]);
   const regions = useMemo(() => {
     const byCode = new Map<string, string>();
     appleProducts.forEach((product) => {
