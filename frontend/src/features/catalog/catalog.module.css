@@ -533,6 +533,27 @@
   outline-offset: 2px;
 }
 
+.appleGiftCardSelect {
+  min-height: 54px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: #0d1117;
+  padding: 0 42px 0 16px;
+  color: var(--text);
+  font-family: var(--font-rajdhani), var(--font-inter), sans-serif;
+  font-size: 1.05rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+
+.appleGiftCardSelect:focus-visible {
+  border-color: var(--accent-hover);
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+
 .steamRefillAmount input {
   min-width: 0;
   flex: 1;

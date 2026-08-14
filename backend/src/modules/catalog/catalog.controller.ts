@@ -37,7 +37,7 @@ const productSchema = {
   properties: {
     id: { type: "string" },
     slug: { type: "string" },
-    kind: { type: "string", enum: ["steam", "skins"] },
+    kind: { type: "string", enum: ["steam", "skins", "apple_gift_card"] },
     category: { type: "string" },
     game: { type: "string" },
     productType: { type: "string" },

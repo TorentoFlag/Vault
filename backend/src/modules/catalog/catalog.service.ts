@@ -483,11 +483,12 @@ ${supplierPricingJoin}
     const params: Array<number | string> = [];
     const where = [
       "catalog_products.public_enabled = true",
-      "catalog_products.kind = 'skins'",
     ];
     if (command.category !== undefined) {
       params.push(command.category);
       where.push(`catalog_products.kind = $${params.length}`);
+    } else if (command.slug === undefined) {
+      where.push("catalog_products.kind = 'skins'");
     }
     if (command.game !== undefined) {
       params.push(command.game);
@@ -658,6 +659,7 @@ ${supplierPricingJoin}
       kinds: [
         { id: "skins", title: "Игровые предметы" },
         { id: "steam", title: "Steam" },
+        { id: "apple_gift_card", title: "Подарочные карты Apple" },
       ],
       games,
       productTypes: facetOptionsFromValues(result.rows.map((row) => row.product_type)),
@@ -665,6 +667,7 @@ ${supplierPricingJoin}
       fulfillmentModes: [
         { id: "automatic", title: "Автоматически" },
         { id: "steam-trade", title: "Steam Trade" },
+        { id: "manual", title: "Ручная выдача" },
       ],
       availability: [{ id: "available", title: "Доступен к оформлению" }],
     };

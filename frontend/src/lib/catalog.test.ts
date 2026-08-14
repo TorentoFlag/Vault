@@ -54,6 +54,15 @@ test("URL-параметры каталога разбираются в безо
   });
 });
 
+test("URL-параметры каталога поддерживают отдельный раздел Apple gift cards", () => {
+  const filters = parseCatalogSearchParams(new URLSearchParams([
+    ["category", "apple_gift_card"],
+  ]));
+
+  assert.equal(filters.category, "apple_gift_card");
+  assert.equal(getCatalogResultTitle(filters), "Подарочные карты Apple");
+});
+
 test("легаси-фильтры наличия, выдачи и weapon игнорируются", () => {
   const filters = parseCatalogSearchParams(new URLSearchParams([
     ["status", "available"],

@@ -9,6 +9,7 @@ export type ServiceNavigationItem = {
 export const serviceNavigation: ServiceNavigationItem[] = [
   { label: "Все товары", href: "/catalog", icon: "bag" },
   { label: "Пополнение Steam", href: "/catalog?category=steam", icon: "steam" },
+  { label: "Подарочные карты Apple", href: "/catalog?category=apple_gift_card", icon: "bag" },
   { label: "Скины CS2", href: "/catalog?category=skins&game=cs2", icon: "shield" },
   { label: "Скины Rust", href: "/catalog?category=skins&game=rust", icon: "shield" },
   { label: "Скины TF2", href: "/catalog?category=skins&game=tf2", icon: "shield" },

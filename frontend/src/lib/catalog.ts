@@ -32,7 +32,7 @@ export function createDefaultCatalogFilters(): CatalogFilters {
   };
 }
 
-const productFilters: ProductFilter[] = ["all", "steam", "skins"];
+const productFilters: ProductFilter[] = ["all", "steam", "skins", "apple_gift_card"];
 const catalogSorts: CatalogSort[] = ["relevance", "price_asc", "price_desc", "newest", "name_asc", "name_desc"];
 type CatalogSearchParams = Pick<URLSearchParams, "get" | "getAll">;
 
@@ -111,6 +111,7 @@ export function getCatalogResultTitle(filters: CatalogFilters) {
   const query = filters.query.trim();
   if (query) return `Результаты по запросу «${query}»`;
   if (filters.category === "steam") return "Пополнение Steam";
+  if (filters.category === "apple_gift_card") return "Подарочные карты Apple";
   if (filters.category === "skins" && filters.game !== undefined) {
     return `Скины ${getCatalogGameLabel(filters.game)}`;
   }

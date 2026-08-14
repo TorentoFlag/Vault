@@ -1227,7 +1227,8 @@
                             "type": "string",
                             "enum": [
                               "steam",
-                              "skins"
+                              "skins",
+                              "apple_gift_card"
                             ]
                           },
                           "category": {
@@ -1377,7 +1378,8 @@
                       "type": "string",
                       "enum": [
                         "steam",
-                        "skins"
+                        "skins",
+                        "apple_gift_card"
                       ]
                     },
                     "category": {
@@ -2223,6 +2225,58 @@
         },
         "tags": [
           "Inventory"
+        ]
+      }
+    },
+    "/.well-known/vv-admin/manifest.json": {
+      "get": {
+        "operationId": "IntegrationController_manifest",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "VV Admin Integration Protocol v1 manifest."
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/readiness": {
+      "get": {
+        "operationId": "IntegrationController_readiness",
+        "parameters": [
+          {
+            "name": "X-Admin-Token",
+            "in": "header",
+            "description": "Backend-only admin token loaded from ADMIN_API_TOKEN_FILE.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vault integration readiness for VV Admin."
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/scenarios/checkout-payment-reached/run": {
+      "post": {
+        "operationId": "IntegrationController_runCheckoutPaymentReached",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
         ]
       }
     },

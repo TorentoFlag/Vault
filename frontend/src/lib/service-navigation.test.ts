@@ -27,6 +27,7 @@ test("сервисная навигация хранит первый релиз
   for (const label of [
     "Все товары",
     "Пополнение Steam",
+    "Подарочные карты Apple",
     "Скины CS2",
     "Скины Rust",
     "Скины TF2",
@@ -50,6 +51,7 @@ test("ссылки меню ведут в существующие раздел�
   for (const href of [
     "/catalog",
     "/catalog?category=steam",
+    "/catalog?category=apple_gift_card",
     "/catalog?category=skins&game=cs2",
     "/catalog?category=skins&game=rust",
     "/catalog?category=skins&game=tf2",

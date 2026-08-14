@@ -31,6 +31,7 @@ import { getServiceNavigationHref, serviceNavigation } from "@/lib/service-navig
 import type { Product } from "@/types/commerce";
 
 import styles from "./catalog.module.css";
+import { AppleGiftCardForm } from "./AppleGiftCardForm";
 import { SteamRefillForm } from "./SteamRefillForm";
 
 const categories: { value: ProductFilter; label: string }[] = [
@@ -348,6 +349,7 @@ export function CatalogScreen({
   const draftChips = useMemo(() => getActiveChips(draftFilters), [draftFilters]);
   const catalogReturnHref = filtersKey ? `${pathname}?${filtersKey}` : pathname;
   const isSteamRefillMode = filters.category === "steam";
+  const isAppleGiftCardMode = filters.category === "apple_gift_card";
 
   useEffect(() => {
     if (loadedFiltersKey === "" || loadedFiltersKey === filtersKey) return;
@@ -579,6 +581,8 @@ export function CatalogScreen({
 
         {isSteamRefillMode ? (
           <SteamRefillForm />
+        ) : isAppleGiftCardMode ? (
+          <AppleGiftCardForm products={products} />
         ) : (
           <>
             <div className={styles.toolbar}>
