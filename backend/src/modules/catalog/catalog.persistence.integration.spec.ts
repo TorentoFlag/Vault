@@ -165,7 +165,7 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
     expect(body.items.filter((item) => item.kind === "skins").every((item) => item.game === "CS2")).toBe(true);
   });
 
-  it("rejects duplicate public Apple gift-card variants for the same region currency and nominal", async () => {
+  it("rejects duplicate Apple gift-card variants for the same region currency and nominal", async () => {
     const details = {
       specifications: [
         { label: "Регион", value: "Европа" },
@@ -184,7 +184,7 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
       },
     };
 
-    async function insertVariant(id: string, slug: string) {
+    async function insertVariant(id: string, slug: string, publicEnabled: boolean) {
       await pool.query(
         `
           INSERT INTO catalog_products (
@@ -213,15 +213,15 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
           VALUES ($1, $2, 'apple_gift_card', 'Подарочная карта Apple', NULL, 'Подарочная карта App Store & iTunes',
             'Подарочная карта Apple', 'Подарочная карта Apple для App Store & iTunes.', 200, 'available', 'manual', 10,
             NULL, NULL, ARRAY['Европа', '2 EUR'], ARRAY['apple', 'itunes', 'подарочная карта'], $3::jsonb,
-            'manual', '{}'::jsonb, true, '2026-08-14T10:00:00.000Z')
+            'manual', '{}'::jsonb, $4, '2026-08-14T10:00:00.000Z')
         `,
-        [id, slug, JSON.stringify(details)],
+        [id, slug, JSON.stringify(details), publicEnabled],
       );
     }
 
-    await insertVariant("test-apple-variant-one", "test-apple-eur-2-one");
+    await insertVariant("test-apple-variant-one", "test-apple-eur-2-one", true);
 
-    await expect(insertVariant("test-apple-variant-two", "test-apple-eur-2-two"))
+    await expect(insertVariant("test-apple-variant-two", "test-apple-eur-2-two", false))
       .rejects.toMatchObject({ code: "23505" });
   });
 

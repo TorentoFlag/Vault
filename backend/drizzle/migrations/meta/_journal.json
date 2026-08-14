@@ -124,8 +124,8 @@
     {
       "idx": 17,
       "version": "7",
-      "when": 1786715520000,
-      "tag": "0017_public_apple_gift_card_variant_unique",
+      "when": 1786715700000,
+      "tag": "0017_delete_duplicate_apple_gift_card_variants",
       "breakpoints": true
     }
   ]
