@@ -9,7 +9,9 @@ const readyInput = {
   balanceCoins: 3000,
   isAuthenticated: true,
   requiresSteam: false,
+  requiresEmail: false,
   hasSteam: false,
+  hasEmail: false,
   hasTradeUrl: false,
 };
 
@@ -32,6 +34,13 @@ test("checkout требует Steam только для игровых пред�
   assert.equal(getCheckoutGate({ ...readyInput, requiresSteam: true, hasSteam: false }), "steam-required");
   assert.equal(getCheckoutGate({ ...readyInput, requiresSteam: true, hasSteam: true }), "trade-url-required");
   assert.equal(getCheckoutGate({ ...readyInput, requiresSteam: true, hasSteam: true, hasTradeUrl: true }), "ready");
+});
+
+test("checkout требует подтверждённый email для цифровой доставки", () => {
+  assert.equal(getCheckoutGate({ ...readyInput, requiresEmail: true, hasEmail: false }), "email-required");
+  assert.equal(getCheckoutGate({ ...readyInput, requiresEmail: true, hasEmail: true }), "ready");
+  assert.equal(getCheckoutGate({ ...readyInput, requiresSteam: true, requiresEmail: true, hasSteam: false, hasEmail: false }), "steam-required");
+  assert.equal(getCheckoutGate({ ...readyInput, requiresSteam: true, requiresEmail: true, hasSteam: true, hasTradeUrl: true, hasEmail: false }), "email-required");
 });
 
 test("оформление доступно только после принятия условий", () => {

@@ -34,6 +34,7 @@ const resultMessage: Record<Exclude<CheckoutResult["status"], "success" | "busy"
   "auth-required": "Сессия завершена. Войдите в аккаунт и повторите оформление.",
   "steam-required": "Для игровых предметов требуется подключение Steam.",
   "trade-url-required": "Сохраните Steam Trade URL и повторите оформление.",
+  "email-required": "Подтвердите email для доставки цифрового товара.",
   "fulfillment-invalid": "Состав корзины изменился. Проверьте данные получателя и повторите оформление.",
   "price-changed": "Стоимость заказа изменилась. Проверьте обновлённую сумму и снова примите условия.",
   "storage-error": "Заказ не оформлен: не удалось сохранить состояние checkout. Обновите страницу и повторите попытку.",
@@ -56,7 +57,7 @@ function CheckoutSkeleton() {
   return <div className={styles.checkoutLayout} aria-label="Загрузка оформления заказа"><Skeleton className={styles.itemsSkeleton} /><Skeleton className={styles.summarySkeleton} /></div>;
 }
 
-function GuardState({ gate, shortfall, requiresSteam }: { gate: Exclude<CheckoutGate, "ready">; shortfall: number; requiresSteam: boolean }) {
+function GuardState({ gate, shortfall, requiresSteam, requiresEmail }: { gate: Exclude<CheckoutGate, "ready">; shortfall: number; requiresSteam: boolean; requiresEmail: boolean }) {
   const content = {
     empty: {
       eyebrow: "Корзина",
@@ -72,9 +73,13 @@ function GuardState({ gate, shortfall, requiresSteam }: { gate: Exclude<Checkout
     },
     "auth-required": {
       eyebrow: "Аккаунт",
-      title: "Войдите для оформления",
-      description: requiresSteam ? "Для игрового предмета требуется вход через Steam." : "После входа вы вернётесь к оформлению заказа.",
-      action: <Link className={styles.primaryLink} href={`/auth?method=steam&returnTo=%2Fcheckout${requiresSteam ? "&required=steam" : ""}`}>{requiresSteam ? "Подключить Steam" : "Войти через Steam"}</Link>,
+      title: requiresEmail && !requiresSteam ? "Подтвердите email" : "Войдите для оформления",
+      description: requiresSteam
+        ? "Для игрового предмета требуется вход через Steam."
+        : requiresEmail
+          ? "Подарочная карта будет отправлена на подтверждённый email."
+          : "После входа вы вернётесь к оформлению заказа.",
+      action: <Link className={styles.primaryLink} href={requiresEmail && !requiresSteam ? "/auth?method=email&returnTo=%2Fcheckout" : `/auth?method=steam&returnTo=%2Fcheckout${requiresSteam ? "&required=steam" : ""}`}>{requiresEmail && !requiresSteam ? "Подтвердить email" : requiresSteam ? "Подключить Steam" : "Войти через Steam"}</Link>,
     },
     "steam-required": {
       eyebrow: "Steam",
@@ -87,6 +92,12 @@ function GuardState({ gate, shortfall, requiresSteam }: { gate: Exclude<Checkout
       title: "Добавьте ссылку обмена",
       description: "Без действующего Trade URL невозможно сохранить настройки заказа игрового предмета.",
       action: <Link className={styles.primaryLink} href="/account/steam?returnTo=%2Fcheckout">Добавить Trade URL</Link>,
+    },
+    "email-required": {
+      eyebrow: "Email",
+      title: "Подтвердите email",
+      description: "Подарочная карта будет отправлена только на подтверждённый email.",
+      action: <Link className={styles.primaryLink} href="/auth?method=email&returnTo=%2Fcheckout">Подтвердить email</Link>,
     },
   }[gate];
 
@@ -101,7 +112,9 @@ export function CheckoutScreen() {
     cartShortfallCoins,
     isAuthenticated,
     requiresSteam,
+    requiresEmail,
     hasSteam,
+    hasEmail,
     steamTradeUrl,
     hasSteamTradeUrl,
     session,
@@ -135,7 +148,9 @@ export function CheckoutScreen() {
     balanceCoins,
     isAuthenticated,
     requiresSteam,
+    requiresEmail,
     hasSteam,
+    hasEmail,
     hasTradeUrl: hasSteamTradeUrl,
   });
   const fulfillmentErrors = validateFulfillmentInput([...new Set(cart.map((product) => product.kind))], fulfillment);
@@ -223,7 +238,7 @@ export function CheckoutScreen() {
             <span className={styles.successMark} aria-hidden="true">✓</span>
             <div><span>Заказ {receipt.orderNumber}</span><h2 id="checkout-success-title" ref={successHeadingRef} tabIndex={-1}>Заказ оформлен</h2><p>{formatCoins(receipt.totalCoins)} Coins списаны с баланса. Статус заказа доступен в личном кабинете.</p><dl><div><dt>Товаров</dt><dd>{receipt.itemCount}</dd></div><div><dt>Остаток</dt><dd>{formatCoins(receipt.remainingCoins)} Coins</dd></div></dl><div className={styles.successActions}><Link className={styles.primaryLink} href="/account/purchases">Мои покупки</Link><Link href="/catalog">Продолжить покупки</Link></div></div>
           </section>
-        ) : gate !== "ready" ? <GuardState gate={gate} shortfall={cartShortfallCoins} requiresSteam={requiresSteam} /> : (
+        ) : gate !== "ready" ? <GuardState gate={gate} shortfall={cartShortfallCoins} requiresSteam={requiresSteam} requiresEmail={requiresEmail} /> : (
           <form className={styles.checkoutLayout} noValidate aria-busy={status === "submitting"} onSubmit={submit}>
             <div className={styles.mainColumn}>
               <section className={styles.panel} aria-labelledby="checkout-items-title">

@@ -22,20 +22,22 @@ const maxCatalogLimit = 240;
 const coinRateFiatMinor = 100;
 const coinRateCoinMinor = 150;
 const appleGiftCardRubRates: Record<string, { rateRubScaled: number; unit: number }> = {
-  AED: { rateRubScaled: 228_198, unit: 1 },
-  BRL: { rateRubScaled: 162_303, unit: 1 },
-  CAD: { rateRubScaled: 601_621, unit: 1 },
-  CNY: { rateRubScaled: 124_175, unit: 1 },
-  EUR: { rateRubScaled: 967_538, unit: 1 },
-  GBP: { rateRubScaled: 1_132_133, unit: 1 },
-  INR: { rateRubScaled: 878_377, unit: 100 },
-  JPY: { rateRubScaled: 525_956, unit: 100 },
-  KZT: { rateRubScaled: 180_154, unit: 100 },
-  NZD: { rateRubScaled: 490_725, unit: 1 },
-  PLN: { rateRubScaled: 224_308, unit: 1 },
+  AED: { rateRubScaled: 230_211, unit: 1 },
+  BRL: { rateRubScaled: 163_038, unit: 1 },
+  CAD: { rateRubScaled: 606_578, unit: 1 },
+  CHF: { rateRubScaled: 1_039_146, unit: 1 },
+  CNY: { rateRubScaled: 124_789, unit: 1 },
+  EUR: { rateRubScaled: 975_141, unit: 1 },
+  GBP: { rateRubScaled: 1_141_948, unit: 1 },
+  INR: { rateRubScaled: 885_971, unit: 100 },
+  JPY: { rateRubScaled: 530_461, unit: 100 },
+  KZT: { rateRubScaled: 181_743, unit: 100 },
+  NOK: { rateRubScaled: 887_620, unit: 10 },
+  NZD: { rateRubScaled: 495_137, unit: 1 },
+  PLN: { rateRubScaled: 226_662, unit: 1 },
   RUB: { rateRubScaled: 10_000, unit: 1 },
-  TRY: { rateRubScaled: 175_654, unit: 10 },
-  USD: { rateRubScaled: 838_058, unit: 1 },
+  TRY: { rateRubScaled: 177_136, unit: 10 },
+  USD: { rateRubScaled: 845_449, unit: 1 },
 };
 const supplierPricingJoin = `
         LEFT JOIN LATERAL (

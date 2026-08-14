@@ -56,7 +56,7 @@ import type { CoinTransaction, InventoryItem, MarketplaceOrder, TradeEvent } fro
 
 export type CartItemInput = { id: string; slug?: string; title?: string };
 export type CheckoutResult =
-  | { status: "empty" | "insufficient" | "auth-required" | "steam-required" | "trade-url-required" | "fulfillment-invalid" | "price-changed" | "storage-error" | "busy" | "lock-unavailable" }
+  | { status: "empty" | "insufficient" | "auth-required" | "steam-required" | "trade-url-required" | "email-required" | "fulfillment-invalid" | "price-changed" | "storage-error" | "busy" | "lock-unavailable" }
   | {
       status: "success";
       orderNumber: string;
@@ -90,6 +90,7 @@ type MarketplaceContextValue = {
   cartShortfallCoins: number;
   hasSufficientBalance: boolean;
   requiresSteam: boolean;
+  requiresEmail: boolean;
   canPurchase: boolean;
   orders: MarketplaceOrder[];
   inventoryItems: MarketplaceInventoryItem[];
@@ -100,6 +101,7 @@ type MarketplaceContextValue = {
   session: MarketplaceSession | null;
   isAuthenticated: boolean;
   hasSteam: boolean;
+  hasEmail: boolean;
   isHydrated: boolean;
   marketplaceRevision: number;
   addToCart: (item: CartItemInput) => Promise<boolean>;
@@ -133,6 +135,15 @@ export type MarketplaceInventoryItem = InventoryItem & {
 
 function orderNumberFromId(id: string) {
   return `VLT-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
+function errorCode(value: unknown) {
+  return typeof value === "object"
+    && value !== null
+    && "code" in value
+    && typeof (value as { code?: unknown }).code === "string"
+    ? (value as { code: string }).code
+    : "";
 }
 
 function mapProviderInventoryItem(item: ApiMappedInventoryItem): MarketplaceInventoryItem {
@@ -277,9 +288,11 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!(session?.emailAccount || session?.steamAccount);
   const hasSteam = !!session?.steamAccount;
   const requiresSteam = cart.some((product) => product.kind === "skins");
+  const requiresEmail = cart.some((product) => product.kind === "apple_gift_card" || product.kind === "gpt");
+  const hasEmail = !!session?.emailAccount;
   const hasSteamTradeUrl = isServerBacked ? serverSteamTradeUrlConfigured : !!steamTradeUrl;
   const canPurchase =
-    cartSummary.canPurchase && isAuthenticated && (!requiresSteam || hasSteam);
+    cartSummary.canPurchase && isAuthenticated && (!requiresSteam || hasSteam) && (!requiresEmail || hasEmail);
   const accountKey = getSessionAccountKey(session);
   const exposedHydrated = isHydrated && serverSyncStatus !== "checking";
 
@@ -427,6 +440,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       cartShortfallCoins: cartSummary.shortfallCoins,
       hasSufficientBalance: cartSummary.canPurchase,
       requiresSteam,
+      requiresEmail,
       canPurchase,
       orders,
       inventoryItems: accountInventoryItems,
@@ -437,6 +451,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       session,
       isAuthenticated,
       hasSteam,
+      hasEmail,
       accountKey,
       hasSeedData,
       isHydrated: exposedHydrated,
@@ -536,6 +551,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           } catch (error) {
             if (error instanceof CartApiError && error.status === 402) return { status: "insufficient" };
             if (error instanceof CartApiError && error.status === 409) return { status: "price-changed" };
+            if (error instanceof CartApiError && error.status === 400 && errorCode(error.body) === "DELIVERY_EMAIL_REQUIRED") return { status: "email-required" };
             if (error instanceof CartApiError && error.status === 400) return { status: "fulfillment-invalid" };
             if (error instanceof CartApiError && error.status === 401) return { status: "auth-required" };
             return { status: "busy" };
@@ -637,6 +653,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       ensureCsrfToken,
       exposedHydrated,
       hasSteam,
+      hasEmail,
       hasSteamTradeUrl,
       hasSeedData,
       isAuthenticated,
@@ -647,6 +664,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       orders,
       persistCurrentState,
       requiresSteam,
+      requiresEmail,
       serverCart,
       session,
       steamTradeUrl,

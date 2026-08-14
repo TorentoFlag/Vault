@@ -132,7 +132,7 @@ describe("CatalogService", () => {
 
     const product = await service.getBySlug("apple-in-200");
 
-    expect(product.price.amountMinor).toBe(26_352);
-    expect(product.price.display).toBe("263,52 Coins");
+    expect(product.price.amountMinor).toBe(26_580);
+    expect(product.price.display).toBe("265,80 Coins");
   });
 });

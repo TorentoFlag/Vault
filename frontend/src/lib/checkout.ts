@@ -4,6 +4,7 @@ export type CheckoutGate =
   | "auth-required"
   | "steam-required"
   | "trade-url-required"
+  | "email-required"
   | "ready";
 
 export type CheckoutGateInput = {
@@ -12,7 +13,9 @@ export type CheckoutGateInput = {
   balanceCoins: number;
   isAuthenticated: boolean;
   requiresSteam: boolean;
+  requiresEmail: boolean;
   hasSteam: boolean;
+  hasEmail: boolean;
   hasTradeUrl?: boolean;
 };
 
@@ -21,6 +24,7 @@ export function getCheckoutGate(input: CheckoutGateInput): CheckoutGate {
   if (!input.isAuthenticated) return "auth-required";
   if (input.requiresSteam && !input.hasSteam) return "steam-required";
   if (input.requiresSteam && !input.hasTradeUrl) return "trade-url-required";
+  if (input.requiresEmail && !input.hasEmail) return "email-required";
   if (input.balanceCoins < input.totalCoins) return "insufficient";
   return "ready";
 }

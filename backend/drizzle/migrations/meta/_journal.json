@@ -134,6 +134,13 @@
       "when": 1786717500000,
       "tag": "0018_price_apple_gift_cards_by_fx",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786721400000,
+      "tag": "0019_sync_apple_gift_cards_from_plati",
+      "breakpoints": true
     }
   ]
 }

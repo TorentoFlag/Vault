@@ -62,9 +62,11 @@ export function CartScreen() {
     cartShortfallCoins,
     hasSufficientBalance,
     requiresSteam,
+    requiresEmail,
     canPurchase,
     isAuthenticated,
     hasSteam,
+    hasEmail,
     hasSteamTradeUrl,
     isHydrated,
     removeFromCart,
@@ -173,8 +175,8 @@ export function CartScreen() {
 
               {!isAuthenticated ? (
                 <div className={styles.authNotice} id="auth-required-note">
-                  <strong>Войдите для работы с заказом</strong>
-                  <span>После авторизации можно проверить баланс и продолжить оформление.</span>
+                  <strong>{requiresEmail && !requiresSteam ? "Подтвердите email" : "Войдите для работы с заказом"}</strong>
+                  <span>{requiresEmail && !requiresSteam ? "На него придёт код подарочной карты после обработки заказа." : "После авторизации можно проверить баланс и продолжить оформление."}</span>
                 </div>
               ) : requiresSteam && !hasSteam ? (
                 <div className={styles.authNotice} id="steam-required-note">
@@ -185,6 +187,11 @@ export function CartScreen() {
                 <div className={styles.authNotice} id="trade-url-required-note">
                   <strong>Добавьте Steam Trade URL</strong>
                   <span>Без персональной ссылки невозможно подготовить получение игрового предмета.</span>
+                </div>
+              ) : requiresEmail && !hasEmail ? (
+                <div className={styles.authNotice} id="email-required-note">
+                  <strong>Подтвердите email</strong>
+                  <span>На него придёт код подарочной карты после обработки заказа.</span>
                 </div>
               ) : !hasSufficientBalance ? (
                 <div className={styles.shortfallNotice} id="insufficient-coins-note">
@@ -208,6 +215,15 @@ export function CartScreen() {
                   >
                     Добавить Steam Trade URL
                   </Button>
+                ) : requiresEmail && !hasEmail ? (
+                  <Button
+                    className={styles.primaryLink}
+                    type="button"
+                    aria-describedby="email-required-note"
+                    onClick={() => router.push("/auth?method=email&returnTo=%2Fcart")}
+                  >
+                    Подтвердить email
+                  </Button>
                 ) : canPurchase ? (
                   <Button className={styles.primaryLink} type="button" onClick={() => router.push("/checkout")}>Перейти к оформлению</Button>
                   ) : !isAuthenticated ? (
@@ -215,9 +231,9 @@ export function CartScreen() {
                       className={styles.primaryLink}
                       type="button"
                       aria-describedby="auth-required-note"
-                      onClick={() => router.push(`/auth?method=steam&returnTo=%2Fcart${requiresSteam ? "&required=steam" : ""}`)}
+                      onClick={() => router.push(requiresEmail && !requiresSteam ? "/auth?method=email&returnTo=%2Fcart" : `/auth?method=steam&returnTo=%2Fcart${requiresSteam ? "&required=steam" : ""}`)}
                     >
-                      Войти через Steam
+                      {requiresEmail && !requiresSteam ? "Подтвердить email" : "Войти через Steam"}
                     </Button>
                   ) : requiresSteam && !hasSteam ? (
                     <Button
