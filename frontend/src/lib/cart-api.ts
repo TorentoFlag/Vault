@@ -7,7 +7,7 @@ type ApiFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respon
 type ApiCartItem = {
   productId: string;
   productSlug: string;
-  kind: "skins" | "steam";
+  kind: Product["kind"];
   title: string;
   quantity: number;
   unitPriceCoinMinor: number;
@@ -23,7 +23,7 @@ type ApiCart = {
 export type ServerCartItem = {
   productId: string;
   productSlug: string;
-  kind: "skins" | "steam";
+  kind: Product["kind"];
   title: string;
   quantity: number;
   unitPriceCoins: number;
@@ -109,7 +109,7 @@ function isApiCartItem(value: unknown): value is ApiCartItem {
   return (
     typeof value.productId === "string"
     && typeof value.productSlug === "string"
-    && (value.kind === "skins" || value.kind === "steam")
+    && (value.kind === "skins" || value.kind === "steam" || value.kind === "apple_gift_card")
     && typeof value.title === "string"
     && isSafePositiveInteger(value.quantity)
     && value.quantity <= 50

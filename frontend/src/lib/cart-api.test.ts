@@ -68,6 +68,26 @@ test("mapApiCart validates backend cart shape and converts Coins minor totals", 
   assert.throws(() => mapApiCart({ ...apiCart, totalCoinMinor: 1.5 }), /Cart response is malformed/);
 });
 
+test("mapApiCart accepts Apple gift-card cart items returned by the backend", () => {
+  const cart = mapApiCart({
+    items: [{
+      productId: "apple-eu-at-2",
+      productSlug: "apple-eu-at-2",
+      kind: "apple_gift_card",
+      title: "Подарочная карта Apple",
+      quantity: 1,
+      unitPriceCoinMinor: 1,
+      lineTotalCoinMinor: 1,
+      recipient: {},
+    }],
+    totalCoinMinor: 1,
+  });
+
+  assert.equal(cart.items[0]?.kind, "apple_gift_card");
+  assert.equal(cart.items[0]?.productSlug, "apple-eu-at-2");
+  assert.equal(cart.totalCoins, 0.01);
+});
+
 test("fetchHydratedCart uses backend cart quote price over catalog detail price", async () => {
   const requested: string[] = [];
   const cart = await fetchHydratedCart({

@@ -26,7 +26,7 @@ const cartSchema = {
         properties: {
           productId: { type: "string" },
           productSlug: { type: "string" },
-          kind: { type: "string", enum: ["skins", "steam"] },
+          kind: { type: "string", enum: ["skins", "steam", "apple_gift_card"] },
           title: { type: "string" },
           quantity: { type: "integer", minimum: 1, maximum: 50 },
           unitPriceCoinMinor: { type: "integer", minimum: 1 },

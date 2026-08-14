@@ -1522,7 +1522,8 @@
                             "type": "string",
                             "enum": [
                               "skins",
-                              "steam"
+                              "steam",
+                              "apple_gift_card"
                             ]
                           },
                           "title": {
@@ -1601,7 +1602,8 @@
                             "type": "string",
                             "enum": [
                               "skins",
-                              "steam"
+                              "steam",
+                              "apple_gift_card"
                             ]
                           },
                           "title": {
@@ -1710,7 +1712,8 @@
                             "type": "string",
                             "enum": [
                               "skins",
-                              "steam"
+                              "steam",
+                              "apple_gift_card"
                             ]
                           },
                           "title": {
@@ -1789,7 +1792,8 @@
                             "type": "string",
                             "enum": [
                               "skins",
-                              "steam"
+                              "steam",
+                              "apple_gift_card"
                             ]
                           },
                           "title": {
