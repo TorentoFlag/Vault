@@ -36,3 +36,9 @@ test("checkout recipient section does not render the extra fulfillment summary c
   assert.doesNotMatch(checkout, /deliveryGrid/);
   assert.doesNotMatch(checkout, /Данные после заказа/);
 });
+
+test("Apple gift card summary shows delivery email without manual issuance row", () => {
+  const appleGiftCard = source("src/features/catalog/AppleGiftCardForm.tsx");
+  assert.match(appleGiftCard, /Доставка[\s\S]*На подтвержд[её]нный email/);
+  assert.doesNotMatch(appleGiftCard, /Выдача[\s\S]{0,80}Ручная/);
+});

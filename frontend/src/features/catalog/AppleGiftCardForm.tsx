@@ -164,7 +164,6 @@ export function AppleGiftCardForm({ products }: { products: Product[] }) {
           <div className={styles.steamRefillTotal}><dt>Баланс после покупки</dt><dd>{isAuthenticated ? `${balanceAfter.toLocaleString("ru-RU")} Coins` : "После входа"}</dd></div>
         </dl>
         <div className={styles.steamRefillRate}>
-          <div><span>Выдача</span><strong>Ручная</strong></div>
           <div><span>Доставка</span><strong>На подтверждённый email</strong></div>
         </div>
       </aside>
