@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { bigint as pgBigint, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable(
@@ -144,6 +145,18 @@ export const catalogProducts = pgTable(
     index("catalog_products_game_idx").on(table.game),
     index("catalog_products_product_type_idx").on(table.productType),
     index("catalog_products_supplier_item_idx").on(table.supplierProvider, table.supplierItemId),
+    uniqueIndex("catalog_products_public_apple_variant_uidx")
+      .on(
+        sql`upper(${table.details}->'appleGiftCard'->>'regionCode')`,
+        sql`upper(${table.details}->'appleGiftCard'->>'currency')`,
+        sql`${table.details}->'appleGiftCard'->>'nominalMinor'`,
+      )
+      .where(sql`${table.kind} = 'apple_gift_card'
+        AND ${table.publicEnabled} = true
+        AND ${table.details} ? 'appleGiftCard'
+        AND coalesce(${table.details}->'appleGiftCard'->>'regionCode', '') <> ''
+        AND coalesce(${table.details}->'appleGiftCard'->>'currency', '') <> ''
+        AND coalesce(${table.details}->'appleGiftCard'->>'nominalMinor', '') <> ''`),
   ],
 );
 

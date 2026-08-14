@@ -108,6 +108,7 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
     await pool.query("DELETE FROM catalog_metadata_snapshots WHERE provider = 'csgo_api' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
     await pool.query("DELETE FROM catalog_sync_runs WHERE source = 'sih' AND game = 'cs2' AND metadata ->> 'test' = 'catalog-live-price'");
     await pool.query("DELETE FROM catalog_products WHERE supplier_provider = 'sih' AND supplier_item_id = $1", [deagleMarketHashName]);
+    await pool.query("DELETE FROM catalog_products WHERE id LIKE 'test-apple-variant-%'");
     delete process.env.DATABASE_URL;
     await app.close();
     await pool.end();
@@ -115,6 +116,7 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
 
   beforeEach(async () => {
     app = await createApp();
+    await pool.query("DELETE FROM catalog_products WHERE id LIKE 'test-apple-variant-%'");
     await pool.query("DELETE FROM catalog_products WHERE id LIKE 'test-api-game-filter-%'");
     await pool.query("DELETE FROM supplier_listings WHERE supplier = 'sih' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
     await pool.query("DELETE FROM catalog_metadata_items WHERE provider = 'csgo_api' AND game = 'cs2' AND market_hash_name = $1", [deagleMarketHashName]);
@@ -161,6 +163,66 @@ describe.skipIf(!databaseUrl)("catalog PostgreSQL persistence", () => {
     expect(body.facets.games.map((item) => item.id)).not.toContain("Dota 2");
     expect(body.facets.games.map((item) => item.id)).not.toContain("Rust");
     expect(body.items.filter((item) => item.kind === "skins").every((item) => item.game === "CS2")).toBe(true);
+  });
+
+  it("rejects duplicate public Apple gift-card variants for the same region currency and nominal", async () => {
+    const details = {
+      specifications: [
+        { label: "Регион", value: "Европа" },
+        { label: "Номинал", value: "2 EUR" },
+      ],
+      fulfillment: {
+        title: "Ручная выдача",
+        description: "Код отправляется на подтверждённый email.",
+        requirements: ["Регион Apple ID должен соответствовать выбранной карте."],
+      },
+      appleGiftCard: {
+        currency: "EUR",
+        nominalMinor: 200,
+        regionCode: "TEST-EU",
+        regionLabel: "Тестовая Европа",
+      },
+    };
+
+    async function insertVariant(id: string, slug: string) {
+      await pool.query(
+        `
+          INSERT INTO catalog_products (
+            id,
+            slug,
+            kind,
+            category,
+            game,
+            product_type,
+            title,
+            description,
+            price_coin_minor,
+            availability,
+            fulfillment_mode,
+            popularity,
+            image,
+            image_alt,
+            meta,
+            keywords,
+            details,
+            supplier_provider,
+            supplier_snapshot,
+            public_enabled,
+            created_at
+          )
+          VALUES ($1, $2, 'apple_gift_card', 'Подарочная карта Apple', NULL, 'Подарочная карта App Store & iTunes',
+            'Подарочная карта Apple', 'Подарочная карта Apple для App Store & iTunes.', 200, 'available', 'manual', 10,
+            NULL, NULL, ARRAY['Европа', '2 EUR'], ARRAY['apple', 'itunes', 'подарочная карта'], $3::jsonb,
+            'manual', '{}'::jsonb, true, '2026-08-14T10:00:00.000Z')
+        `,
+        [id, slug, JSON.stringify(details)],
+      );
+    }
+
+    await insertVariant("test-apple-variant-one", "test-apple-eur-2-one");
+
+    await expect(insertVariant("test-apple-variant-two", "test-apple-eur-2-two"))
+      .rejects.toMatchObject({ code: "23505" });
   });
 
   it("quotes supplier-linked skin products from the latest active SIH listing", async () => {

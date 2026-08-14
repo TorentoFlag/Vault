@@ -113,6 +113,20 @@
       "when": 1786463606447,
       "tag": "0015_apple-gift-cards",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786640340000,
+      "tag": "0016_vv-admin-integration-outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786715520000,
+      "tag": "0017_public_apple_gift_card_variant_unique",
+      "breakpoints": true
     }
   ]
 }
