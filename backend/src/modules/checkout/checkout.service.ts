@@ -196,12 +196,6 @@ function uniqueSnapshots(lines: PreparedLine[]): CheckoutRecipientSnapshot[] {
   return snapshots;
 }
 
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!local || !domain) return "[masked]";
-  return `${local.slice(0, 1)}***@${domain}`;
-}
-
 function formatCoins(amountCoinMinor: number): string {
   return `${(amountCoinMinor / 100).toLocaleString("ru-RU")} Coins`;
 }
@@ -211,7 +205,7 @@ function orderNumberFromId(orderId: string): string {
 }
 
 function recipientSlackLabel(snapshot: CheckoutRecipientSnapshot): string {
-  if (snapshot.kind === "delivery-email") return maskEmail(snapshot.email);
+  if (snapshot.kind === "delivery-email") return snapshot.email;
   if (snapshot.kind === "steam-refill") return `Steam login ${snapshot.steamLogin}`;
   return `Steam ${snapshot.steamId64}`;
 }

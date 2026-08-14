@@ -56,20 +56,7 @@ export class NotificationDispatcher {
 
   private resolveSlackBlocks(notification: NotificationOutboxRecord): unknown[] {
     if (notification.eventType === "order.slack-alert") return this.resolveOrderSlackBlocks(notification);
-    if (notification.eventType !== "apple-card.slack-alert") throw new Error("SLACK_NOTIFICATION_EVENT_UNSUPPORTED");
-    const payload = notification.payload;
-    if (typeof payload.orderNumber !== "string" || typeof payload.productName !== "string" || typeof payload.regionLabel !== "string" || typeof payload.nominalDisplay !== "string" || typeof payload.amount !== "string" || typeof payload.maskedEmail !== "string") throw new Error("SLACK_NOTIFICATION_PAYLOAD_INVALID");
-    return [
-      { type: "header", text: { type: "plain_text", text: "Новый заказ Apple Gift Card" } },
-      { type: "section", fields: [
-        { type: "mrkdwn", text: `*Заказ:* ${payload.orderNumber}` },
-        { type: "mrkdwn", text: `*Товар:* ${payload.productName}` },
-        { type: "mrkdwn", text: `*Регион:* ${payload.regionLabel}` },
-        { type: "mrkdwn", text: `*Номинал:* ${payload.nominalDisplay}` },
-        { type: "mrkdwn", text: `*Сумма:* ${payload.amount}` },
-        { type: "mrkdwn", text: `*Email:* ${payload.maskedEmail}` },
-      ] },
-    ];
+    throw new Error("SLACK_NOTIFICATION_EVENT_UNSUPPORTED");
   }
 
   private resolveOrderSlackBlocks(notification: NotificationOutboxRecord): unknown[] {
