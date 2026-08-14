@@ -105,7 +105,6 @@ export function AppleGiftCardForm({ products }: { products: Product[] }) {
         <div className={styles.steamRefillHeading}>
           <span>App Store & iTunes</span>
           <h2 id="apple-gift-card-title">Подарочная карта Apple</h2>
-          <p>Выберите регион и номинал. Код вручную отправит команда Vault на подтверждённый email после оплаты.</p>
         </div>
 
         <div className={styles.steamRefillField}>
