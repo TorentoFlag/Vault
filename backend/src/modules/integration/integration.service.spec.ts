@@ -29,16 +29,17 @@ const config: AppConfig = {
   integration: {
     publicOrigin: "https://vault.example",
     adminOrigin: "https://api.vault.example",
+    vvAdminSiteKey: "vault",
+    vvAdminWebhookSecretFile: "/run/secrets/vv-admin-integration-secret",
   },
   corsOrigins: [],
 };
 
 describe("IntegrationService", () => {
-  it("publishes a protocol v1 manifest without secrets", () => {
+  it("publishes the current VV Admin manifest with Locker-class checks and Apple catalog capability", () => {
     const manifest = new IntegrationService(config).manifest();
 
     expect(manifest).toMatchObject({
-      protocolVersion: 1,
       site: {
         key: "vault",
         displayName: "Vault",
@@ -50,9 +51,39 @@ describe("IntegrationService", () => {
         delivery: "site_to_vv_admin_webhook",
       },
     });
+    expect(manifest).not.toHaveProperty("protocolVersion");
+    expect(manifest.healthChecks.map((check) => check.key)).toEqual([
+      "backend_http",
+      "frontend_http",
+      "postgres",
+      "redis",
+      "top_up_payment",
+      "checkout_fulfillment",
+      "quote_storage",
+      "steam_refill",
+      "visible_catalog",
+      "catalog_cs2",
+      "catalog_rust",
+      "catalog_tf2",
+      "apple_gift_cards",
+    ]);
+    expect(manifest.catalog).toMatchObject({
+      baseUrl: "https://api.vault.example/admin/integration/catalog",
+      auth: { scheme: "vv_hmac" },
+      locales: ["ru"],
+      media: { mode: "url" },
+      resources: {
+        products: { enabled: true, categoryRequired: true },
+        offers: { enabled: true, requiredForPurchasableProduct: true },
+        destinations: { enabled: false, orderedProductMembership: false },
+        sellers: { enabled: false, mode: "none" },
+        collections: { enabled: false },
+      },
+    });
     expect(manifest.syntheticScenarios).toEqual([
       expect.objectContaining({
         key: "checkout_payment_reached",
+        label: "Проверить выход на оплату",
         kind: "synthetic_transaction",
         productionSafe: true,
         effect: "creates_synthetic_entities",

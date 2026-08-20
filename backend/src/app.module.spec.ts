@@ -47,19 +47,19 @@ describe("AppModule", () => {
       .expect(200)
       .expect((response: { body: unknown }) => {
         const body = readManifestBody(response.body);
-        if (body.protocolVersion !== 1) {
-          throw new Error("manifest protocolVersion must be 1");
-        }
         if (body.site.key !== "vault") {
           throw new Error("manifest site key must be vault");
+        }
+        if (body.catalog.auth.scheme !== "vv_hmac") {
+          throw new Error("manifest catalog auth must be vv_hmac");
         }
       });
   });
 });
 
 function readManifestBody(value: unknown): {
-  readonly protocolVersion: unknown;
   readonly site: { readonly key: unknown };
+  readonly catalog: { readonly auth: { readonly scheme: unknown } };
 } {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("manifest body must be an object");
@@ -69,8 +69,16 @@ function readManifestBody(value: unknown): {
   if (!site || typeof site !== "object" || Array.isArray(site)) {
     throw new Error("manifest site must be an object");
   }
+  const catalog = body.catalog;
+  if (!catalog || typeof catalog !== "object" || Array.isArray(catalog)) {
+    throw new Error("manifest catalog must be an object");
+  }
+  const auth = (catalog as Record<string, unknown>).auth;
+  if (!auth || typeof auth !== "object" || Array.isArray(auth)) {
+    throw new Error("manifest catalog auth must be an object");
+  }
   return {
-    protocolVersion: body.protocolVersion,
     site: { key: (site as Record<string, unknown>).key },
+    catalog: { auth: { scheme: (auth as Record<string, unknown>).scheme } },
   };
 }

@@ -82,6 +82,7 @@ describe("loadAppConfig", () => {
         vvAdminWebhookUrl: "https://admin.example/commerce/webhook",
         vvAdminSiteKey: "vault-site-key",
         vvAdminWebhookSecretFile: "/run/secrets/vv-admin-webhook-secret",
+        protocolAuthSecretFile: "/run/secrets/vv-admin-webhook-secret",
         scenarioAuthSecretFile: "/run/secrets/vv-scenario-auth-secret",
       },
       corsOrigins: ["https://vault.example", "https://admin.vault.example"],

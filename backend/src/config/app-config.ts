@@ -48,6 +48,7 @@ export type AppConfig = {
     vvAdminWebhookUrl?: string;
     vvAdminSiteKey?: string;
     vvAdminWebhookSecretFile?: string;
+    protocolAuthSecretFile?: string;
     scenarioAuthSecretFile?: string;
   };
   corsOrigins: string[];
@@ -185,6 +186,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const vvAdminWebhookSecretFile = optionalString(
     env.VV_ADMIN_WEBHOOK_SECRET_FILE,
   );
+  const protocolAuthSecretFile = optionalString(
+    env.VV_ADMIN_INTEGRATION_SECRET_FILE,
+  ) ?? vvAdminWebhookSecretFile;
   const scenarioAuthSecretFile = optionalString(env.VV_SCENARIO_AUTH_SECRET_FILE);
 
   if (nodeEnv === "production" && resendApiKeyFile !== undefined && resendFrom === undefined) {
@@ -234,6 +238,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       ...(vvAdminWebhookUrl ? { vvAdminWebhookUrl } : {}),
       ...(vvAdminSiteKey ? { vvAdminSiteKey } : {}),
       ...(vvAdminWebhookSecretFile ? { vvAdminWebhookSecretFile } : {}),
+      ...(protocolAuthSecretFile ? { protocolAuthSecretFile } : {}),
       ...(scenarioAuthSecretFile ? { scenarioAuthSecretFile } : {}),
     },
     corsOrigins: parseCorsOrigins(env.CORS_ORIGINS),

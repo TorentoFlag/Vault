@@ -2270,9 +2270,281 @@
         ]
       }
     },
+    "/admin/integration/health/redis": {
+      "get": {
+        "operationId": "IntegrationController_redisHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/health/top-up": {
+      "get": {
+        "operationId": "IntegrationController_topUpHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/health/checkout": {
+      "get": {
+        "operationId": "IntegrationController_checkoutHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/health/quote-storage": {
+      "get": {
+        "operationId": "IntegrationController_quoteStorageHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/health/steam-refill": {
+      "get": {
+        "operationId": "IntegrationController_steamRefillHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/health/catalog-visible": {
+      "get": {
+        "operationId": "IntegrationController_visibleCatalogHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/health/catalog/{game}": {
+      "get": {
+        "operationId": "IntegrationController_catalogGameHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/health/apple-gift-cards": {
+      "get": {
+        "operationId": "IntegrationController_appleGiftCardsHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
     "/admin/integration/scenarios/checkout-payment-reached/run": {
       "post": {
         "operationId": "IntegrationController_runCheckoutPaymentReached",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/catalog/categories": {
+      "get": {
+        "operationId": "IntegrationController_listCatalogCategories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/catalog/products": {
+      "get": {
+        "operationId": "IntegrationController_listCatalogProducts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      },
+      "post": {
+        "operationId": "IntegrationController_createCatalogProduct",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/catalog/products/{id}": {
+      "patch": {
+        "operationId": "IntegrationController_updateCatalogProduct",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      },
+      "delete": {
+        "operationId": "IntegrationController_deleteCatalogProduct",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/catalog/offers": {
+      "get": {
+        "operationId": "IntegrationController_listCatalogOffers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      },
+      "post": {
+        "operationId": "IntegrationController_createCatalogOffer",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/catalog/offers/{id}": {
+      "patch": {
+        "operationId": "IntegrationController_updateCatalogOffer",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      },
+      "delete": {
+        "operationId": "IntegrationController_deleteCatalogOffer",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/catalog/sellers": {
+      "get": {
+        "operationId": "IntegrationController_listCatalogSellers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/catalog/destinations": {
+      "get": {
+        "operationId": "IntegrationController_listCatalogDestinations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/catalog/operations/by-request/{requestId}": {
+      "get": {
+        "operationId": "IntegrationController_catalogOperationByRequest",
         "parameters": [],
         "responses": {
           "200": {

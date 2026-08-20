@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { BadRequestException, ConflictException, Inject, Injectable, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import type { QueryResult, QueryResultRow } from "pg";
 
 import { DatabaseService } from "../../common/database/database.service";
@@ -446,6 +446,38 @@ export class PaymentsService {
       if (created === null) throw new Error("TOP_UP_PAYMENT_NOT_FOUND_AFTER_CREATE");
       return toDto(created);
     });
+  }
+
+  async expireSyntheticTopUpSession(command: {
+    readonly topUpPaymentId: string;
+    readonly userId: string;
+  }): Promise<void> {
+    if (!command.userId.startsWith("synthetic:")) {
+      throw new BadRequestException("Only synthetic top-up sessions can be expired through this path");
+    }
+    const result = await this.database.query(
+      `
+        UPDATE top_up_payments
+        SET
+          status = 'failed',
+          provider_status = 'synthetic_expired',
+          metadata = metadata || $3::jsonb,
+          updated_at = now()
+        WHERE id = $1
+          AND user_id = $2
+          AND status = 'checkout_pending'
+      `,
+      [
+        command.topUpPaymentId,
+        command.userId,
+        JSON.stringify({
+          syntheticCleanup: "expired_by_vv_admin_scenario",
+        }),
+      ],
+    );
+    if (result.rowCount !== 1) {
+      throw new NotFoundException("Synthetic top-up checkout was not found");
+    }
   }
 
   private async createRealTopUpSession(command: CreateTopUpSessionCommand): Promise<TopUpSessionDto> {

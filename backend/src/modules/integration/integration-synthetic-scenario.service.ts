@@ -23,7 +23,7 @@ export type IntegrationSyntheticScenarioResult = {
 @Injectable()
 export class IntegrationSyntheticScenarioService {
   constructor(
-    @Inject(PaymentsService) private readonly payments: Pick<PaymentsService, "createTopUpSession">,
+    @Inject(PaymentsService) private readonly payments: Pick<PaymentsService, "createTopUpSession" | "expireSyntheticTopUpSession">,
   ) {}
 
   async runCheckoutPaymentReached(input: {
@@ -36,18 +36,35 @@ export class IntegrationSyntheticScenarioService {
       coinAmountMinor: SYNTHETIC_TOP_UP_COIN_MINOR,
     });
     const reached = topUp.status === "checkout_pending" && topUp.checkoutUrl !== null;
+    let cleanupStatus: "retained" | "failed" | "expired" = "retained";
+    let cleanupError: string | null = null;
+    if (reached) {
+      try {
+        await this.payments.expireSyntheticTopUpSession({
+          topUpPaymentId: topUp.id,
+          userId: SYNTHETIC_USER_ID,
+        });
+        cleanupStatus = "expired";
+      } catch (error) {
+        cleanupStatus = "failed";
+        cleanupError = error instanceof Error ? error.message : "TOP_UP_SYNTHETIC_CLEANUP_FAILED";
+      }
+    }
+    const healthy = reached && cleanupStatus === "expired";
     return {
-      status: reached ? "healthy" : "down",
-      summary: reached
-        ? "Synthetic checkout reached hosted payment"
-        : "Synthetic checkout did not reach hosted payment",
-      error: null,
+      status: healthy ? "healthy" : "down",
+      summary: healthy
+        ? "Платежная страница Arc Pay получена"
+        : reached
+          ? "Платежная страница Arc Pay получена, но synthetic top-up не очищен"
+          : "Платежная страница Arc Pay не получена",
+      error: healthy ? null : (cleanupError ?? "TOP_UP_PAYMENT_REDIRECT_MISSING"),
       payment: { reached },
       syntheticEntities: [
         {
           type: "top_up_payment",
           externalId: topUp.id,
-          cleanupStatus: "retained",
+          cleanupStatus,
         },
       ],
       steps: [
@@ -58,8 +75,8 @@ export class IntegrationSyntheticScenarioService {
           finishedAt: new Date().toISOString(),
         },
       ],
-      artifacts: topUp.checkoutUrl
-        ? [{ kind: "final_url", value: topUp.checkoutUrl }]
+      artifacts: reached && topUp.checkoutUrl
+        ? [{ kind: "payment_redirect_origin", value: new URL(topUp.checkoutUrl).origin }]
         : null,
       metadata: {
         topUpPaymentId: topUp.id,

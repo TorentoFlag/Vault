@@ -9,11 +9,7 @@ describe("IntegrationController synthetic scenario endpoint", () => {
       runCheckoutPaymentReached: vi.fn().mockResolvedValue({ status: "healthy" }),
     };
     const verifier = { verify: vi.fn().mockReturnValue(true) };
-    const controller = new IntegrationController(
-      {} as never,
-      scenario as never,
-      verifier as never,
-    );
+    const controller = createController({ scenario, verifier });
 
     await expect(
       controller.runCheckoutPaymentReached(
@@ -30,9 +26,9 @@ describe("IntegrationController synthetic scenario endpoint", () => {
   });
 
   it("rejects missing run id", async () => {
-    const controller = new IntegrationController({} as never, {
+    const controller = createController({ scenario: {
       runCheckoutPaymentReached: vi.fn(),
-    } as never, { verify: vi.fn().mockReturnValue(true) } as never);
+    }, verifier: { verify: vi.fn().mockReturnValue(true) } });
 
     await expect(
       controller.runCheckoutPaymentReached({}, {
@@ -43,12 +39,23 @@ describe("IntegrationController synthetic scenario endpoint", () => {
   });
 
   it("rejects unsigned requests", async () => {
-    const controller = new IntegrationController({} as never, {
+    const controller = createController({ scenario: {
       runCheckoutPaymentReached: vi.fn(),
-    } as never, { verify: vi.fn().mockReturnValue(false) } as never);
+    }, verifier: { verify: vi.fn().mockReturnValue(false) } });
 
     await expect(
       controller.runCheckoutPaymentReached({ runId: "run-1" }, {}),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
+
+function createController(input: { scenario: unknown; verifier: unknown }): IntegrationController {
+  return new IntegrationController(
+    {} as never,
+    input.scenario as never,
+    input.verifier as never,
+    {} as never,
+    {} as never,
+    { integration: {} } as never,
+  );
+}

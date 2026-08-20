@@ -13,8 +13,8 @@ describe("IntegrationSyntheticScenarioService", () => {
     vi.useRealTimers();
   });
 
-  it("passes only when the synthetic top-up reaches a hosted payment URL", async () => {
-    const payments: Pick<PaymentsService, "createTopUpSession"> = {
+  it("passes only when the synthetic top-up reaches a hosted payment URL and is cleaned up", async () => {
+    const payments: Pick<PaymentsService, "createTopUpSession" | "expireSyntheticTopUpSession"> = {
       createTopUpSession: vi.fn().mockResolvedValue(
         createTopUp({
           id: "top-up-1",
@@ -22,6 +22,7 @@ describe("IntegrationSyntheticScenarioService", () => {
           checkoutUrl: "https://pay.example/checkout/session-1",
         }),
       ),
+      expireSyntheticTopUpSession: vi.fn().mockResolvedValue(undefined),
     };
     const service = new IntegrationSyntheticScenarioService(payments);
 
@@ -29,18 +30,19 @@ describe("IntegrationSyntheticScenarioService", () => {
       service.runCheckoutPaymentReached({ runId: "run-1" }),
     ).resolves.toMatchObject({
       status: "healthy",
+      summary: "Платежная страница Arc Pay получена",
       payment: { reached: true },
       syntheticEntities: [
         {
           type: "top_up_payment",
           externalId: "top-up-1",
-          cleanupStatus: "retained",
+          cleanupStatus: "expired",
         },
       ],
       artifacts: [
         {
-          kind: "final_url",
-          value: "https://pay.example/checkout/session-1",
+          kind: "payment_redirect_origin",
+          value: "https://pay.example",
         },
       ],
     });
@@ -48,6 +50,10 @@ describe("IntegrationSyntheticScenarioService", () => {
       userId: "synthetic:vv-admin",
       idempotencyKey: "vv-admin-synthetic-run-1",
       coinAmountMinor: 10_000,
+    });
+    expect(payments.expireSyntheticTopUpSession).toHaveBeenCalledWith({
+      topUpPaymentId: "top-up-1",
+      userId: "synthetic:vv-admin",
     });
   });
 
@@ -61,6 +67,7 @@ describe("IntegrationSyntheticScenarioService", () => {
             checkoutUrl: null,
           }),
         ),
+        expireSyntheticTopUpSession: vi.fn(),
       },
     );
 
@@ -69,7 +76,37 @@ describe("IntegrationSyntheticScenarioService", () => {
     ).resolves.toMatchObject({
       status: "down",
       payment: { reached: false },
-      summary: "Synthetic checkout did not reach hosted payment",
+      summary: "Платежная страница Arc Pay не получена",
+    });
+  });
+
+  it("fails when the hosted payment is reached but cleanup fails", async () => {
+    const service = new IntegrationSyntheticScenarioService(
+      {
+        createTopUpSession: vi.fn().mockResolvedValue(
+          createTopUp({
+            id: "top-up-1",
+            status: "checkout_pending",
+            checkoutUrl: "https://pay.example/checkout/session-1",
+          }),
+        ),
+        expireSyntheticTopUpSession: vi.fn().mockRejectedValue(new Error("DB_DOWN")),
+      },
+    );
+
+    await expect(
+      service.runCheckoutPaymentReached({ runId: "run-3" }),
+    ).resolves.toMatchObject({
+      status: "down",
+      summary: "Платежная страница Arc Pay получена, но synthetic top-up не очищен",
+      error: "DB_DOWN",
+      syntheticEntities: [
+        {
+          type: "top_up_payment",
+          externalId: "top-up-1",
+          cleanupStatus: "failed",
+        },
+      ],
     });
   });
 });
