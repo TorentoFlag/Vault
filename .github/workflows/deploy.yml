@@ -119,7 +119,7 @@ jobs:
             "install -d -m 700 /opt/vault/secrets && umask 077 && cat > /opt/vault/secrets/vv-admin-webhook-secret && chmod 600 /opt/vault/secrets/vv-admin-webhook-secret"
           "${ssh_cmd[@]}" "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}" \
             "VV_ADMIN_WEBHOOK_URL='$VV_ADMIN_WEBHOOK_URL' VV_ADMIN_SITE_KEY='$VV_ADMIN_WEBHOOK_SITE_KEY' VV_ADMIN_WEBHOOK_SECRET_VERSION='${VV_ADMIN_WEBHOOK_SECRET_VERSION:-1}' sh -s" <<'REMOTE'
-            set -euo pipefail
+            set -eu
             install -d -m 700 /opt/vault/env
             env_file="/opt/vault/env/backend.env"
             touch "$env_file"
