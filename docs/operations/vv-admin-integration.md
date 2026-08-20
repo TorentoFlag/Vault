@@ -1,9 +1,11 @@
 # VV Admin integration
 
 Vault exposes the unified VV Admin integration contract from the backend. The
-contract is intentionally narrow: VV Admin monitors the storefront and manages
-only Apple gift-card catalog records. CS2, Rust, and Team Fortress 2 skins remain
-provider-fed catalog resources owned by Vault sync jobs.
+public storefront origin also serves the manifest path and proxies it to the
+backend, because VV Admin discovers manifests from the registered public domain.
+The contract is intentionally narrow: VV Admin monitors the storefront and
+manages only Apple gift-card catalog records. CS2, Rust, and Team Fortress 2
+skins remain provider-fed catalog resources owned by Vault sync jobs.
 
 ## Manifest
 
