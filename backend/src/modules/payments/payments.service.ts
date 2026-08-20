@@ -88,6 +88,8 @@ type TopUpPaymentWebhookRow = {
   fiat_currency: TopUpSessionDto["fiatCurrency"];
 };
 
+type VvAdminTopUpEventType = "top_up.created" | "top_up.completed" | "top_up.failed";
+
 type TopUpPaymentReconciliationRow = TopUpPaymentWebhookRow & {
   request_hash: string;
 };
@@ -276,6 +278,12 @@ function isManualReviewProviderStatus(status: string): boolean {
   return ["refunded", "chargeback"].includes(status);
 }
 
+function topUpStatusForVvAdmin(eventType: VvAdminTopUpEventType): "created" | "completed" | "failed" {
+  if (eventType === "top_up.completed") return "completed";
+  if (eventType === "top_up.failed") return "failed";
+  return "created";
+}
+
 function manualReviewReason(providerStatus: string): string {
   if (providerStatus === "chargeback") return "arc_pay_chargeback_after_credit";
   return "arc_pay_refunded_after_credit";
@@ -444,6 +452,10 @@ export class PaymentsService {
 
       const created = await this.findTopUpPayment(client, command.userId, idempotencyKey);
       if (created === null) throw new Error("TOP_UP_PAYMENT_NOT_FOUND_AFTER_CREATE");
+      await this.enqueueVvAdminTopUpEvent(client, {
+        eventType: created.status === "checkout_pending" ? "top_up.created" : "top_up.failed",
+        topUpPaymentId: created.id,
+      });
       return toDto(created);
     });
   }
@@ -478,6 +490,10 @@ export class PaymentsService {
     if (result.rowCount !== 1) {
       throw new NotFoundException("Synthetic top-up checkout was not found");
     }
+    await this.enqueueVvAdminTopUpEvent(this.database, {
+      eventType: "top_up.failed",
+      topUpPaymentId: command.topUpPaymentId,
+    });
   }
 
   private async createRealTopUpSession(command: CreateTopUpSessionCommand): Promise<TopUpSessionDto> {
@@ -599,6 +615,10 @@ export class PaymentsService {
             }),
           ],
         );
+        await this.enqueueVvAdminTopUpEvent(client, {
+          eventType: "top_up.failed",
+          topUpPaymentId: initial.id,
+        });
         await client.query(
           `
             UPDATE payment_provider_attempts
@@ -663,6 +683,10 @@ export class PaymentsService {
       );
       const created = await this.findTopUpPayment(client, command.userId, command.idempotencyKey);
       if (created === null) throw new Error("TOP_UP_PAYMENT_NOT_FOUND_AFTER_PROVIDER_CREATE");
+      await this.enqueueVvAdminTopUpEvent(client, {
+        eventType: "top_up.created",
+        topUpPaymentId: created.id,
+      });
       return toDto(created);
     });
   }
@@ -950,6 +974,10 @@ export class PaymentsService {
           `,
           [topUpPayment.id, providerStatus],
         );
+        await this.enqueueVvAdminTopUpEvent(client, {
+          eventType: "top_up.completed",
+          topUpPaymentId: topUpPayment.id,
+        });
         return "credited";
       }
       await client.query(
@@ -973,6 +1001,10 @@ export class PaymentsService {
           `,
           [topUpPayment.id, providerStatus],
         );
+        await this.enqueueVvAdminTopUpEvent(client, {
+          eventType: "top_up.failed",
+          topUpPaymentId: topUpPayment.id,
+        });
         return "failed";
       }
       await client.query(
@@ -1015,9 +1047,82 @@ export class PaymentsService {
         `,
         [topUpPayment.id, providerStatus],
       );
+      await this.enqueueVvAdminTopUpEvent(client, {
+        eventType: "top_up.failed",
+        topUpPaymentId: topUpPayment.id,
+      });
       return "failed";
     }
     return "ignored";
+  }
+
+  private async enqueueVvAdminTopUpEvent(
+    client: Queryable,
+    input: {
+      eventType: VvAdminTopUpEventType;
+      topUpPaymentId: string;
+    },
+  ): Promise<void> {
+    const result = await client.query<
+      TopUpPaymentWebhookRow & {
+        created_at: Date;
+        provider_payment_id: string | null;
+        updated_at: Date;
+      }
+    >(
+      `
+        SELECT
+          id,
+          user_id,
+          status,
+          coin_amount_minor,
+          fiat_amount_minor,
+          fiat_currency,
+          provider_payment_id,
+          created_at,
+          updated_at
+        FROM top_up_payments
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [input.topUpPaymentId],
+    );
+    const topUp = result.rows[0];
+    if (topUp === undefined) throw new Error("VV_ADMIN_TOP_UP_NOT_FOUND");
+    const eventId = `vault.top_up.${topUp.id}.${input.eventType.split(".")[1]}`;
+    const payload = {
+      schemaVersion: 2,
+      eventId,
+      eventType: input.eventType,
+      source: "customer",
+      occurredAt: topUp.updated_at.toISOString(),
+      site: { domain: new URL(this.config.integration.publicOrigin).hostname },
+      subject: { type: "top_up", externalId: topUp.id },
+      data: {
+        externalTopUpId: topUp.id,
+        externalUserId: topUp.user_id,
+        status: topUpStatusForVvAdmin(input.eventType),
+        paymentProvider: "arc_pay",
+        paymentMethod: "sbp",
+        providerPaymentId: topUp.provider_payment_id,
+        paidAmount: (topUp.fiat_amount_minor / 100).toFixed(2),
+        paidCurrency: topUp.fiat_currency,
+        creditedAmount: (topUp.coin_amount_minor / 100).toFixed(2),
+        creditedCurrency: "FC",
+        createdAtExternal: topUp.created_at.toISOString(),
+        updatedAtExternal: topUp.updated_at.toISOString(),
+      },
+    };
+    await client.query(
+      `
+        INSERT INTO vv_admin_integration_outbox (
+          event_id, event_type, subject_type, subject_external_id, payload
+        )
+        VALUES ($1, $2, 'top_up', $3, $4::jsonb)
+        ON CONFLICT (event_id) DO UPDATE SET updated_at = vv_admin_integration_outbox.updated_at
+      `,
+      [eventId, input.eventType, topUp.id, JSON.stringify(payload)],
+    );
   }
 
   private async beginReconciliationAttempt(topUpPayment: TopUpPaymentReconciliationRow, attemptKey: string): Promise<void> {

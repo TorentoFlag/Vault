@@ -5,21 +5,39 @@ import { Inject, Injectable } from "@nestjs/common";
 import { DatabaseService } from "../../common/database/database.service";
 
 export type VvAdminIntegrationEvent = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   eventId: string;
-  eventType: string;
+  eventType:
+    | "order.created"
+    | "order.paid"
+    | "order.failed"
+    | "order.cancelled"
+    | "order.refunded"
+    | "top_up.created"
+    | "top_up.completed"
+    | "top_up.failed";
   source: "customer" | "scenario";
   occurredAt: string;
-  site: { externalSiteKey: "vault"; domain: string };
-  subject: { type: "order"; externalId: string };
-  data: Record<string, unknown>;
+  site: { domain: string };
+  subject: { type: "order" | "top_up"; externalId: string };
+  data: Record<string, unknown> & {
+    payment?: {
+      status: "pending" | "paid" | "failed" | "refunded";
+      method: {
+        type: "internal_balance" | "card" | "sbp" | "crypto" | "other";
+        displayName: string;
+        provider: string | null;
+      };
+      paidAt: string | null;
+    };
+  };
 };
 
 export type VvAdminOutboxRecord = {
   id: string;
   eventId: string;
   eventType: string;
-  subjectType: "order";
+  subjectType: "order" | "top_up";
   subjectExternalId: string;
   payload: VvAdminIntegrationEvent;
   status: "pending" | "processing" | "accepted" | "failed";
@@ -30,7 +48,7 @@ type VvAdminOutboxRow = {
   id: string;
   event_id: string;
   event_type: string;
-  subject_type: "order";
+  subject_type: "order" | "top_up";
   subject_external_id: string;
   payload: VvAdminIntegrationEvent;
   status: VvAdminOutboxRecord["status"];

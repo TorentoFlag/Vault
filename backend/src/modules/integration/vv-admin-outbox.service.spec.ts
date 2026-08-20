@@ -8,24 +8,31 @@ import { VvAdminDispatcher } from "./vv-admin-dispatcher";
 import { VvAdminOutboxService, type VvAdminIntegrationEvent } from "./vv-admin-outbox.service";
 
 const event: VvAdminIntegrationEvent = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   eventId: "evt_vault_order_1",
   eventType: "order.created",
   source: "customer",
   occurredAt: "2026-08-13T12:00:00.000Z",
-  site: { externalSiteKey: "vault", domain: "vault.example" },
+  site: { domain: "vault.example" },
   subject: { type: "order", externalId: "order-1" },
   data: {
-    order: {
-      externalOrderId: "order-1",
-      displayNumber: "VLT-0001",
-      status: "created",
-      total: { amountMinor: 125000, currency: "FC", scale: 100 },
-      createdAt: "2026-08-13T12:00:00.000Z",
-      paidAt: null,
-      completedAt: null,
+    externalOrderId: "order-1",
+    externalUserId: "user-1",
+    status: "created",
+    payment: {
+      status: "paid",
+      method: {
+        type: "internal_balance",
+        displayName: "Vault Coins",
+        provider: null,
+      },
+      paidAt: "2026-08-13T12:00:00.000Z",
     },
-    attributes: {},
+    totalAmount: "1250.00",
+    currency: "FC",
+    createdAtExternal: "2026-08-13T12:00:00.000Z",
+    paidAtExternal: "2026-08-13T12:00:00.000Z",
+    items: [],
   },
 };
 
@@ -82,7 +89,10 @@ describe("VvAdminOutboxService", () => {
     await expect(
       outbox.enqueue({
         ...event,
-        data: { attributes: { apiToken: "must-not-leave-site" } },
+        data: {
+          ...event.data,
+          attributes: { apiToken: "must-not-leave-site" },
+        },
       }),
     ).rejects.toThrow("SENSITIVE_PAYLOAD");
   });

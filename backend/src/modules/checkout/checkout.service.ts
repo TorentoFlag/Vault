@@ -3,6 +3,8 @@ import { BadRequestException, ConflictException, HttpException, Inject, Injectab
 import type { QueryResult, QueryResultRow } from "pg";
 
 import { DatabaseService } from "../../common/database/database.service";
+import type { AppConfig } from "../../config/app-config";
+import { APP_CONFIG } from "../../config/app-config.module";
 import { normalizeIdempotencyKey } from "../../common/idempotency/idempotency-key";
 import { CatalogService } from "../catalog/catalog.service";
 import type { CatalogProductDto } from "../catalog/catalog.types";
@@ -231,6 +233,7 @@ export class CheckoutService {
     @Inject(FulfillmentService) private readonly fulfillment: FulfillmentService,
     @Inject(UsersService) private readonly users: UsersService,
     @Inject(WalletService) private readonly wallet: WalletService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async checkoutFromCart(command: CheckoutFromCartCommand): Promise<CheckoutOrderDto> {
@@ -363,41 +366,39 @@ export class CheckoutService {
       lines: FulfillmentOrderLineInput[];
     },
   ): Promise<void> {
+    const now = new Date();
     const event = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       eventId: `vault.order.${input.orderId}.created`,
       eventType: "order.created",
       source: "customer",
-      occurredAt: new Date().toISOString(),
-      site: { externalSiteKey: "vault", domain: "vault.example" },
+      occurredAt: now.toISOString(),
+      site: { domain: new URL(this.config.integration.publicOrigin).hostname },
       subject: { type: "order", externalId: input.orderId },
       data: {
-        order: {
-          externalOrderId: input.orderId,
-          displayNumber: null,
-          status: "created",
-          total: { amountMinor: input.totalCoinMinor, currency: "FC", scale: 100 },
-          createdAt: new Date().toISOString(),
-          paidAt: null,
-          completedAt: null,
+        externalOrderId: input.orderId,
+        externalUserId: input.userId,
+        status: "created",
+        payment: {
+          status: "paid",
+          method: {
+            type: "internal_balance",
+            displayName: "Vault Coins",
+            provider: null,
+          },
+          paidAt: now.toISOString(),
         },
+        totalAmount: (input.totalCoinMinor / 100).toFixed(2),
+        currency: "FC",
+        createdAtExternal: now.toISOString(),
+        paidAtExternal: now.toISOString(),
         items: input.lines.map((line) => ({
           externalItemId: line.id,
-          title: line.title,
-          kind: line.kind,
-          quantity: 1,
-          unitPrice: {
-            amountMinor: line.unitPriceCoinMinor,
-            currency: "FC",
-            scale: 100,
-          },
-          attributes: {
-            productSlug: line.productSlug,
-          },
+          name: line.title,
+          marketHashName: line.productSlug,
+          priceAmount: (line.unitPriceCoinMinor / 100).toFixed(2),
+          currency: "FC",
         })),
-        attributes: {
-          externalUserId: input.userId,
-        },
       },
     };
     await client.query(

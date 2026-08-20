@@ -48,7 +48,7 @@ describe("IntegrationService", () => {
         adminAllowedHosts: ["api.vault.example"],
       },
       commerceEvents: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         delivery: "site_to_vv_admin_webhook",
       },
     });

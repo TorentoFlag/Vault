@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import { CheckoutService } from "./checkout.service";
 
 describe("CheckoutService Apple gift cards", () => {
+  const config = {
+    integration: { publicOrigin: "https://vaultapp24.com" },
+  };
+
   it("requires a verified delivery email instead of a Steam recipient", async () => {
     const catalog = {
       getBySlug: () => Promise.resolve({
@@ -14,7 +18,7 @@ describe("CheckoutService Apple gift cards", () => {
         price: { amountMinor: 2500 },
       }),
     };
-    const service = new CheckoutService({} as never, catalog as never, {} as never, {} as never, {} as never);
+    const service = new CheckoutService({} as never, catalog as never, {} as never, {} as never, {} as never, config as never);
 
     await expect((service as never as { prepareLines: (userId: string, steamId64: undefined, email: undefined, items: unknown[]) => Promise<unknown> }).prepareLines(
       "user_1", undefined, undefined, [{ productSlug: "apple-usd-25", quantity: 1 }],
@@ -91,7 +95,7 @@ describe("CheckoutService Apple gift cards", () => {
       createHold: () => Promise.resolve(),
       lockUserBalance: () => Promise.resolve(),
     };
-    const service = new CheckoutService(database as never, catalog as never, fulfillment as never, users as never, wallet as never);
+    const service = new CheckoutService(database as never, catalog as never, fulfillment as never, users as never, wallet as never, config as never);
 
     await service.checkoutFromCart({
       userId: "user_1",
