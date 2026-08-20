@@ -137,7 +137,7 @@ jobs:
             upsert_env VV_ADMIN_SITE_KEY "$VV_ADMIN_SITE_KEY"
             upsert_env VV_ADMIN_WEBHOOK_SECRET_FILE /run/secrets/vault/vv-admin-webhook-secret
             upsert_env VV_ADMIN_WEBHOOK_SECRET_VERSION "$VV_ADMIN_WEBHOOK_SECRET_VERSION"
-REMOTE
+          REMOTE
 
       - name: Deploy on server
         shell: bash
