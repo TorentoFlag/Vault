@@ -77,6 +77,12 @@ test("production compose runs a persistent notifications worker", () => {
   assert.match(compose, /command:\s+\["node", "dist\/notifications-worker\.js", "--watch"\]/);
 });
 
+test("production compose runs a persistent VV Admin dispatcher worker", () => {
+  assert.match(compose, /\n  vv-admin-dispatcher-worker:\n/);
+  assert.match(compose, /command:\s+\["node", "dist\/vv-admin-dispatcher-worker\.js", "--watch"\]/);
+  assert.match(compose, /VV_ADMIN_DISPATCHER_INTERVAL_MS: "10000"/);
+});
+
 test("frontend Dockerfile does not require generated gitignored Next.js files", () => {
   assert.doesNotMatch(frontendDockerfile, /COPY[^\n]*next-env\.d\.ts/);
 });

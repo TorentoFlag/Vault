@@ -83,6 +83,24 @@ services:
     volumes:
       - /opt/vault/secrets:/run/secrets/vault:ro
 
+  vv-admin-dispatcher-worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    command: ["node", "dist/vv-admin-dispatcher-worker.js", "--watch"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - /opt/vault/env/backend.env
+    environment:
+      DATABASE_URL_FILE: /run/secrets/vault/database-url
+      VV_ADMIN_DISPATCHER_INTERVAL_MS: "10000"
+    volumes:
+      - /opt/vault/secrets:/run/secrets/vault:ro
+
   frontend:
     build:
       context: ./frontend
