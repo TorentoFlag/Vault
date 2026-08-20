@@ -36,7 +36,6 @@ describe("loadAppConfig", () => {
       VV_ADMIN_WEBHOOK_URL: "https://admin.example/commerce/webhook",
       VV_ADMIN_SITE_KEY: "vault-site-key",
       VV_ADMIN_WEBHOOK_SECRET_FILE: "/run/secrets/vv-admin-webhook-secret",
-      VV_SCENARIO_AUTH_SECRET_FILE: "/run/secrets/vv-scenario-auth-secret",
       CATALOG_PUBLIC_GAMES: "cs2,rust,tf2",
       CORS_ORIGINS: "https://vault.example, https://admin.vault.example",
     })).toEqual({
@@ -83,7 +82,6 @@ describe("loadAppConfig", () => {
         vvAdminSiteKey: "vault-site-key",
         vvAdminWebhookSecretFile: "/run/secrets/vv-admin-webhook-secret",
         protocolAuthSecretFile: "/run/secrets/vv-admin-webhook-secret",
-        scenarioAuthSecretFile: "/run/secrets/vv-scenario-auth-secret",
       },
       corsOrigins: ["https://vault.example", "https://admin.vault.example"],
     });

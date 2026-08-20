@@ -25,7 +25,7 @@ function createConfig(secretFile?: string): AppConfig {
     integration: {
       publicOrigin: "https://vault.example",
       adminOrigin: "https://vault.example",
-      ...(secretFile ? { scenarioAuthSecretFile: secretFile } : {}),
+      ...(secretFile ? { protocolAuthSecretFile: secretFile } : {}),
     },
     corsOrigins: [],
   };

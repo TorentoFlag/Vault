@@ -17,7 +17,7 @@ export class VvAdminScenarioAuthVerifier {
     readonly timestamp: string;
   }): boolean {
     const secret = optionalStringFromFile(
-      this.config.integration.scenarioAuthSecretFile,
+      this.config.integration.protocolAuthSecretFile,
     );
     if (!secret) return false;
     const bodyHash = createHash("sha256").update(input.body).digest("hex");
