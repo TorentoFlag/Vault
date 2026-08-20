@@ -45,6 +45,7 @@ describe("IntegrationService", () => {
         displayName: "Vault",
         publicOrigin: "https://vault.example",
         adminOrigin: "https://api.vault.example",
+        adminAllowedHosts: ["api.vault.example"],
       },
       commerceEvents: {
         schemaVersion: 1,

@@ -9,6 +9,7 @@ type IntegrationManifest = {
     readonly displayName: "Vault";
     readonly publicOrigin: string;
     readonly adminOrigin: string;
+    readonly adminAllowedHosts: readonly string[];
   };
   readonly commerceEvents: {
     readonly schemaVersion: 1;
@@ -115,6 +116,7 @@ export class IntegrationService {
         displayName: "Vault",
         publicOrigin,
         adminOrigin,
+        adminAllowedHosts: [new URL(adminOrigin).hostname],
       },
       commerceEvents: {
         schemaVersion: 1,
