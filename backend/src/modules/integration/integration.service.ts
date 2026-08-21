@@ -5,7 +5,7 @@ import { APP_CONFIG } from "../../config/app-config.module";
 
 type IntegrationManifest = {
   readonly site: {
-    readonly key: "vault";
+    readonly key: string;
     readonly displayName: "Vault";
     readonly publicOrigin: string;
     readonly adminOrigin: string;
@@ -110,9 +110,10 @@ export class IntegrationService {
   manifest(): IntegrationManifest {
     const publicOrigin = this.config.integration.publicOrigin;
     const adminOrigin = this.config.integration.adminOrigin;
+    const siteKey = this.config.integration.vvAdminSiteKey ?? "vault";
     return {
       site: {
-        key: "vault",
+        key: siteKey,
         displayName: "Vault",
         publicOrigin,
         adminOrigin,

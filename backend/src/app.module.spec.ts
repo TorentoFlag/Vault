@@ -47,8 +47,8 @@ describe("AppModule", () => {
       .expect(200)
       .expect((response: { body: unknown }) => {
         const body = readManifestBody(response.body);
-        if (body.site.key !== "vault") {
-          throw new Error("manifest site key must be vault");
+        if (typeof body.site.key !== "string" || !body.site.key.trim()) {
+          throw new Error("manifest site key must be configured");
         }
         if (body.catalog.auth.scheme !== "vv_hmac") {
           throw new Error("manifest catalog auth must be vv_hmac");

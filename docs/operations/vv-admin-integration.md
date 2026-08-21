@@ -27,8 +27,8 @@ The manifest does not publish protocol-number branches or legacy adapters.
 
 Catalog Protocol requests are signed with VV Admin HMAC headers. The backend
 expects `VV_ADMIN_INTEGRATION_SECRET_FILE`; when it is absent, it falls back to
-`VV_ADMIN_WEBHOOK_SECRET_FILE`. The expected site key is
-`VV_ADMIN_SITE_KEY`, falling back to `vault`.
+`VV_ADMIN_WEBHOOK_SECRET_FILE`. The manifest publishes the same expected site
+key from `VV_ADMIN_SITE_KEY`, falling back to `vault`.
 
 Supported resources:
 
