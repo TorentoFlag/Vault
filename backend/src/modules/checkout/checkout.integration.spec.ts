@@ -51,6 +51,7 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
         notification_outbox,
         vv_admin_integration_attempts,
         vv_admin_integration_outbox,
+        fulfillment_provider_attempts,
         fulfillment_commands,
         cart_items,
         carts,
@@ -143,8 +144,8 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
         SELECT
           (SELECT count(*) FROM order_lines WHERE order_id = $1) AS line_count,
           (SELECT count(*) FROM wallet_holds WHERE order_id = $1 AND status = 'active') AS hold_count,
-          (SELECT count(*) FROM notification_outbox WHERE entity_id = $1 AND channel = 'slack' AND event_type = 'order.slack-alert') AS slack_events,
-          (SELECT count(*) FROM vv_admin_integration_outbox WHERE subject_external_id = $1 AND event_type = 'order.created') AS vv_admin_events
+          (SELECT count(*) FROM notification_outbox WHERE entity_id = $1::text AND channel = 'slack' AND event_type = 'order.slack-alert') AS slack_events,
+          (SELECT count(*) FROM vv_admin_integration_outbox WHERE subject_external_id = $1::text AND event_type = 'order.created') AS vv_admin_events
       `,
       [order.id],
     );
@@ -155,9 +156,25 @@ describe.skipIf(!databaseUrl)("checkout PostgreSQL persistence", () => {
       vv_admin_events: "1",
     });
     const outbox = await pool.query<{ payload: unknown }>(
-      "SELECT payload FROM vv_admin_integration_outbox WHERE subject_external_id = $1",
+      "SELECT payload FROM vv_admin_integration_outbox WHERE subject_external_id = $1::text",
       [order.id],
     );
+    expect(outbox.rows[0]?.payload).toMatchObject({
+      schemaVersion: 2,
+      eventType: "order.created",
+      source: "customer",
+      subject: { type: "order", externalId: order.id },
+      data: {
+        payment: {
+          status: "paid",
+          method: {
+            type: "internal_balance",
+            displayName: "Vault Coins",
+            provider: null,
+          },
+        },
+      },
+    });
     expect(JSON.stringify(outbox.rows[0]?.payload)).not.toContain("secretToken");
   });
 

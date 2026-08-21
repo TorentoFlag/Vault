@@ -329,13 +329,15 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
       webhook_status: string;
       wallet_transactions: string;
       liability_entries: string;
+      vv_admin_completed_events: string;
     }>(
       `
         SELECT
           (SELECT status FROM top_up_payments WHERE id = $1) AS payment_status,
           (SELECT status FROM payment_webhook_events WHERE provider_event_id = $2) AS webhook_status,
           (SELECT count(*) FROM wallet_transactions WHERE user_id = $3 AND type = 'top_up_credit') AS wallet_transactions,
-          (SELECT count(*) FROM wallet_ledger_entries WHERE account_key = 'vault:coins-liability') AS liability_entries
+          (SELECT count(*) FROM wallet_ledger_entries WHERE account_key = 'vault:coins-liability') AS liability_entries,
+          (SELECT count(*) FROM vv_admin_integration_outbox WHERE subject_external_id = $1::text AND event_type = 'top_up.completed') AS vv_admin_completed_events
       `,
       [createdBody.id, webhookPayload.eventId, userId],
     );
@@ -344,7 +346,25 @@ describe.skipIf(!databaseUrl)("payments PostgreSQL persistence", () => {
       webhook_status: "processed",
       wallet_transactions: "1",
       liability_entries: "1",
+      vv_admin_completed_events: "1",
     });
+    const outbox = await pool.query<{ payload: { data?: Record<string, unknown> } }>(
+      "SELECT payload FROM vv_admin_integration_outbox WHERE subject_external_id = $1::text AND event_type = 'top_up.completed'",
+      [createdBody.id],
+    );
+    expect(outbox.rows[0]?.payload).toMatchObject({
+      schemaVersion: 2,
+      eventType: "top_up.completed",
+      subject: { type: "top_up", externalId: createdBody.id },
+      data: {
+        paymentMethod: {
+          type: "sbp",
+          displayName: "SBP",
+          provider: "Arc Pay",
+        },
+      },
+    });
+    expect(outbox.rows[0]?.payload.data).not.toHaveProperty("payment");
   });
 
   it("creates a real payment provider hosted checkout request with SBP only without crediting Coins", async () => {

@@ -1066,7 +1066,7 @@ export class PaymentsService {
     const result = await client.query<
       TopUpPaymentWebhookRow & {
         created_at: Date;
-        provider_payment_id: string | null;
+        provider_session_id: string | null;
         updated_at: Date;
       }
     >(
@@ -1078,7 +1078,7 @@ export class PaymentsService {
           coin_amount_minor,
           fiat_amount_minor,
           fiat_currency,
-          provider_payment_id,
+          provider_session_id,
           created_at,
           updated_at
         FROM top_up_payments
@@ -1103,8 +1103,12 @@ export class PaymentsService {
         externalUserId: topUp.user_id,
         status: topUpStatusForVvAdmin(input.eventType),
         paymentProvider: "arc_pay",
-        paymentMethod: "sbp",
-        providerPaymentId: topUp.provider_payment_id,
+        providerOrderId: topUp.provider_session_id,
+        paymentMethod: {
+          type: "sbp",
+          displayName: "SBP",
+          provider: "Arc Pay",
+        },
         paidAmount: (topUp.fiat_amount_minor / 100).toFixed(2),
         paidCurrency: topUp.fiat_currency,
         creditedAmount: (topUp.coin_amount_minor / 100).toFixed(2),
