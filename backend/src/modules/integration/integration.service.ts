@@ -12,7 +12,7 @@ type IntegrationManifest = {
     readonly adminAllowedHosts: readonly string[];
   };
   readonly commerceEvents: {
-    readonly schemaVersion: 2;
+    readonly schemaVersion: 1;
     readonly delivery: "site_to_vv_admin_webhook";
   };
   readonly healthChecks: readonly {
@@ -120,7 +120,7 @@ export class IntegrationService {
         adminAllowedHosts: [new URL(adminOrigin).hostname],
       },
       commerceEvents: {
-        schemaVersion: 2,
+        schemaVersion: 1,
         delivery: "site_to_vv_admin_webhook",
       },
       healthChecks: [

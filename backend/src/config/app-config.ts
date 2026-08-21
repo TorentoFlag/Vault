@@ -47,6 +47,7 @@ export type AppConfig = {
     adminOrigin: string;
     vvAdminWebhookUrl?: string;
     vvAdminSiteKey?: string;
+    vvAdminWebhookSiteKey?: string;
     vvAdminWebhookSecretFile?: string;
     protocolAuthSecretFile?: string;
   };
@@ -153,6 +154,13 @@ function parseCorsOrigins(value: string | undefined): string[] {
     .filter((origin) => origin.length > 0);
 }
 
+function parseProtocolKey(name: string, value: string | undefined): string | undefined {
+  const normalized = optionalString(value);
+  if (normalized === undefined) return undefined;
+  if (/^[a-z][a-z0-9_]*$/.test(normalized)) return normalized;
+  throw new Error(`${name} must be a lowercase protocol key.`);
+}
+
 export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const nodeEnv = parseNodeEnv(env.NODE_ENV);
   const databaseUrl = optionalString(env.DATABASE_URL) ?? optionalStringFromFile(env.DATABASE_URL_FILE);
@@ -181,7 +189,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     "VV_ADMIN_WEBHOOK_URL",
     env.VV_ADMIN_WEBHOOK_URL,
   );
-  const vvAdminSiteKey = optionalString(env.VV_ADMIN_SITE_KEY);
+  const vvAdminSiteKey = parseProtocolKey("VV_ADMIN_SITE_KEY", env.VV_ADMIN_SITE_KEY);
+  const vvAdminWebhookSiteKey = optionalString(env.VV_ADMIN_WEBHOOK_SITE_KEY);
   const vvAdminWebhookSecretFile = optionalString(
     env.VV_ADMIN_WEBHOOK_SECRET_FILE,
   );
@@ -235,6 +244,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       adminOrigin: integrationAdminOrigin,
       ...(vvAdminWebhookUrl ? { vvAdminWebhookUrl } : {}),
       ...(vvAdminSiteKey ? { vvAdminSiteKey } : {}),
+      ...(vvAdminWebhookSiteKey ? { vvAdminWebhookSiteKey } : {}),
       ...(vvAdminWebhookSecretFile ? { vvAdminWebhookSecretFile } : {}),
       ...(protocolAuthSecretFile ? { protocolAuthSecretFile } : {}),
     },

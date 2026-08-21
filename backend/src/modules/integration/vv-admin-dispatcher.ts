@@ -57,7 +57,7 @@ export class VvAdminDispatcher {
     readonly secret: string;
   } {
     const webhookUrl = this.config.integration.vvAdminWebhookUrl;
-    const siteKey = this.config.integration.vvAdminSiteKey;
+    const siteKey = this.config.integration.vvAdminWebhookSiteKey;
     const secret = optionalStringFromFile(
       this.config.integration.vvAdminWebhookSecretFile,
     );

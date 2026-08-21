@@ -34,7 +34,8 @@ describe("loadAppConfig", () => {
       VV_ADMIN_PUBLIC_ORIGIN: "https://vault.example",
       VV_ADMIN_API_ORIGIN: "https://api.vault.example",
       VV_ADMIN_WEBHOOK_URL: "https://admin.example/commerce/webhook",
-      VV_ADMIN_SITE_KEY: "vault-site-key",
+      VV_ADMIN_SITE_KEY: "vault",
+      VV_ADMIN_WEBHOOK_SITE_KEY: "vault-webhook-site-key",
       VV_ADMIN_WEBHOOK_SECRET_FILE: "/run/secrets/vv-admin-webhook-secret",
       CATALOG_PUBLIC_GAMES: "cs2,rust,tf2",
       CORS_ORIGINS: "https://vault.example, https://admin.vault.example",
@@ -79,7 +80,8 @@ describe("loadAppConfig", () => {
         publicOrigin: "https://vault.example",
         adminOrigin: "https://api.vault.example",
         vvAdminWebhookUrl: "https://admin.example/commerce/webhook",
-        vvAdminSiteKey: "vault-site-key",
+        vvAdminSiteKey: "vault",
+        vvAdminWebhookSiteKey: "vault-webhook-site-key",
         vvAdminWebhookSecretFile: "/run/secrets/vv-admin-webhook-secret",
         protocolAuthSecretFile: "/run/secrets/vv-admin-webhook-secret",
       },
@@ -97,6 +99,7 @@ describe("loadAppConfig", () => {
     expect(() => loadAppConfig({ ARC_PAY_PUBLIC_ORIGIN: "http://vault.example" })).toThrow("ARC_PAY_PUBLIC_ORIGIN must be a valid HTTPS base URL.");
     expect(() => loadAppConfig({ ARC_PAY_PUBLIC_ORIGIN: "https://vault.example/path?query=1" })).toThrow("ARC_PAY_PUBLIC_ORIGIN must be a valid HTTPS base URL.");
     expect(() => loadAppConfig({ VV_ADMIN_PUBLIC_ORIGIN: "http://vault.example" })).toThrow("VV_ADMIN_PUBLIC_ORIGIN must be a valid HTTPS base URL.");
+    expect(() => loadAppConfig({ VV_ADMIN_SITE_KEY: "393a977013443bb19069045d36af4890" })).toThrow("VV_ADMIN_SITE_KEY must be a lowercase protocol key.");
     expect(() => loadAppConfig({ SIH_REQUEST_TIMEOUT_MS: "499" })).toThrow("SIH_REQUEST_TIMEOUT_MS must be between 500 and 120000.");
     expect(() => loadAppConfig({ SIH_RESPONSE_MAX_BYTES: "1023" })).toThrow("SIH_RESPONSE_MAX_BYTES must be between 1024 and 16777216.");
     expect(() => loadAppConfig({ CATALOG_PUBLIC_GAMES: "cs2,dota2" })).toThrow("CATALOG_PUBLIC_GAMES contains unsupported game: dota2.");

@@ -29,7 +29,8 @@ const config: AppConfig = {
   integration: {
     publicOrigin: "https://vault.example",
     adminOrigin: "https://api.vault.example",
-    vvAdminSiteKey: "vault-site-key",
+    vvAdminSiteKey: "vault",
+    vvAdminWebhookSiteKey: "vault-webhook-site-key",
     vvAdminWebhookSecretFile: "/run/secrets/vv-admin-integration-secret",
   },
   corsOrigins: [],
@@ -41,14 +42,14 @@ describe("IntegrationService", () => {
 
     expect(manifest).toMatchObject({
       site: {
-        key: "vault-site-key",
+        key: "vault",
         displayName: "Vault",
         publicOrigin: "https://vault.example",
         adminOrigin: "https://api.vault.example",
         adminAllowedHosts: ["api.vault.example"],
       },
       commerceEvents: {
-        schemaVersion: 2,
+        schemaVersion: 1,
         delivery: "site_to_vv_admin_webhook",
       },
     });

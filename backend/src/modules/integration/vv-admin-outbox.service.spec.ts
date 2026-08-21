@@ -59,7 +59,8 @@ function createConfig(secretFile: string): AppConfig {
       publicOrigin: "https://vault.example",
       adminOrigin: "https://vault.example",
       vvAdminWebhookUrl: "https://admin.example/commerce/webhook",
-      vvAdminSiteKey: "vault-site-key",
+      vvAdminSiteKey: "vault",
+      vvAdminWebhookSiteKey: "vault-webhook-site-key",
       vvAdminWebhookSecretFile: secretFile,
     },
     corsOrigins: [],
@@ -127,7 +128,7 @@ describe("VvAdminDispatcher", () => {
     expect(url).toBe("https://admin.example/commerce/webhook");
     expect(init?.method).toBe("POST");
     const headers = init?.headers as Record<string, string>;
-    expect(headers["x-vv-site-key"]).toBe("vault-site-key");
+    expect(headers["x-vv-site-key"]).toBe("vault-webhook-site-key");
     expect(headers["x-vv-event-id"]).toBe("evt_vault_order_1");
     expect(headers["x-vv-signature"]).toMatch(/^sha256=/);
     await expect(outbox.claimNext()).resolves.toBeNull();
