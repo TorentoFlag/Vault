@@ -86,6 +86,12 @@ describe("IntegrationService", () => {
         collections: { enabled: false },
       },
     });
+    expect(manifest.storeOrders).toEqual({
+      baseUrl: "https://api.vault.example/admin/integration/store-orders",
+      auth: { scheme: "vv_hmac" },
+      processing: { enabled: true },
+      refund: { mode: "none" },
+    });
     expect(manifest.syntheticScenarios).toEqual([
       expect.objectContaining({
         key: "checkout_payment_reached",

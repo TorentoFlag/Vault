@@ -9,6 +9,7 @@ export type VvAdminIntegrationEvent = {
   eventId: string;
   eventType:
     | "order.created"
+    | "order.completed"
     | "order.paid"
     | "order.failed"
     | "order.cancelled"

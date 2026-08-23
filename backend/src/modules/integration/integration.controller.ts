@@ -28,6 +28,7 @@ import { authenticateCatalogProtocolRequest } from "./catalog-protocol.auth";
 import { IntegrationHealthService, type IntegrationHealthResult } from "./integration-health.service";
 import { IntegrationSyntheticScenarioService } from "./integration-synthetic-scenario.service";
 import { IntegrationService } from "./integration.service";
+import { StoreOrdersProtocolService } from "./store-orders-protocol.service";
 import { VvAdminScenarioAuthVerifier } from "./vv-admin-scenario-auth";
 
 const CHECKOUT_PAYMENT_REACHED_PATH =
@@ -45,6 +46,8 @@ export class IntegrationController {
     private readonly scenarioAuth: VvAdminScenarioAuthVerifier,
     @Inject(CatalogProtocolService)
     private readonly catalogProtocol: CatalogProtocolService,
+    @Inject(StoreOrdersProtocolService)
+    private readonly storeOrdersProtocol: StoreOrdersProtocolService,
     @Inject(IntegrationHealthService)
     private readonly integrationHealth: IntegrationHealthService,
     @Inject(APP_CONFIG)
@@ -224,17 +227,57 @@ export class IntegrationController {
     return this.catalogProtocol.operationByRequest(requestId);
   }
 
+  @Get("admin/integration/store-orders/orders")
+  listStoreOrders(@Req() request: Request) {
+    this.requireStoreOrdersAuth(request);
+    return this.storeOrdersProtocol.listOrders();
+  }
+
+  @Patch("admin/integration/store-orders/orders/:id/processing")
+  @HttpCode(200)
+  updateStoreOrderProcessing(
+    @Req() request: Request,
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("if-match") ifMatch?: string,
+  ) {
+    const actor = this.requireStoreOrdersAuth(request, body);
+    return mutationEnvelope(
+      request,
+      this.storeOrdersProtocol.updateProcessing(id, {
+        actorId: actor.actorId,
+        idempotencyKey: actor.idempotencyKey,
+        ifMatch,
+        isProcessed: readProcessingBody(body),
+      }),
+    );
+  }
+
+  @Get("admin/integration/store-orders/operations/by-request/:requestId")
+  storeOrderOperationByRequest(@Req() request: Request, @Param("requestId") requestId: string) {
+    this.requireStoreOrdersAuth(request);
+    return this.storeOrdersProtocol.operationByRequest(requestId);
+  }
+
   private requireCatalogAuth(request: Request, body?: unknown): void {
+    this.requireProtocolAuth(request, catalogRelativePath(request), body);
+  }
+
+  private requireStoreOrdersAuth(request: Request, body?: unknown) {
+    return this.requireProtocolAuth(request, storeOrdersRelativePath(request), body);
+  }
+
+  private requireProtocolAuth(request: Request, path: string, body?: unknown) {
     const secret = optionalStringFromFile(this.config.integration.protocolAuthSecretFile);
     const siteKey = this.config.integration.vvAdminSiteKey ?? "vault";
     if (!secret) throw new UnauthorizedException();
     try {
-      authenticateCatalogProtocolRequest(
+      return authenticateCatalogProtocolRequest(
         {
           body: body === undefined ? "" : JSON.stringify(body),
           headers: request.headers,
           method: request.method,
-          path: catalogRelativePath(request),
+          path,
         },
         secret,
         siteKey,
@@ -259,6 +302,23 @@ function catalogRelativePath(request: Request): string {
   const originalUrl = request.originalUrl || request.url;
   const [, suffix = ""] = originalUrl.split("/admin/integration/catalog");
   return suffix.startsWith("/") ? suffix : `/${suffix}`;
+}
+
+function storeOrdersRelativePath(request: Request): string {
+  const originalUrl = request.originalUrl || request.url;
+  const [, suffix = ""] = originalUrl.split("/admin/integration/store-orders");
+  return suffix.startsWith("/") ? suffix : `/${suffix}`;
+}
+
+function readProcessingBody(body: unknown): boolean {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new BadRequestException("Store order processing body is invalid");
+  }
+  const isProcessed = (body as { isProcessed?: unknown }).isProcessed;
+  if (typeof isProcessed !== "boolean") {
+    throw new BadRequestException("isProcessed is required");
+  }
+  return isProcessed;
 }
 
 async function mutationEnvelope(request: Request, resource: Promise<unknown>) {

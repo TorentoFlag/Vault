@@ -42,7 +42,8 @@ type IntegrationManifest = {
     readonly category:
       | "payments.reconcile"
       | "fulfillment.reconcile"
-      | "manual_fulfillment.list";
+      | "manual_fulfillment.list"
+      | "manual_fulfillment.complete";
     readonly method: "GET" | "POST";
     readonly url: string;
     readonly effect: "read_only" | "recovery";
@@ -89,6 +90,12 @@ type IntegrationManifest = {
       readonly maxBytes: number;
       readonly mimeTypes: readonly ["image/jpeg", "image/png", "image/webp"];
     };
+  };
+  readonly storeOrders: {
+    readonly baseUrl: string;
+    readonly auth: { readonly scheme: "vv_hmac" };
+    readonly processing: { readonly enabled: true };
+    readonly refund: { readonly mode: "none" };
   };
 };
 
@@ -270,6 +277,15 @@ export class IntegrationService {
           effect: "read_only",
           requiresIdempotencyKey: false,
         },
+        {
+          key: "manual_apple_gift_card_complete",
+          label: "Mark manually delivered Apple gift-card order complete",
+          category: "manual_fulfillment.complete",
+          method: "POST",
+          url: `${adminOrigin}/admin/integration/store-orders/orders/:id/processing`,
+          effect: "recovery",
+          requiresIdempotencyKey: true,
+        },
       ],
       catalog: {
         baseUrl: `${adminOrigin}/admin/integration/catalog`,
@@ -312,6 +328,12 @@ export class IntegrationService {
           maxBytes: 0,
           mimeTypes: ["image/jpeg", "image/png", "image/webp"],
         },
+      },
+      storeOrders: {
+        baseUrl: `${adminOrigin}/admin/integration/store-orders`,
+        auth: { scheme: "vv_hmac" },
+        processing: { enabled: true },
+        refund: { mode: "none" },
       },
     };
   }

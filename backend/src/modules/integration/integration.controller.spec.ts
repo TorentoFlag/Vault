@@ -56,6 +56,7 @@ function createController(input: { scenario: unknown; verifier: unknown }): Inte
     input.verifier as never,
     {} as never,
     {} as never,
+    {} as never,
     { integration: {} } as never,
   );
 }
