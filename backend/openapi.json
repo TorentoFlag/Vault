@@ -2556,6 +2556,48 @@
         ]
       }
     },
+    "/admin/integration/store-orders/orders": {
+      "get": {
+        "operationId": "IntegrationController_listStoreOrders",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/store-orders/orders/{id}/processing": {
+      "patch": {
+        "operationId": "IntegrationController_updateStoreOrderProcessing",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
+    "/admin/integration/store-orders/operations/by-request/{requestId}": {
+      "get": {
+        "operationId": "IntegrationController_storeOrderOperationByRequest",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Integration"
+        ]
+      }
+    },
     "/orders/me": {
       "get": {
         "operationId": "OrdersController_me",
