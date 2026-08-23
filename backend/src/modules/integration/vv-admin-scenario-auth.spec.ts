@@ -21,7 +21,11 @@ function createConfig(secretFile?: string): AppConfig {
       steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
     },
     catalog: { publicGames: ["cs2"] },
-    notifications: {},
+    notifications: {
+      smtpHost: "smtp.purelymail.com",
+      smtpPort: 465,
+      smtpSecure: true,
+    },
     integration: {
       publicOrigin: "https://vault.example",
       adminOrigin: "https://vault.example",

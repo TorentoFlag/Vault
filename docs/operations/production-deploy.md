@@ -44,7 +44,7 @@ Runtime config lives outside git:
 - `/opt/vault/secrets/arc-pay-webhook-secret`
 - `/opt/vault/secrets/sih-api-key`
 - `/opt/vault/secrets/sih-steam-refill-api-key`
-- `/opt/vault/secrets/resend-api-key`
+- `/opt/vault/secrets/purelymail-smtp-password`
 - `/opt/vault/secrets/slack-apple-orders-webhook`
 - `/opt/vault/secrets/apple-gift-card-encryption-key`
 
@@ -53,13 +53,18 @@ Never commit, echo, screenshot, or paste secret file contents.
 Apple gift-card notifications require these backend environment entries:
 
 ```dotenv
-RESEND_API_KEY_FILE=/run/secrets/vault/resend-api-key
-RESEND_FROM=Vault <noreply@turkeyplanners.com>
+PURELYMAIL_SMTP_USERNAME=support@vaultapp24.com
+PURELYMAIL_SMTP_PASSWORD_FILE=/run/secrets/vault/purelymail-smtp-password
+PURELYMAIL_SMTP_FROM=Vault <support@vaultapp24.com>
+# Optional defaults:
+# PURELYMAIL_SMTP_HOST=smtp.purelymail.com
+# PURELYMAIL_SMTP_PORT=465
+# PURELYMAIL_SMTP_SECURE=true
 SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE=/run/secrets/vault/slack-apple-orders-webhook
 APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE=/run/secrets/vault/apple-gift-card-encryption-key
 ```
 
-Resend delivery webhooks are intentionally disabled for the current release, so do not set `RESEND_WEBHOOK_SECRET_FILE` or expose a public Resend webhook endpoint. The worker treats Resend API acceptance as the send result; final mailbox delivery events are not collected until a signed webhook is enabled later.
+Purelymail delivery uses SMTP only for the current release. The worker treats SMTP acceptance as the send result; final mailbox delivery events are not collected.
 
 When deriving `/opt/vault/secrets/database-url` from `/opt/vault/secrets/postgres-password`, URL-encode the password. Raw generated passwords may contain characters that are invalid inside a PostgreSQL connection URL.
 

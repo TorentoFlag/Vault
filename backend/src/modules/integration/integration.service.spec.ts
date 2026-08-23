@@ -25,7 +25,11 @@ const config: AppConfig = {
     steamRefillBaseUrl: "https://core.steaminventoryhelper.com",
   },
   catalog: { publicGames: ["cs2", "rust", "tf2"] },
-  notifications: {},
+  notifications: {
+    smtpHost: "smtp.purelymail.com",
+    smtpPort: 465,
+    smtpSecure: true,
+  },
   integration: {
     publicOrigin: "https://vault.example",
     adminOrigin: "https://api.vault.example",

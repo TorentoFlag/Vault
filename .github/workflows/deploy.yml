@@ -101,45 +101,6 @@ jobs:
             -e "ssh -i ~/.ssh/vault_deploy_key -p $deploy_port -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts" \
             ./ "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}:${release_dir}/"
 
-      - name: Install VV Admin webhook environment
-        shell: bash
-        env:
-          VV_ADMIN_WEBHOOK_URL: ${{ secrets.VV_ADMIN_WEBHOOK_URL }}
-          VV_ADMIN_WEBHOOK_SITE_KEY: ${{ secrets.VV_ADMIN_WEBHOOK_SITE_KEY }}
-          VV_ADMIN_WEBHOOK_SECRET: ${{ secrets.VV_ADMIN_WEBHOOK_SECRET }}
-          VV_ADMIN_WEBHOOK_SECRET_VERSION: ${{ secrets.VV_ADMIN_WEBHOOK_SECRET_VERSION }}
-        run: |
-          set -euo pipefail
-          : "${VV_ADMIN_WEBHOOK_URL:?Missing VV_ADMIN_WEBHOOK_URL}"
-          : "${VV_ADMIN_WEBHOOK_SITE_KEY:?Missing VV_ADMIN_WEBHOOK_SITE_KEY}"
-          : "${VV_ADMIN_WEBHOOK_SECRET:?Missing VV_ADMIN_WEBHOOK_SECRET}"
-          deploy_port="${VAULT_DEPLOY_PORT:-22}"
-          ssh_cmd=(ssh -i ~/.ssh/vault_deploy_key -p "$deploy_port" -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts)
-          printf '%s' "$VV_ADMIN_WEBHOOK_SECRET" | "${ssh_cmd[@]}" "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}" \
-            "install -d -m 700 /opt/vault/secrets && umask 077 && cat > /opt/vault/secrets/vv-admin-webhook-secret && chmod 600 /opt/vault/secrets/vv-admin-webhook-secret"
-          "${ssh_cmd[@]}" "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}" \
-            "VV_ADMIN_WEBHOOK_URL='$VV_ADMIN_WEBHOOK_URL' VV_ADMIN_SITE_KEY='vault' VV_ADMIN_WEBHOOK_SITE_KEY='$VV_ADMIN_WEBHOOK_SITE_KEY' VV_ADMIN_WEBHOOK_SECRET_VERSION='${VV_ADMIN_WEBHOOK_SECRET_VERSION:-1}' sh -s" <<'REMOTE'
-            set -eu
-            install -d -m 700 /opt/vault/env
-            env_file="/opt/vault/env/backend.env"
-            touch "$env_file"
-            chmod 600 "$env_file"
-            upsert_env() {
-              key="$1"
-              value="$2"
-              if grep -q "^${key}=" "$env_file"; then
-                sed -i "s|^${key}=.*|${key}=${value}|" "$env_file"
-              else
-                printf '%s=%s\n' "$key" "$value" >> "$env_file"
-              fi
-            }
-            upsert_env VV_ADMIN_WEBHOOK_URL "$VV_ADMIN_WEBHOOK_URL"
-            upsert_env VV_ADMIN_SITE_KEY "$VV_ADMIN_SITE_KEY"
-            upsert_env VV_ADMIN_WEBHOOK_SITE_KEY "$VV_ADMIN_WEBHOOK_SITE_KEY"
-            upsert_env VV_ADMIN_WEBHOOK_SECRET_FILE /run/secrets/vault/vv-admin-webhook-secret
-            upsert_env VV_ADMIN_WEBHOOK_SECRET_VERSION "$VV_ADMIN_WEBHOOK_SECRET_VERSION"
-          REMOTE
-
       - name: Deploy on server
         shell: bash
         run: |

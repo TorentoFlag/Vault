@@ -39,7 +39,6 @@ function assertRedactedPayload(payload: Record<string, unknown>): void {
 @Injectable()
 export class NotificationOutboxService {
   private readonly memoryByKey = new Map<string, NotificationOutboxRecord>();
-  private readonly webhookEventKeys = new Set<string>();
 
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
 
@@ -144,28 +143,6 @@ export class NotificationOutboxService {
         available_at = clock_timestamp() + interval '1 minute', updated_at = clock_timestamp()
       WHERE id = $1
     `, [notificationId, errorCode.slice(0, 120)]);
-  }
-
-  async recordWebhookEvent(input: {
-    eventType: string;
-    payloadSnapshot: Record<string, unknown>;
-    providerEventId: string;
-  }): Promise<"duplicate" | "processed"> {
-    const eventKey = `resend:${input.providerEventId}`;
-    if (!this.database.isConfigured()) {
-      if (this.webhookEventKeys.has(eventKey)) return "duplicate";
-      this.webhookEventKeys.add(eventKey);
-      return "processed";
-    }
-    const result = await this.database.query<{ provider_event_id: string }>(`
-      INSERT INTO notification_webhook_events (
-        provider, provider_event_id, event_type, status, signature_status, payload_snapshot, processed_at
-      )
-      VALUES ('resend', $1, $2, 'processed', 'verified', $3::jsonb, clock_timestamp())
-      ON CONFLICT (provider, provider_event_id) DO NOTHING
-      RETURNING provider_event_id
-    `, [input.providerEventId, input.eventType, JSON.stringify(input.payloadSnapshot)]);
-    return result.rows[0] ? "processed" : "duplicate";
   }
 
   private fromRow(row: NotificationOutboxRow): NotificationOutboxRecord {

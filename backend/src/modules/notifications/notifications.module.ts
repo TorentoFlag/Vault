@@ -5,21 +5,19 @@ import { APP_CONFIG } from "../../config/app-config.module";
 import type { AppConfig } from "../../config/app-config";
 import { NotificationOutboxService } from "./notification-outbox.service";
 import { NotificationDispatcher } from "./notification-dispatcher";
-import { ResendClient } from "./resend.client";
-import { ResendWebhookController } from "./resend-webhook.controller";
+import { SmtpMailClient } from "./smtp-mail.client";
 import { AppleGiftCardsModule } from "../apple-gift-cards/apple-gift-cards.module";
 import { AppleGiftCardsService } from "../apple-gift-cards/apple-gift-cards.service";
 import { SlackClient } from "./slack.client";
 
 @Module({
   imports: [DatabaseModule, forwardRef(() => AppleGiftCardsModule)],
-  controllers: [ResendWebhookController],
   providers: [
     NotificationOutboxService,
     {
-      provide: ResendClient,
+      provide: SmtpMailClient,
       inject: [APP_CONFIG],
-      useFactory: (config: AppConfig) => new ResendClient(config),
+      useFactory: (config: AppConfig) => new SmtpMailClient(config),
     },
     {
       provide: SlackClient,
@@ -28,12 +26,12 @@ import { SlackClient } from "./slack.client";
     },
     {
       provide: NotificationDispatcher,
-      inject: [NotificationOutboxService, ResendClient, APP_CONFIG, AppleGiftCardsService, SlackClient],
-      useFactory: (outbox: NotificationOutboxService, resend: ResendClient, config: AppConfig, appleCards: AppleGiftCardsService, slack: SlackClient) => {
-        return new NotificationDispatcher(outbox, resend, config.notifications.resendFrom ?? "", appleCards, slack);
+      inject: [NotificationOutboxService, SmtpMailClient, APP_CONFIG, AppleGiftCardsService, SlackClient],
+      useFactory: (outbox: NotificationOutboxService, mail: SmtpMailClient, config: AppConfig, appleCards: AppleGiftCardsService, slack: SlackClient) => {
+        return new NotificationDispatcher(outbox, mail, config.notifications.smtpFrom ?? "", appleCards, slack);
       },
     },
   ],
-  exports: [NotificationOutboxService, NotificationDispatcher, ResendClient],
+  exports: [NotificationOutboxService, NotificationDispatcher, SmtpMailClient],
 })
 export class NotificationsModule {}

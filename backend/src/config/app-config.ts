@@ -36,9 +36,12 @@ export type AppConfig = {
     publicGames: CatalogGame[];
   };
   notifications: {
-    resendApiKeyFile?: string;
-    resendFrom?: string;
-    resendWebhookSecretFile?: string;
+    smtpHost: string;
+    smtpPort: number;
+    smtpSecure: boolean;
+    smtpUsername?: string;
+    smtpPasswordFile?: string;
+    smtpFrom?: string;
     slackAppleOrdersWebhookUrlFile?: string;
     appleGiftCardEncryptionKeyFile?: string;
   };
@@ -154,6 +157,14 @@ function parseCorsOrigins(value: string | undefined): string[] {
     .filter((origin) => origin.length > 0);
 }
 
+function parseBoolean(name: string, value: string | undefined, defaultValue: boolean): boolean {
+  const normalized = optionalString(value);
+  if (normalized === undefined) return defaultValue;
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  throw new Error(`${name} must be true or false.`);
+}
+
 function parseProtocolKey(name: string, value: string | undefined): string | undefined {
   const normalized = optionalString(value);
   if (normalized === undefined) return undefined;
@@ -174,9 +185,12 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const sihApiKeyFile = optionalString(env.SIH_API_KEY_FILE);
   const sihSteamRefillApiKeyFile = optionalString(env.SIH_STEAM_REFILL_API_KEY_FILE);
   const adminApiTokenFile = optionalString(env.ADMIN_API_TOKEN_FILE);
-  const resendApiKeyFile = optionalString(env.RESEND_API_KEY_FILE);
-  const resendFrom = optionalString(env.RESEND_FROM);
-  const resendWebhookSecretFile = optionalString(env.RESEND_WEBHOOK_SECRET_FILE);
+  const smtpHost = optionalString(env.PURELYMAIL_SMTP_HOST) ?? "smtp.purelymail.com";
+  const smtpPort = parseBoundedInteger("PURELYMAIL_SMTP_PORT", env.PURELYMAIL_SMTP_PORT, 465, 1, 65_535);
+  const smtpSecure = parseBoolean("PURELYMAIL_SMTP_SECURE", env.PURELYMAIL_SMTP_SECURE, true);
+  const smtpUsername = optionalString(env.PURELYMAIL_SMTP_USERNAME);
+  const smtpPasswordFile = optionalString(env.PURELYMAIL_SMTP_PASSWORD_FILE);
+  const smtpFrom = optionalString(env.PURELYMAIL_SMTP_FROM);
   const slackAppleOrdersWebhookUrlFile = optionalString(env.SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE);
   const appleGiftCardEncryptionKeyFile = optionalString(env.APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE);
   const integrationPublicOrigin =
@@ -198,8 +212,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     env.VV_ADMIN_INTEGRATION_SECRET_FILE,
   ) ?? vvAdminWebhookSecretFile;
 
-  if (nodeEnv === "production" && resendApiKeyFile !== undefined && resendFrom === undefined) {
-    throw new Error("RESEND_FROM is required when RESEND_API_KEY_FILE is configured in production.");
+  if (nodeEnv === "production" && smtpUsername !== undefined && smtpPasswordFile === undefined) {
+    throw new Error("PURELYMAIL_SMTP_PASSWORD_FILE is required when PURELYMAIL_SMTP_USERNAME is configured in production.");
+  }
+  if (nodeEnv === "production" && smtpUsername !== undefined && smtpFrom === undefined) {
+    throw new Error("PURELYMAIL_SMTP_FROM is required when PURELYMAIL_SMTP_USERNAME is configured in production.");
   }
 
   return {
@@ -233,9 +250,12 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       publicGames: parseCatalogPublicGames(env.CATALOG_PUBLIC_GAMES),
     },
     notifications: {
-      ...(resendApiKeyFile ? { resendApiKeyFile } : {}),
-      ...(resendFrom ? { resendFrom } : {}),
-      ...(resendWebhookSecretFile ? { resendWebhookSecretFile } : {}),
+      smtpHost,
+      smtpPort,
+      smtpSecure,
+      ...(smtpUsername ? { smtpUsername } : {}),
+      ...(smtpPasswordFile ? { smtpPasswordFile } : {}),
+      ...(smtpFrom ? { smtpFrom } : {}),
       ...(slackAppleOrdersWebhookUrlFile ? { slackAppleOrdersWebhookUrlFile } : {}),
       ...(appleGiftCardEncryptionKeyFile ? { appleGiftCardEncryptionKeyFile } : {}),
     },

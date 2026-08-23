@@ -9,7 +9,7 @@ import { UsersService } from "../users/users.service";
 
 const OTP_TTL_MILLISECONDS = 10 * 60 * 1_000;
 const OTP_MAX_ATTEMPTS = 5;
-const OTP_RESEND_COOLDOWN_MILLISECONDS = 60 * 1_000;
+const OTP_RETRY_COOLDOWN_MILLISECONDS = 60 * 1_000;
 
 export type EmailAuthRuntime = {
   createCode: () => string;
@@ -97,7 +97,7 @@ export class EmailAuthService {
       codeDigest: digestOtp(id, code),
       attemptCount: 0,
       expiresAt: new Date(now.getTime() + OTP_TTL_MILLISECONDS),
-      resendAvailableAt: new Date(now.getTime() + OTP_RESEND_COOLDOWN_MILLISECONDS),
+      resendAvailableAt: new Date(now.getTime() + OTP_RETRY_COOLDOWN_MILLISECONDS),
       consumedAt: null,
       cancelledAt: null,
     };

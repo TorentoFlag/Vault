@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Sell region- and nominal-specific App Store & iTunes gift cards through the Coins wallet, verify the customer email with Resend, and complete delivery only when an administrator manually releases a code.
+**Goal:** Sell region- and nominal-specific App Store & iTunes gift cards through the Coins wallet, verify the customer email with Purelymail SMTP, and complete delivery only when an administrator manually releases a code.
 
-**Architecture:** Extend the current catalog/checkout/order aggregate with an `apple_gift_card` product kind and a `delivery-email` snapshot. Add backend email identities and OTP challenges, a generic durable notification outbox with Resend and Slack adapters, and a manual Apple fulfillment record encrypted at rest. The administrator explicitly enters a sourced code; a notification worker sends it and only then completes the existing fulfillment command and captures the wallet hold.
+**Architecture:** Extend the current catalog/checkout/order aggregate with an `apple_gift_card` product kind and a `delivery-email` snapshot. Add backend email identities and OTP challenges, a generic durable notification outbox with Purelymail SMTP and Slack adapters, and a manual Apple fulfillment record encrypted at rest. The administrator explicitly enters a sourced code; a notification worker sends it and only then completes the existing fulfillment command and captures the wallet hold.
 
-**Tech Stack:** NestJS 11, PostgreSQL/Drizzle, Node 20, `resend` Node SDK, Slack Incoming Webhooks, existing HTTP-only cookie sessions, CSRF/idempotency helpers, existing Coins wallet and fulfillment command tables, Next.js 16/React 19/TypeScript/CSS Modules.
+**Tech Stack:** NestJS 11, PostgreSQL/Drizzle, Node 20, `nodemailer` SMTP client, Slack Incoming Webhooks, existing HTTP-only cookie sessions, CSRF/idempotency helpers, existing Coins wallet and fulfillment command tables, Next.js 16/React 19/TypeScript/CSS Modules.
 
 ## Global Constraints
 
@@ -14,7 +14,7 @@
 - The customer pays in integer Coins minor units through the existing wallet checkout. No dollar symbol or client-side money arithmetic is introduced.
 - Apple-card products are configured variants; the browser cannot submit a free-form region, currency, or nominal.
 - A gift-card code is secret material: it must not appear in API responses, OpenAPI examples, client state, HTML, logs, error snapshots, Slack, test fixtures, or generic outbox payloads.
-- Resend and Slack credentials, as well as the Apple-code encryption key, are backend-only secret files. Do not echo their contents.
+- Purelymail SMTP and Slack credentials, as well as the Apple-code encryption key, are backend-only secret files. Do not echo their contents.
 - Every external delivery is driven by a durable outbox record with an application idempotency key. No HTTP call occurs in a database transaction.
 - Use TDD: record the focused expected failure, implement the smallest change, then run focused tests before broader gates.
 - Drizzle migrations are append-only. Modify `backend/drizzle/schema.ts`, run `npm --prefix backend run db:generate -- --name=apple-gift-cards`, and commit only the generated next migration/journal/snapshot; never edit prior migrations.
@@ -28,7 +28,7 @@
 | Path | Responsibility |
 | --- | --- |
 | `backend/src/modules/email-auth/**` | Passwordless email identity, OTP challenge request/verification, session creation, abuse limits. |
-| `backend/src/modules/notifications/**` | Resend/Slack adapters, renderers, durable outbox, attempts, webhook inbox, worker. |
+| `backend/src/modules/notifications/**` | Purelymail SMTP/Slack adapters, renderers, durable outbox, attempts, worker. |
 | `backend/src/modules/apple-gift-cards/**` | Gift-card variant parsing, encrypted manually entered code, customer digital-goods projection, admin delivery command. |
 | `backend/src/modules/fulfillment/fulfillment.service.ts` | Creates the `manual_apple_gift_card` command and settles it only after notification dispatch succeeds. |
 | `backend/src/modules/checkout/checkout.service.ts` | Requires and snapshots verified delivery email for each Apple-card line. |
@@ -220,7 +220,7 @@ npm --prefix backend run typecheck
 
 Expected: PASS; expired, invalid, over-attempted, throttled, consumed, and recipient-less cases return safe Problem Details without OTP leakage.
 
-### Task 3: Notifications foundation and Resend adapter
+### Task 3: Notifications foundation and Purelymail SMTP adapter
 
 **Files:**
 - Modify: `backend/package.json`
@@ -229,18 +229,17 @@ Expected: PASS; expired, invalid, over-attempted, throttled, consumed, and recip
 - Modify: `backend/src/config/app-config.spec.ts`
 - Create: `backend/src/modules/notifications/notifications.module.ts`
 - Create: `backend/src/modules/notifications/notification-outbox.service.ts`
-- Create: `backend/src/modules/notifications/resend.client.ts`
+- Create: `backend/src/modules/notifications/smtp-mail.client.ts`
 - Create: `backend/src/modules/notifications/email-templates.ts`
-- Create: `backend/src/modules/notifications/resend-webhook.controller.ts`
 - Create: `backend/src/modules/notifications/notifications.service.spec.ts`
-- Create: `backend/src/modules/notifications/resend-webhook.controller.spec.ts`
+- Create: `backend/src/modules/notifications/smtp-mail.client.spec.ts`
 - Create: `backend/src/notifications-worker.ts`
 - Modify: `backend/src/app.module.ts`
 
 **Interfaces:**
 - Consumes email challenge/order IDs; it receives only entity IDs and template parameters, never a gift-card code in outbox JSON.
 - Produces `NotificationOutboxService.enqueue(client, { channel, eventType, idempotencyKey, entityId, payload })`.
-- Produces `ResendClient.send(input): Promise<{ emailId: string }>` and `POST /webhooks/resend`.
+- Produces `SmtpMailClient.send(input): Promise<{ emailId: string }>` backed by Purelymail SMTP.
 
 - [ ] **Step 1: Add failing template and idempotency tests**
 
@@ -260,36 +259,39 @@ it("does not create a second notification attempt for the same outbox idempotenc
 
 - [ ] **Step 2: Run notification tests to observe missing module failure**
 
-Run: `npm --prefix backend test -- src/modules/notifications/notifications.service.spec.ts src/modules/notifications/resend-webhook.controller.spec.ts`
+Run: `npm --prefix backend test -- src/modules/notifications/notifications.service.spec.ts src/modules/notifications/smtp-mail.client.spec.ts`
 
 Expected: FAIL because notification tables, templates, and adapter do not exist.
 
-- [ ] **Step 3: Add the Resend SDK and typed secret-file configuration**
+- [ ] **Step 3: Add the SMTP client and typed secret-file configuration**
 
-Run `npm --prefix backend install resend`. Extend `AppConfig` with:
+Run `npm --prefix backend install nodemailer` and `npm --prefix backend install --save-dev @types/nodemailer`. Extend `AppConfig` with:
 
 ```ts
 notifications: {
-  resendApiKeyFile?: string;
-  resendFrom?: string;
-  resendWebhookSecretFile?: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUsername?: string;
+  smtpPasswordFile?: string;
+  smtpFrom?: string;
   slackAppleOrdersWebhookUrlFile?: string;
   appleGiftCardEncryptionKeyFile?: string;
 }
 ```
 
-Read secrets only at adapter construction; validate that production email sending requires the key file, a verified-domain from address, and a webhook secret. Do not add default production credentials.
+Read secrets only at adapter construction; validate that production email sending requires the username, password secret file, and a verified-domain from address. Default host/port/TLS to `smtp.purelymail.com`, `465`, and SSL/TLS. Do not add default production credentials.
 
 - [ ] **Step 4: Implement durable send/retry and webhook inbox**
 
-Claim outbox rows with `FOR UPDATE SKIP LOCKED`, persist an attempt before calling Resend, and use keys `email-verification/<challengeId>`, `apple-card-order-accepted/<orderId>`, and `apple-card-delivery/<orderLineId>/<deliveryVersion>`. Record the returned Resend email id after successful API acceptance. Verify the raw body against the Svix headers before parsing the webhook; insert `svix-id` under a unique constraint; record `sent`, `delivered`, `bounced`, `failed`, `suppressed`, and `delivery_delayed` without changing wallet/fulfillment state.
+Claim outbox rows with `FOR UPDATE SKIP LOCKED`, persist an attempt before calling SMTP, and use keys `email-verification/<challengeId>`, `apple-card-order-accepted/<orderId>`, and `apple-card-delivery/<orderLineId>/<deliveryVersion>`. Record the returned SMTP message id after successful SMTP acceptance. There is no provider webhook in this Purelymail SMTP path; mailbox delivery/bounce events are not collected.
 
 - [ ] **Step 5: Run focused tests and manual worker help check**
 
 Run:
 
 ```sh
-npm --prefix backend test -- src/modules/notifications/notifications.service.spec.ts src/modules/notifications/resend-webhook.controller.spec.ts
+npm --prefix backend test -- src/modules/notifications/notifications.service.spec.ts src/modules/notifications/smtp-mail.client.spec.ts
 npm --prefix backend run typecheck
 npm --prefix backend run build
 node backend/dist/notifications-worker.js --help
@@ -316,12 +318,12 @@ Expected: PASS; `--help` lists a finite batch limit and performs no network send
 **Interfaces:**
 - Consumes `manual_apple_gift_card` commands and `NotificationOutboxService` from Tasks 1 and 3.
 - Produces `GET /admin/apple-gift-cards/pending` and `POST /admin/apple-gift-cards/{orderLineId}/deliveries`.
-- Produces `AppleGiftCardsService.completeDeliveryAfterAcceptedSend(notificationId, resendEmailId)` called only by the notification worker.
+- Produces `AppleGiftCardsService.completeDeliveryAfterAcceptedSend(notificationId, smtpMessageId)` called only by the notification worker.
 
 - [ ] **Step 1: Write failing manual-delivery transition tests**
 
 ```ts
-it("queues a redacted code-delivery email and captures Coins only after Resend accepts it", async () => {
+it("queues a redacted code-delivery email and captures Coins only after SMTP accepts it", async () => {
   const result = await appleCards.recordManualDelivery({ orderLineId, code: "ABCD-1234-EFGH", reason: "Код проверен у поставщика", actorId: "admin_1", idempotencyKey: "deliver-1" });
   expect(result.status).toBe("queued");
   expect(await orderLineStatus(orderLineId)).toBe("held");
@@ -343,7 +345,7 @@ Add `manual_apple_gift_card` to `FulfillmentCommandType`; insert it with `provid
 
 - [ ] **Step 4: Encrypt, audit, dispatch, and settle**
 
-Encrypt code material using AES-256-GCM and the configured `APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE`; store `ciphertext`, `nonce`, `authTag`, key version, and monotonically incremented `deliveryVersion`. In the same transaction create a `manual_code_delivery` provider attempt, audit record `admin.apple_gift_card.delivery_queued`, and `apple-card-delivery` outbox event whose payload contains only IDs. Add `apple_card.slack_alert` at checkout, rendered as Block Kit with order number, region, nominal, Coins amount, masked email, and an admin URL. The Slack adapter POSTs only to the secret-file URL and has a redacted result record. On Resend accepted-send completion, mark attempt/command/line terminal and call existing settlement; on permanent send failure set command/line/order to `manual_review` without capture.
+Encrypt code material using AES-256-GCM and the configured `APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE`; store `ciphertext`, `nonce`, `authTag`, key version, and monotonically incremented `deliveryVersion`. In the same transaction create a `manual_code_delivery` provider attempt, audit record `admin.apple_gift_card.delivery_queued`, and `apple-card-delivery` outbox event whose payload contains only IDs. Add `apple_card.slack_alert` at checkout, rendered as Block Kit with order number, region, nominal, Coins amount, masked email, and an admin URL. The Slack adapter POSTs only to the secret-file URL and has a redacted result record. On SMTP accepted-send completion, mark attempt/command/line terminal and call existing settlement; on permanent send failure set command/line/order to `manual_review` without capture.
 
 - [ ] **Step 5: Run admin/security and integration tests**
 
@@ -540,7 +542,7 @@ Expected: PASS; empty, pending, sent-to-email, review, and failed states all ren
 
 **Interfaces:**
 - Consumes all prior tasks.
-- Produces an executable deterministic smoke path and an explicit external release gate `resend-apple-gift-card`.
+- Produces an executable deterministic smoke path and an explicit external release gate `purelymail-apple-gift-card`.
 
 - [ ] **Step 1: Add a failing end-to-end commerce smoke scenario**
 
@@ -549,7 +551,7 @@ it("holds Coins, queues receipt and Slack events, and completes an Apple card on
   const order = await checkoutVerifiedAppleCard();
   expect(await walletHoldStatus(order.id)).toBe("active");
   await adminQueueManualDelivery(order.lineId, "ABCD-1234-EFGH");
-  await runNotificationWorkerWithAcceptedResendFake();
+  await runNotificationWorkerWithAcceptedSmtpFake();
   expect(await walletHoldStatus(order.id)).toBe("captured");
   expect(await customerDigitalGoods(order.userId)).toContainEqual(expect.objectContaining({ status: "sent_to_email" }));
 });
@@ -563,7 +565,7 @@ Expected: FAIL until the fixture creates a verified email identity and exercises
 
 - [ ] **Step 3: Implement deterministic smoke, readiness, and runbook**
 
-Extend the smoke fixture with a fake Resend client and fake Slack endpoint that record redacted payloads. Add readiness checks for `RESEND_API_KEY_FILE`, `RESEND_FROM`, `RESEND_WEBHOOK_SECRET_FILE`, `SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE`, `APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE`, and a public HTTPS backend origin. Document operator steps: verify DNS, submit controlled OTP/receipt/delivery messages, validate a signed Resend webhook, inspect a masked Slack alert, manually enter a disposable test code, inspect DB rows/outbox/audit without reading the code, and record only nonsecret evidence.
+Extend the smoke fixture with a fake SMTP client and fake Slack endpoint that record redacted payloads. Add readiness checks for `PURELYMAIL_SMTP_USERNAME`, `PURELYMAIL_SMTP_PASSWORD_FILE`, `PURELYMAIL_SMTP_FROM`, `SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE`, `APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE`, and a public HTTPS backend origin. Document operator steps: verify DNS, submit controlled OTP/receipt/delivery messages, inspect a masked Slack alert, manually enter a disposable test code, inspect DB rows/outbox/audit without reading the code, and record only nonsecret evidence.
 
 - [ ] **Step 4: Run complete local verification**
 
@@ -584,7 +586,7 @@ Expected: all deterministic gates PASS. `npm --prefix backend run acceptance:rea
 
 - [ ] **Step 5: Perform external acceptance only with explicit authority**
 
-After the user supplies/authorises the Resend domain, controlled recipient, and Slack destination, run the readiness preflight, send only the controlled test emails, and verify the signed webhook plus Slack post. Do not deploy, rotate credentials, purchase a card, or send customer email as part of this task without separate explicit instruction.
+After the user supplies/authorises the Purelymail SMTP account, controlled recipient, and Slack destination, run the readiness preflight, send only the controlled test emails, and verify the SMTP acceptance plus Slack post. Do not deploy, rotate credentials, purchase a card, or send customer email as part of this task without separate explicit instruction.
 
 ## Plan self-review
 
@@ -592,7 +594,7 @@ After the user supplies/authorises the Resend domain, controlled recipient, and 
 | --- | --- |
 | Configured Apple catalogue, region, nominal, Coins price | 1, 6 |
 | Backend passwordless email and OTP | 1, 2, 3, 6 |
-| Exact customer email lifecycle through Resend | 3, 4, 8 |
+| Exact customer email lifecycle through Purelymail SMTP | 3, 4, 8 |
 | Manual-only code sourcing/release | 4, 8 |
 | No code in account/Slack/logs/contracts | 3, 4, 5, 7, 8 |
 | Account listing and activation guide | 5, 7 |

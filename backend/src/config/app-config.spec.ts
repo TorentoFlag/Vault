@@ -26,9 +26,9 @@ describe("loadAppConfig", () => {
       SIH_REQUEST_TIMEOUT_MS: "2500",
       SIH_RESPONSE_MAX_BYTES: "4096",
       ADMIN_API_TOKEN_FILE: "/run/secrets/admin-api-token",
-      RESEND_API_KEY_FILE: "/run/secrets/resend-api-key",
-      RESEND_FROM: "Vault <noreply@vault.example>",
-      RESEND_WEBHOOK_SECRET_FILE: "/run/secrets/resend-webhook-secret",
+      PURELYMAIL_SMTP_USERNAME: "support@vault.example",
+      PURELYMAIL_SMTP_PASSWORD_FILE: "/run/secrets/purelymail-smtp-password",
+      PURELYMAIL_SMTP_FROM: "Vault <support@vault.example>",
       SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE: "/run/secrets/slack-apple-orders",
       APPLE_GIFT_CARD_ENCRYPTION_KEY_FILE: "/run/secrets/apple-gift-card-encryption-key",
       VV_ADMIN_PUBLIC_ORIGIN: "https://vault.example",
@@ -70,9 +70,12 @@ describe("loadAppConfig", () => {
         publicGames: ["cs2", "rust", "tf2"],
       },
       notifications: {
-        resendApiKeyFile: "/run/secrets/resend-api-key",
-        resendFrom: "Vault <noreply@vault.example>",
-        resendWebhookSecretFile: "/run/secrets/resend-webhook-secret",
+        smtpHost: "smtp.purelymail.com",
+        smtpPort: 465,
+        smtpSecure: true,
+        smtpUsername: "support@vault.example",
+        smtpPasswordFile: "/run/secrets/purelymail-smtp-password",
+        smtpFrom: "Vault <support@vault.example>",
         slackAppleOrdersWebhookUrlFile: "/run/secrets/slack-apple-orders",
         appleGiftCardEncryptionKeyFile: "/run/secrets/apple-gift-card-encryption-key",
       },
@@ -103,14 +106,19 @@ describe("loadAppConfig", () => {
     expect(() => loadAppConfig({ SIH_REQUEST_TIMEOUT_MS: "499" })).toThrow("SIH_REQUEST_TIMEOUT_MS must be between 500 and 120000.");
     expect(() => loadAppConfig({ SIH_RESPONSE_MAX_BYTES: "1023" })).toThrow("SIH_RESPONSE_MAX_BYTES must be between 1024 and 16777216.");
     expect(() => loadAppConfig({ CATALOG_PUBLIC_GAMES: "cs2,dota2" })).toThrow("CATALOG_PUBLIC_GAMES contains unsupported game: dota2.");
-    expect(() => loadAppConfig({ NODE_ENV: "production", RESEND_API_KEY_FILE: "/run/secrets/resend" })).toThrow("RESEND_FROM is required");
+    expect(() => loadAppConfig({ NODE_ENV: "production", PURELYMAIL_SMTP_USERNAME: "support@vaultapp24.com" })).toThrow("PURELYMAIL_SMTP_PASSWORD_FILE is required");
     expect(loadAppConfig({
       NODE_ENV: "production",
-      RESEND_API_KEY_FILE: "/run/secrets/resend",
-      RESEND_FROM: "Vault <noreply@turkeyplanners.com>",
+      PURELYMAIL_SMTP_USERNAME: "support@vaultapp24.com",
+      PURELYMAIL_SMTP_PASSWORD_FILE: "/run/secrets/purelymail-smtp-password",
+      PURELYMAIL_SMTP_FROM: "Vault <support@vaultapp24.com>",
     }).notifications).toMatchObject({
-      resendApiKeyFile: "/run/secrets/resend",
-      resendFrom: "Vault <noreply@turkeyplanners.com>",
+      smtpHost: "smtp.purelymail.com",
+      smtpPort: 465,
+      smtpSecure: true,
+      smtpUsername: "support@vaultapp24.com",
+      smtpPasswordFile: "/run/secrets/purelymail-smtp-password",
+      smtpFrom: "Vault <support@vaultapp24.com>",
     });
   });
 

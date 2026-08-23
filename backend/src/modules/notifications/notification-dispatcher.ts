@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 
 import { renderAppleOrderAcceptedEmail, renderEmailVerificationEmail, type RenderedEmail } from "./email-templates";
 import { NotificationOutboxService, type NotificationOutboxRecord } from "./notification-outbox.service";
-import { ResendClient } from "./resend.client";
+import { SmtpMailClient } from "./smtp-mail.client";
 import { SlackClient } from "./slack.client";
 import type { AppleGiftCardsService } from "../apple-gift-cards/apple-gift-cards.service";
 
@@ -26,7 +26,7 @@ function isOrderAcceptedPayload(value: Record<string, unknown>): value is OrderA
 export class NotificationDispatcher {
   constructor(
     @Inject(NotificationOutboxService) private readonly outbox: NotificationOutboxService,
-    @Inject(ResendClient) private readonly resend: Pick<ResendClient, "send">,
+    @Inject(SmtpMailClient) private readonly mail: Pick<SmtpMailClient, "send">,
     private readonly from: string,
     private readonly appleCards?: Pick<AppleGiftCardsService, "completeDeliveryAfterAcceptedSend" | "deliveryEmailForNotification">,
     @Inject(SlackClient) private readonly slack?: Pick<SlackClient, "send">,
@@ -43,7 +43,7 @@ export class NotificationDispatcher {
         return { status: "accepted", notificationId: notification.id };
       }
       const email = await this.resolveEmail(notification);
-      const accepted = await this.resend.send({ ...email.message, from: this.from, to: email.to, idempotencyKey: notification.idempotencyKey });
+      const accepted = await this.mail.send({ ...email.message, from: this.from, to: email.to, idempotencyKey: notification.idempotencyKey });
       await this.outbox.markAccepted(notification.id, accepted.emailId);
       if (notification.eventType === "apple-card.delivery") await this.appleCards?.completeDeliveryAfterAcceptedSend(notification.entityId);
       return { status: "accepted", notificationId: notification.id };

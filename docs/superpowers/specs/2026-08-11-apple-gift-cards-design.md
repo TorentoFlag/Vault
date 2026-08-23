@@ -9,7 +9,7 @@ Add App Store & iTunes gift cards as a manually fulfilled digital-goods category
 - Sell only explicitly configured Apple-card variants: one region, currency, and nominal per catalogue product/variant.
 - Show all customer-facing prices and order totals in Coins.
 - Require a verified delivery email before Apple-card checkout. The existing frontend-only email concept becomes a backend-owned passwordless email session, so the same customer can later open their purchases.
-- Send the OTP, order-accepted receipt, and later gift-card delivery email through Resend.
+- Send the OTP, order-accepted receipt, and later gift-card delivery email through Purelymail SMTP.
 - Create one manual-fulfillment command for every purchased Apple-card line. No supplier API, scraping, browser automation, Plati integration, or automatic code issuance is in scope.
 - Notify the configured Slack channel after the order is created and Coins are held. Slack never receives a gift-card code, an unmasked email address, an API key, or a webhook URL.
 - Show Apple-card purchases in a dedicated digital-goods section of the account. It shows status, region, nominal, and activation instructions; it never reveals the gift-card code.
@@ -19,7 +19,7 @@ Add App Store & iTunes gift cards as a manually fulfilled digital-goods category
 
 - No automated supplier purchase, balance polling, stock synchronization, Plati integration, or supplier reconciliation.
 - No direct card payment in this product flow. The existing Coins wallet checkout remains the payment mechanism.
-- No guest checkout, locally stored order state, or client-side Resend/Slack credentials.
+- No guest checkout, locally stored order state, or client-side SMTP/Slack credentials.
 - No display, download, support-log, Slack-message, OpenAPI response, or analytics export containing a gift-card code.
 - No change to Steam skin or Steam refill behavior beyond safely extending their shared checkout/order types.
 
@@ -111,7 +111,7 @@ An authorised admin uses a dedicated, token-protected endpoint and page rather t
 - an immutable audit record with the acting admin and reason but no plaintext code;
 - an outbox row for the code-delivery email.
 
-The delivery worker makes the Resend request outside the database transaction. A successful accepted send marks the manual delivery attempt successful and the order line `supplier_finished`, then captures the existing Coins hold according to the existing terminal settlement rules. A transient sending failure leaves the command retryable with the same idempotency key. A permanent send failure, invalid manually entered code, unavailable stock, or customer dispute moves the line to `manual_review`; it must not silently capture the hold. A reasoned admin recovery may later resend, replace, or fail/release according to the documented support policy.
+The delivery worker makes the SMTP send outside the database transaction. A successful accepted send marks the manual delivery attempt successful and the order line `supplier_finished`, then captures the existing Coins hold according to the existing terminal settlement rules. A transient sending failure leaves the command retryable with the same idempotency key. A permanent send failure, invalid manually entered code, unavailable stock, or customer dispute moves the line to `manual_review`; it must not silently capture the hold. A reasoned admin recovery may later resend, replace, or fail/release according to the documented support policy.
 
 ## Account experience and activation guide
 
@@ -127,9 +127,9 @@ The product page repeats the region-matching warning before checkout. Apple’s 
 
 ## Notifications and operational safety
 
-The notification module owns `notification_outbox`, send attempts, and Resend webhook inbox records. Checkout writes `apple_gift_card.order_accepted` and `apple_gift_card.slack_alert` transactionally. Workers claim events with leases, retry safely, and persist the Resend email id or Slack result in redacted form.
+The notification module owns `notification_outbox` and send attempts. Checkout writes `apple_gift_card.order_accepted` and `apple_gift_card.slack_alert` transactionally. Workers claim events with leases, retry safely, and persist the SMTP message id or Slack result in redacted form.
 
-Resend is configured with a backend-only `RESEND_API_KEY_FILE`, verified sending domain/from address, and `RESEND_WEBHOOK_SECRET_FILE`. Each message has a deterministic application idempotency key such as `email-verification/<challenge-id>` or `apple-card-order-accepted/<order-id>`. Resend webhook signature verification uses the untouched raw body; the inbox deduplicates `svix-id` and retains event type, timestamp, email id, tags, and safe bounce metadata. `sent` means accepted by Resend, while `delivered` only means accepted by the recipient mail server and is not proof the customer read or redeemed a code.
+Purelymail is configured with backend-only `PURELYMAIL_SMTP_USERNAME`, `PURELYMAIL_SMTP_PASSWORD_FILE`, and `PURELYMAIL_SMTP_FROM`; host, port, and TLS default to `smtp.purelymail.com`, `465`, and SSL/TLS. Each message has a deterministic application idempotency key such as `email-verification/<challenge-id>` or `apple-card-order-accepted/<order-id>` recorded in the outbox and SMTP headers. `accepted` means the SMTP server accepted the message for delivery; it is not proof the customer read or redeemed a code.
 
 Slack uses a backend-only `SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE`. The incoming message has order number, product, region, nominal, Coins amount, order time, masked recipient email, and the secure admin action URL. It never contains the code. Slack notification failure is visible in the admin operations queue and does not prevent a durable order from being created or fulfilled.
 
@@ -143,17 +143,16 @@ Slack uses a backend-only `SLACK_APPLE_ORDERS_WEBHOOK_URL_FILE`. The incoming me
 ## Testing and acceptance
 
 - Unit tests cover variant validation, integer Coins prices, OTP expiration/attempts/cooldown, templates in both formats, masked-email formatting, code encryption/redaction, and state transitions.
-- Integration tests cover verified email session → Apple checkout → wallet hold and durable commands/outbox → admin manual delivery → Resend retry/idempotency → terminal hold capture; plus permanent failure/manual review/release paths.
-- Webhook tests cover raw-body signature validation, duplicate `svix-id`, out-of-order email events, bounce/suppression, and no mutation of payment/fulfillment state from an email delivery event.
+- Integration tests cover verified email session → Apple checkout → wallet hold and durable commands/outbox → admin manual delivery → SMTP retry/idempotency → terminal hold capture; plus permanent failure/manual review/release paths.
 - Admin tests prove unauthorised access is denied, idempotency collisions are safe, reasons are required, and all externally visible data remains redacted.
 - Frontend tests and browser tests cover region/nominal selection, required email verification, consent reset after a selection change, account listing with no code, status copy, and both activation-guide layouts.
 - Run backend OpenAPI generation/check, frontend API sync, backend/frontend unit/type/lint/build gates, and the relevant integration/commerce smoke additions.
-- Before release, verify the Resend domain DNS and send a controlled test to a recipient mailbox; verify a real signed Resend webhook, controlled Slack alert, and a complete manually entered test-code delivery without exposing the test code in evidence.
+- Before release, verify the Purelymail domain DNS and send a controlled test to a recipient mailbox; verify a controlled Slack alert and a complete manually entered test-code delivery without exposing the test code in evidence.
 
 ## Explicit release blockers
 
 - Final supported Apple regions, currencies, nominals, Coins prices, product imagery, and stock/fulfillment operating procedure.
-- Vault sending domain, sender address, Resend account API key and webhook secret, plus DNS verification.
+- Vault sending domain, sender address, Purelymail SMTP account and password secret file, plus DNS verification.
 - Slack destination and secret webhook URL.
 - Application encryption-key storage/rotation procedure for stored gift-card codes.
 - Legal/offer review of manual resale, refund/replacement policy, regional Apple-card restrictions, customer support contact, and retention/deletion policy for delivery emails and audit records.

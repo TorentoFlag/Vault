@@ -2689,64 +2689,6 @@
         ]
       }
     },
-    "/webhooks/resend": {
-      "post": {
-        "operationId": "ResendWebhookController_handle",
-        "parameters": [
-          {
-            "name": "svix-signature",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "svix-timestamp",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "svix-id",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "status"
-                  ],
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "processed",
-                        "duplicate"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Notifications"
-        ]
-      }
-    },
     "/admin/apple-gift-cards/pending": {
       "get": {
         "operationId": "AppleGiftCardsAdminController_pending",

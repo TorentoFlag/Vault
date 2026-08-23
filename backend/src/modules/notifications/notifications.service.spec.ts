@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { renderEmailVerificationEmail } from "./email-templates";
 import { NotificationDispatcher } from "./notification-dispatcher";
 import { NotificationOutboxService } from "./notification-outbox.service";
-import type { ResendSendInput } from "./resend.client";
+import type { MailSendInput } from "./smtp-mail.client";
 
 describe("notifications", () => {
   it("renders the approved OTP text in plain text and escaped HTML", () => {
@@ -61,7 +61,7 @@ describe("notifications", () => {
     expect(await outbox.claimNext()).toBeNull();
   });
 
-  it("sends a queued OTP email with the durable application idempotency key", async () => {
+  it("sends a queued OTP email through SMTP using the durable application idempotency key", async () => {
     const outbox = new NotificationOutboxService({ isConfigured: () => false } as never);
     await outbox.enqueue({
       channel: "email",
@@ -70,12 +70,12 @@ describe("notifications", () => {
       idempotencyKey: "email-verification/challenge_3",
       payload: { challengeId: "challenge_3", email: "buyer@example.com", otp: "123456", expireMinutes: 10 },
     });
-    const send = (input: ResendSendInput) => {
+    const send = (input: MailSendInput) => {
       expect(input).toMatchObject({ to: "buyer@example.com", idempotencyKey: "email-verification/challenge_3" });
-      return Promise.resolve({ emailId: "re_123" });
+      return Promise.resolve({ emailId: "smtp-message-id" });
     };
 
-    const result = await new NotificationDispatcher(outbox, { send }, "Vault <noreply@vault.example>").processNext();
+    const result = await new NotificationDispatcher(outbox, { send }, "Vault <support@vault.example>").processNext();
     expect(result.status).toBe("accepted");
     if (result.status === "accepted") expect(typeof result.notificationId).toBe("string");
   });
@@ -98,7 +98,7 @@ describe("notifications", () => {
     const result = await new NotificationDispatcher(
       outbox,
       { send: () => Promise.resolve({ emailId: "unused" }) },
-      "Vault <noreply@vault.example>",
+      "Vault <support@vault.example>",
       undefined,
       { send: (input) => { sent.push(input); return Promise.resolve(); } },
     ).processNext();

@@ -18,7 +18,11 @@ const baseConfig: AppConfig = {
   catalog: {
     publicGames: ["cs2"],
   },
-  notifications: {},
+  notifications: {
+    smtpHost: "smtp.purelymail.com",
+    smtpPort: 465,
+    smtpSecure: true,
+  },
   integration: {
     publicOrigin: "https://vault.example",
     adminOrigin: "https://vault.example",
