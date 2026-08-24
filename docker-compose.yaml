@@ -1,0 +1,119 @@
+name: vault
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - /opt/vault/volumes/postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - /opt/vault/volumes/redis_data:/data
+
+  backend:
+    image: vault-backend:${IMAGE_TAG}
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - /opt/vault/secrets:/opt/vault/secrets:ro
+    ports:
+      - "127.0.0.1:${BACKEND_PORT}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  fulfillment-worker:
+    image: vault-backend:${IMAGE_TAG}
+    restart: unless-stopped
+    command: ["node", "dist/fulfillment-worker.js"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      FULFILLMENT_WORKER_INTERVAL_MS: "10000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - /opt/vault/secrets:/opt/vault/secrets:ro
+
+  notifications-worker:
+    image: vault-backend:${IMAGE_TAG}
+    restart: unless-stopped
+    command: ["node", "dist/notifications-worker.js", "--watch"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      NOTIFICATIONS_WORKER_INTERVAL_MS: "10000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - /opt/vault/secrets:/opt/vault/secrets:ro
+
+  vv-admin-dispatcher-worker:
+    image: vault-backend:${IMAGE_TAG}
+    restart: unless-stopped
+    command: ["node", "dist/vv-admin-dispatcher-worker.js", "--watch"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      VV_ADMIN_DISPATCHER_INTERVAL_MS: "10000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - /opt/vault/secrets:/opt/vault/secrets:ro
+
+  frontend:
+    image: vault-frontend:${IMAGE_TAG}
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      VAULT_API_BASE_URL: http://backend:3000
+    env_file: .env
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12

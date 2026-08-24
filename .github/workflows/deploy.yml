@@ -51,65 +51,79 @@ jobs:
         run: node --test deploy/**/*.test.mjs
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, vault-stage]
     needs: validate
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     environment: production
     concurrency:
       group: vault-production
       cancel-in-progress: false
-    env:
-      VAULT_DEPLOY_HOST: ${{ secrets.VAULT_DEPLOY_HOST }}
-      VAULT_DEPLOY_USER: ${{ secrets.VAULT_DEPLOY_USER }}
-      VAULT_DEPLOY_PORT: ${{ secrets.VAULT_DEPLOY_PORT }}
-      VAULT_DEPLOY_SSH_KEY: ${{ secrets.VAULT_DEPLOY_SSH_KEY }}
-      VAULT_DEPLOY_KNOWN_HOSTS: ${{ secrets.VAULT_DEPLOY_KNOWN_HOSTS }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Configure SSH
+      - name: Prepare production environment
         shell: bash
         run: |
           set -euo pipefail
-          : "${VAULT_DEPLOY_HOST:?Missing VAULT_DEPLOY_HOST}"
-          : "${VAULT_DEPLOY_USER:?Missing VAULT_DEPLOY_USER}"
-          : "${VAULT_DEPLOY_SSH_KEY:?Missing VAULT_DEPLOY_SSH_KEY}"
-          : "${VAULT_DEPLOY_KNOWN_HOSTS:?Missing VAULT_DEPLOY_KNOWN_HOSTS}"
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$VAULT_DEPLOY_SSH_KEY" > ~/.ssh/vault_deploy_key
-          chmod 600 ~/.ssh/vault_deploy_key
-          printf '%s\n' "$VAULT_DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          test -f ~/.envs/vault/.env
+          cp ~/.envs/vault/.env .env
+          chmod 600 .env
+          docker compose config --quiet
 
-      - name: Upload release source
+      - name: Build production images
         shell: bash
         run: |
           set -euo pipefail
-          deploy_port="${VAULT_DEPLOY_PORT:-22}"
-          release_dir="/opt/vault/deploy-incoming/${GITHUB_SHA}"
-          ssh_cmd=(ssh -i ~/.ssh/vault_deploy_key -p "$deploy_port" -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts)
-          "${ssh_cmd[@]}" "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}" "rm -rf '$release_dir' && mkdir -p '$release_dir'"
-          rsync -az --delete \
-            --exclude='.git/' \
-            --exclude='.secrets/' \
-            --exclude='node_modules/' \
-            --exclude='frontend/.next/' \
-            --exclude='backend/dist/' \
-            --exclude='.DS_Store' \
-            -e "ssh -i ~/.ssh/vault_deploy_key -p $deploy_port -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts" \
-            ./ "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}:${release_dir}/"
+          docker compose build backend frontend
 
-      - name: Deploy on server
+      - name: Start dependencies
         shell: bash
         run: |
           set -euo pipefail
-          deploy_port="${VAULT_DEPLOY_PORT:-22}"
-          release_dir="/opt/vault/deploy-incoming/${GITHUB_SHA}"
-          ssh -i ~/.ssh/vault_deploy_key \
-            -p "$deploy_port" \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
-            "${VAULT_DEPLOY_USER}@${VAULT_DEPLOY_HOST}" \
-            "VAULT_RELEASE_DIR='$release_dir' VAULT_DEPLOY_SHA='${GITHUB_SHA}' sh '$release_dir/deploy/production-remote-deploy.sh'"
+          docker compose up -d postgres redis
+          for attempt in $(seq 1 30); do
+            if docker compose exec -T postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1 \
+              && docker compose exec -T redis redis-cli ping >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps postgres redis
+          exit 1
+
+      - name: Apply database migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose run --rm --no-deps backend npm run db:migrate
+
+      - name: Deploy application services
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose up -d --remove-orphans backend fulfillment-worker notifications-worker vv-admin-dispatcher-worker frontend
+
+      - name: Verify deployed HTTP surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            http://127.0.0.1:3001/health/live \
+            http://127.0.0.1:3001/health/ready \
+            http://127.0.0.1:3000/ \
+            https://api.vaultapp24.com/health/live \
+            https://api.vaultapp24.com/health/ready \
+            https://vaultapp24.com/
+          do
+            curl --fail --silent --show-error --retry 10 --retry-delay 2 "$url" >/dev/null
+          done
+          curl --fail --silent --show-error --retry 10 --retry-delay 2 \
+            https://vaultapp24.com/.well-known/vv-admin/manifest.json \
+            | grep -F '"storeOrders"'
+          docker compose ps
+
+      - name: Cleanup production environment file
+        if: always()
+        shell: bash
+        run: rm -f .env
