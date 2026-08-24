@@ -94,7 +94,7 @@ The workflow:
 3. copies `/home/github-runner/.envs/vault/.env` into the clean checkout as `.env`;
 4. validates `docker-compose.yaml`, builds backend and frontend images, and starts Postgres/Redis;
 5. applies migrations with `docker compose run --rm --no-deps backend npm run db:migrate`;
-6. starts `backend`, `fulfillment-worker`, `notifications-worker`, `vv-admin-dispatcher-worker`, and `frontend` with `--remove-orphans`;
+6. starts `backend`, `fulfillment-worker`, `notifications-worker`, `vv-admin-dispatcher-worker`, and `frontend` with `--wait --wait-timeout 180 --remove-orphans`;
 7. verifies local and public health endpoints plus the VV Admin manifest.
 
 The workflow does not store provider secrets. Runtime config stays outside git in
@@ -116,7 +116,7 @@ docker compose config --quiet
 docker compose build backend frontend
 docker compose up -d postgres redis
 docker compose run --rm --no-deps backend npm run db:migrate
-docker compose up -d --remove-orphans backend fulfillment-worker notifications-worker vv-admin-dispatcher-worker frontend
+docker compose up -d --wait --wait-timeout 180 --remove-orphans backend fulfillment-worker notifications-worker vv-admin-dispatcher-worker frontend
 rm -f .env
 ```
 
@@ -163,7 +163,7 @@ cd /home/github-runner/actions-runner/_work/Vault/Vault
 tar -xzf "$latest_backup" -C .
 cp /home/github-runner/.envs/vault/.env .env
 docker compose build backend frontend
-docker compose up -d --remove-orphans backend fulfillment-worker notifications-worker vv-admin-dispatcher-worker frontend
+docker compose up -d --wait --wait-timeout 180 --remove-orphans backend fulfillment-worker notifications-worker vv-admin-dispatcher-worker frontend
 rm -f .env
 ```
 

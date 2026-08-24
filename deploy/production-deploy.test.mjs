@@ -17,7 +17,7 @@ test("workflow deploys production only after validation on the self-hosted serve
   assert.match(workflow, /docker compose config --quiet/);
   assert.match(workflow, /docker compose build backend frontend/);
   assert.match(workflow, /docker compose run --rm --no-deps backend npm run db:migrate/);
-  assert.match(workflow, /docker compose up -d --remove-orphans backend fulfillment-worker notifications-worker vv-admin-dispatcher-worker frontend/);
+  assert.match(workflow, /docker compose up -d --wait --wait-timeout 180 --remove-orphans backend fulfillment-worker notifications-worker vv-admin-dispatcher-worker frontend/);
   assert.match(workflow, /https:\/\/api\.vaultapp24\.com\/health\/ready/);
   assert.doesNotMatch(workflow, /VAULT_DEPLOY_SSH_KEY|VAULT_DEPLOY_KNOWN_HOSTS|sshpass/);
 });

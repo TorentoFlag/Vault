@@ -102,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose up -d --remove-orphans backend fulfillment-worker notifications-worker vv-admin-dispatcher-worker frontend
+          docker compose up -d --wait --wait-timeout 180 --remove-orphans backend fulfillment-worker notifications-worker vv-admin-dispatcher-worker frontend
 
       - name: Verify deployed HTTP surfaces
         shell: bash
